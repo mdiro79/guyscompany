@@ -11,3 +11,9 @@
 - Office door rules for visitors: locked or frosted → closed; private → only members with an accepted private-chat invite; public → open, view only (only the owner sits at the desk).
 - Talking without a mouth: the head nods and the arms move with the voice level (owner decision); emotes show in a bubble above the head.
 - Furniture: Kenney Furniture Kit (CC0) from a GitHub mirror (github.com/ETdoFresh/kenney.nl); walls, glass, doors, floor lines are built in code.
+- Office fixes (owner request): building and conference room enlarged (corridor half width 7 m, offices 8×8 m, conference radius 4.5 m); compact reception desk with a chair, the receptionist sits and types; her tour walks to each area (reception, floor lines, conference room, office, desk/dashboard, lounge) with the speech bubble above her head; E next to her replays it.
+- Doors (offices, conference room, entrance) open and close with E; state is shared over the WebRTC events channel (newest command wins). Visitors without access always see an office door closed. Glass porch outside the entrance.
+- Characters, chairs, plants and door leaves block walking. A taken chair cannot be used by a second person.
+- At a desk monitor only the Fullscreen and Exit buttons are shown; in fullscreen they sit in a 48 px bar above the dashboard so nothing covers it.
+- Computers: Tab switches between mouse look and a brand-styled cursor. Conference/lounge chairs allow free looking around.
+- Phones in landscape (height ≤ 500 px, `short:` variant): side menu instead of the bottom bar, compact office UI.

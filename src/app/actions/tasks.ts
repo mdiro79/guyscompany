@@ -73,8 +73,12 @@ export async function deleteTaskAction(id: string) {
   return okResult();
 }
 
+// Volunteering only takes a task that asks for a volunteer or has nobody on it (never someone else's).
 export async function volunteerTaskAction(id: string) {
   const user = await requireUser();
+  const task = (await store().listTasks()).find((t) => t.id === id);
+  if (!task) return fail('error');
+  if (!task.needsVolunteer && task.assigneeId && task.assigneeId !== user.id) return fail('taken');
   await store().updateTask(id, { assigneeId: user.id, needsVolunteer: false });
   revalidatePath('/', 'layout');
   return okResult();

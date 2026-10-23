@@ -17,6 +17,7 @@ const CLIPS: Record<Character['group'], Record<Exclude<Motion, 'sit'>, string[]>
 };
 
 export const CHARACTER_HEIGHT = 1.55;
+const TYPE_ARM = -0.9, TYPE_FORE = -0.5;
 
 const findBone = (root: THREE.Object3D, re: RegExp, not?: RegExp) => {
   let found: THREE.Object3D | null = null;
@@ -24,7 +25,7 @@ const findBone = (root: THREE.Object3D, re: RegExp, not?: RegExp) => {
   return found as THREE.Object3D | null;
 };
 
-interface CharacterProps { characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean }
+interface CharacterProps { characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean; typing?: boolean }
 
 /**
  * One of the 20 characters, normalised to CHARACTER_HEIGHT with feet at y=0.
@@ -44,7 +45,7 @@ function KaykitCharacter(props: CharacterProps) {
   return <Rig {...props} sharedClips={clips} />;
 }
 
-function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
+function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, typing = false, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
   const character = getCharacter(characterId);
   const gltf = useGLTF(character.model);
   const talk = useRef(0);
@@ -69,6 +70,8 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
         legR: findBone(object, /upperleg\.?r|thigh.*r|LegRight|upperleg_r/i),
         shinL: findBone(object, /lowerleg\.?l|shin.*l|lowerleg_l/i),
         shinR: findBone(object, /lowerleg\.?r|shin.*r|lowerleg_r/i),
+        foreL: findBone(object, /lowerarm\.?l\b|forearm.*l\b|lowerarm_l/i),
+        foreR: findBone(object, /lowerarm\.?r\b|forearm.*r\b|lowerarm_r/i),
       },
     };
   }, [gltf.scene]);
@@ -109,12 +112,16 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
   }, [onlyArms, object]);
 
   // Talking offsets are additive; the previous frame's offset is removed first so un-animated bones do not drift.
-  const applied = useRef({ hx: 0, hz: 0, al: 0, ar: 0 });
+  const applied = useRef({ hx: 0, hz: 0, al: 0, ar: 0, tl: 0, tr: 0, fl: 0, fr: 0 });
   useFrame((state, dt) => {
     const a = applied.current;
     if (bones.head) { bones.head.rotation.x -= a.hx; bones.head.rotation.z -= a.hz; }
     if (bones.armL) bones.armL.rotation.z -= a.al;
     if (bones.armR) bones.armR.rotation.z -= a.ar;
+    if (bones.armL) bones.armL.rotation.x -= a.tl;
+    if (bones.armR) bones.armR.rotation.x -= a.tr;
+    if (bones.foreL) bones.foreL.rotation.x -= a.fl;
+    if (bones.foreR) bones.foreR.rotation.x -= a.fr;
     mixer.update(Math.min(dt, 0.1));
     talk.current += (talkLevel - talk.current) * Math.min(1, dt * 12);
     const k = talk.current;
@@ -126,6 +133,15 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
     if (bones.head) { bones.head.rotation.x += a.hx; bones.head.rotation.z += a.hz; }
     if (bones.armL) bones.armL.rotation.z += a.al;
     if (bones.armR) bones.armR.rotation.z += a.ar;
+    // Typing at a keyboard: forearms forward with small alternating taps.
+    const ty = typing ? 1 : 0;
+    a.tl = ty * (TYPE_ARM + Math.sin(time * 17) * 0.05);
+    a.tr = ty * (TYPE_ARM + Math.sin(time * 15 + 1.7) * 0.05);
+    a.fl = ty * TYPE_FORE; a.fr = ty * TYPE_FORE;
+    if (bones.armL) bones.armL.rotation.x += a.tl;
+    if (bones.armR) bones.armR.rotation.x += a.tr;
+    if (bones.foreL) bones.foreL.rotation.x += a.fl;
+    if (bones.foreR) bones.foreR.rotation.x += a.fr;
     // Procedural sitting pose for characters without a sit animation; flyers just hover.
     if (motion === 'sit' && !hasSitClip && character.group !== 'monsters-c') {
       for (const leg of [bones.legL, bones.legR]) if (leg) leg.rotation.x = -Math.PI / 2;

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { input } from './store';
 
 // Virtual joystick (bottom-left) and drag-to-look on the rest of the screen.
-export function TouchControls() {
+export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
   const [knob, setKnob] = useState<{ x: number; y: number } | null>(null);
   const stick = useRef<{ id: number; cx: number; cy: number } | null>(null);
   const look = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -14,7 +14,7 @@ export function TouchControls() {
         if (e.pointerType === 'mouse') return;
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         const leftHalf = e.clientX < window.innerWidth * 0.45 && e.clientY > window.innerHeight * 0.45;
-        if (leftHalf && !stick.current) { stick.current = { id: e.pointerId, cx: e.clientX, cy: e.clientY }; setKnob({ x: 0, y: 0 }); }
+        if (leftHalf && !lookOnly && !stick.current) { stick.current = { id: e.pointerId, cx: e.clientX, cy: e.clientY }; setKnob({ x: 0, y: 0 }); }
         else if (!look.current) look.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
       }}
       onPointerMove={(e) => {
@@ -37,10 +37,10 @@ export function TouchControls() {
         if (look.current?.id === e.pointerId) look.current = null;
       }}
       onPointerCancel={() => { stick.current = null; look.current = null; setKnob(null); input.forward = input.right = 0; }}>
-      <div className="pointer-events-none absolute bottom-8 left-6 flex size-32 items-center justify-center rounded-full border-2 border-white/40 bg-black/20"
+      {!lookOnly && <div className="pointer-events-none absolute bottom-8 left-6 flex size-32 short:bottom-4 short:size-28 items-center justify-center rounded-full border-2 border-white/40 bg-black/20"
         style={stick.current ? { left: stick.current.cx - 64, top: stick.current.cy - 64, bottom: 'auto' } : undefined}>
         <div className="size-14 rounded-full bg-white/70 shadow" style={{ transform: `translate(${knob?.x ?? 0}px, ${knob?.y ?? 0}px)` }} />
-      </div>
+      </div>}
     </div>
   );
 }

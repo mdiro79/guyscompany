@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import { X, MessageCircle } from 'lucide-react';
+import { isEmbedded } from '@/lib/device';
 import { useSearchParams } from 'next/navigation';
-import { usePathname } from '@/i18n/navigation';
+import { Link, usePathname } from '@/i18n/navigation';
 import { useLive } from '@/lib/live';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { PresenceProvider } from '@/components/presence/PresenceProvider';
@@ -14,6 +15,7 @@ import { ShellProvider, type ShellData } from './ShellContext';
 import { Sidebar } from './Sidebar';
 import { TopBar, type SearchItem } from './TopBar';
 import { MobileNav } from './MobileNav';
+import { NAV, ADMIN_NAV, isActive } from './nav';
 
 const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
 
@@ -27,27 +29,38 @@ export function AppShell({ data, notifications, messages, files, search, childre
   // The chat list is capped, so unread messages are counted from the last one seen rather than by length.
   const lastId = messages.at(-1)?.id;
   const [seenId, setSeenId] = useState(lastId);
-  const [inFrame, setInFrame] = useState(false);
   useLive(LIVE_TABLES);
   useEffect(() => { setDrawer(false); }, [pathname]);
   useEffect(() => { if (chat) setSeenId(lastId); }, [chat, lastId]);
-  useEffect(() => { setInFrame(window.self !== window.top); }, []);
   const unreadChat = useMemo(() => {
     const from = seenId ? messages.findIndex((m) => m.id === seenId) + 1 : 0;
     return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
   }, [messages, seenId, data.user.id]);
   const fullBleed = pathname.startsWith('/office');
-  // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those). Links inside the
-  // monitor drop the ?embed flag, so being inside a frame counts too.
-  const embed = useSearchParams().get('embed') === '1' || inFrame;
+  // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those).
+  // The ?embed=1 flag only exists on the first page; later navigation inside the iframe stays embedded too.
+  const embedParam = useSearchParams().get('embed') === '1';
+  const [framed, setFramed] = useState(false);
+  useEffect(() => setFramed(isEmbedded()), []);
+  const embed = embedParam || framed;
   if (embed) {
+    const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office');
     return (
       <ShellProvider value={data}>
         <div className="flex min-h-dvh flex-col">
-          <TopBar notifications={notifications} search={search} onMenu={() => {}} />
+          <TopBar notifications={notifications} search={search} />
+          {/* Section tabs (the sidebar is too wide for a monitor) */}
+          <nav className="sticky top-16 z-20 flex gap-1 overflow-x-auto border-b border-line bg-bg/95 px-2 py-1.5 backdrop-blur scrollbar-thin short:top-12">
+            {items.map(({ href, key, icon: Icon }) => (
+              <Link key={href} href={href} className={clsx('flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium',
+                isActive(pathname, href) ? 'bg-brand text-brand-ink' : 'text-muted hover:bg-surface-2')}>
+                <Icon className="size-4" />{t(`nav.${key}`)}
+              </Link>
+            ))}
+          </nav>
           <div className="flex flex-1">
             <main className="min-w-0 flex-1 p-3 sm:p-4">{children}</main>
-            <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex"><ChatPanel messages={messages} files={files} className="w-full" /></aside>
+            <aside className="sticky top-28 hidden h-[calc(100dvh-7rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex"><ChatPanel messages={messages} files={files} className="w-full" /></aside>
           </div>
         </div>
       </ShellProvider>
@@ -63,15 +76,15 @@ export function AppShell({ data, notifications, messages, files, search, childre
               {data.demo && <div className="bg-accent px-4 py-1 text-center text-xs text-white">{t('common.demoBanner')}</div>}
               <TopBar notifications={notifications} search={search} onMenu={() => setDrawer(true)} />
               <div className="flex flex-1">
-                <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-64 shrink-0 border-e border-line lg:block"><Sidebar /></aside>
-                <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-4">{children}</main>
+                <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-64 shrink-0 border-e border-line lg:block short:top-12 short:block short:h-[calc(100dvh-3rem)] short:w-56"><Sidebar /></aside>
+                <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-4 short:pb-4">{children}</main>
                 <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex 2xl:w-96">
                   <ChatPanel messages={messages} files={files} className="w-full" />
                 </aside>
               </div>
               <MobileNav onChat={() => setChat(true)} onMenu={() => setDrawer(true)} unreadChat={unreadChat} />
               <button type="button" onClick={() => setChat(true)} aria-label={t('nav.chat')}
-                className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden">
+                className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden short:flex short:bottom-3 short:end-3 short:size-12">
                 <MessageCircle className="size-6" />
               </button>
               {/* Drawer (phone/tablet) */}

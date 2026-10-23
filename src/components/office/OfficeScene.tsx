@@ -5,11 +5,13 @@ import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
 import { Furniture } from './Furniture';
 import { Player, type Pose } from './Player';
-import { Avatars, Receptionist } from './Avatars';
+import { Avatars } from './Avatars';
+import { Receptionist } from './Receptionist';
 import { FirstPersonArms } from './FirstPersonArms';
 import { preloadCharacter } from '@/components/three/CharacterModel';
 import { MonitorFrame } from './MonitorFrame';
-import { OFFICES } from './layout';
+import { TourBubbleAnchor } from './TourBubbleAnchor';
+import { OFFICES, RECEPTION_Z, SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 
 export interface SceneProps {
@@ -26,8 +28,10 @@ function Lights({ low }: { low: boolean }) {
       <ambientLight intensity={0.25} color="#ffd9a8" />
       {!low && (
         <>
-          <pointLight position={[0, 2.6, 0]} intensity={14} distance={10} color="#ffd8a0" />
-          <pointLight position={[0, 2.6, 8.5]} intensity={10} distance={9} color="#ffd8a0" />
+          <pointLight position={[0, 2.6, 0]} intensity={18} distance={12} color="#ffd8a0" />
+          <pointLight position={[0, 2.6, RECEPTION_Z]} intensity={10} distance={9} color="#ffd8a0" />
+          <pointLight position={[-11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
+          <pointLight position={[11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
           {OFFICES.map((o) => (
             <pointLight key={o.slot} position={[(o.min[0] + o.max[0]) / 2, 2.6, (o.min[1] + o.max[1]) / 2]} intensity={12} distance={9} color={o.wallColor === 'orange' ? '#ffc58a' : '#ffe0b8'} />
           ))}
@@ -44,11 +48,11 @@ export default function OfficeScene(p: SceneProps) {
     <Canvas
       dpr={p.lowQuality ? 1 : [1, 1.75]}
       gl={{ antialias: !p.lowQuality, powerPreference: p.lowQuality ? 'low-power' : 'high-performance' }}
-      camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 80, position: [0, 1.6, 11.6] }}
+      camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 90, position: [SPAWN.pos[0], 1.6, SPAWN.pos[1]] }}
       style={{ touchAction: 'none' }}
     >
       <color attach="background" args={['#2a221c']} />
-      <fog attach="fog" args={['#2a221c', 18, 40]} />
+      <fog attach="fog" args={['#2a221c', 24, 55]} />
       <Lights low={p.lowQuality} />
       <Suspense fallback={null}>
         <Building offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} />
@@ -57,8 +61,9 @@ export default function OfficeScene(p: SceneProps) {
         <Avatars remotes={p.remotes} profiles={p.profiles} messages={p.messages} voiceDistance={p.voiceDistance} />
         <FirstPersonArms characterId={p.user.characterId} userId={p.user.id} />
       </Suspense>
-      <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} isPhone={p.isPhone} />
+      <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />
       <MonitorFrame />
+      <TourBubbleAnchor />
     </Canvas>
   );
 }
