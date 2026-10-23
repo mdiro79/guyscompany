@@ -54,6 +54,16 @@
     "tooShort": "Password must be at least 8 characters",
     "changed": "Password changed"
   },
+  "setup": {
+    "title": "First-time setup",
+    "intro": "The site is connected to Supabase. Create the admin account; other accounts are created later in Admin.",
+    "displayName": "Display name",
+    "create": "Create admin account",
+    "code": "Setup code",
+    "badCode": "Wrong setup code",
+    "usernameInvalid": "3–24 chars: a-z, 0-9, . _ -",
+    "done": "Setup is already done"
+  },
   "nav": {
     "home": "Home",
     "projects": "Projects",

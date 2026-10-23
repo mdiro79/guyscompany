@@ -84,7 +84,7 @@ export async function changeOwnPassword(user: Profile, newPassword: string) {
   await store().updateProfile(user.id, { mustChangePassword: false });
 }
 
-export async function createAccount(input: { username: string; displayName: string; jobTitle: string; role: Profile['role']; password: string }) {
+export async function createAccount(input: { username: string; displayName: string; jobTitle: string; role: Profile['role']; password: string; mustChangePassword?: boolean }): Promise<string> {
   const username = input.username.trim().toLowerCase();
   if (await store().getProfileByUsername(username)) throw new Error('USERNAME_TAKEN');
   let id: string = crypto.randomUUID();
@@ -98,9 +98,10 @@ export async function createAccount(input: { username: string; displayName: stri
   }
   await store().insertProfile({
     id, username, displayName: input.displayName || username, jobTitle: input.jobTitle, role: input.role,
-    characterId: 'humans-casual2-female', status: 'online', mustChangePassword: true, tutorialDone: false,
+    characterId: 'humans-casual2-female', status: 'online', mustChangePassword: input.mustChangePassword ?? true, tutorialDone: false,
     createdAt: new Date().toISOString(),
   });
+  return id;
 }
 
 export async function deleteAccount(id: string) {

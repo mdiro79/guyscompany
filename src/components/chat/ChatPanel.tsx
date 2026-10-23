@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { sendMessageAction, toggleReactionAction } from '@/app/actions/chat';
 import { formatBytes, formatTime } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
+import { uploadFile } from '@/lib/upload';
 import type { FileMeta, Message } from '@/lib/data/types';
 import { useShell } from '@/components/shell/ShellContext';
 
@@ -41,11 +42,8 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
   const upload = async (file: File) => {
     setError(null);
     if (file.size > MAX_FILE_BYTES) { setError(t('tooLarge')); return; }
-    const body = new FormData();
-    body.append('file', file);
-    const res = await fetch('/api/files', { method: 'POST', body });
-    if (!res.ok) { setError(t('tooLarge')); return; }
-    const { id } = (await res.json()) as { id: string };
+    let id: string;
+    try { id = await uploadFile(file); } catch { setError(t('tooLarge')); return; }
     send(text, id);
   };
 

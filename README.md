@@ -15,15 +15,12 @@ Without Supabase variables the app runs in **demo mode**: in-memory data and fou
 
 ## Production setup (Vercel Hobby + Supabase free)
 
-1. Create a Supabase project. Copy `.env.example` to `.env.local` and fill in URL, anon key, service-role key and
-   the pooler connection string (`DATABASE_URL`, transaction mode, port 6543).
-2. Apply the schema: `npm run db:migrate`, then run `supabase-setup.sql` in the Supabase SQL editor
-   (RLS, Realtime publication, the 4 office slots, private `files` bucket).
-3. Create the first admin: `node --env-file=.env.local scripts/create-admin.mjs <username> "<name>" <password>`.
-   The admin creates the other accounts in **Admin**; every new account must change its password on first login.
-4. Import the repo in Vercel, add the same variables plus `CRON_SECRET`. `vercel.json` schedules the daily cleanup
-   (`/api/cron/cleanup`), which also keeps the free Supabase project from pausing.
-5. Optional TURN for strict networks: `NEXT_PUBLIC_TURN_URLS`, `NEXT_PUBLIC_TURN_USERNAME`, `NEXT_PUBLIC_TURN_CREDENTIAL`.
+Zero manual config: import the repo in Vercel, add **Storage → Supabase** (Marketplace) to the project and redeploy.
+Each build runs `scripts/db-setup.mjs` (migrations + `supabase-setup.sql`, idempotent); the first visit opens
+**/setup** to create the admin. Details in Persian: `docs/DEPLOY.md`. Health check: `/api/health`.
+
+Variable names from the integration (`SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`/`ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`/`SECRET_KEY`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`) and our own (`.env.example`) both work.
 
 Keys are never committed; source asset zips stay in the repo but are excluded from Vercel (`.vercelignore`).
 

@@ -8,6 +8,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { deleteFileAction } from '@/app/actions/calendar';
 import { formatBytes, formatDate } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
+import { uploadFile } from '@/lib/upload';
 import type { FileMeta } from '@/lib/data/types';
 
 export function FilesView({ files }: { files: FileMeta[] }) {
@@ -24,10 +25,8 @@ export function FilesView({ files }: { files: FileMeta[] }) {
     setError('');
     if (file.size > MAX_FILE_BYTES) { setError(t('maxSize')); return; }
     setBusy(true);
-    const body = new FormData(); body.append('file', file);
-    const res = await fetch('/api/files', { method: 'POST', body });
+    try { await uploadFile(file); router.refresh(); } catch { setError(tc('error')); }
     setBusy(false);
-    if (!res.ok) setError(tc('error')); else router.refresh();
   };
   return (
     <section className="card p-3 sm:p-4">

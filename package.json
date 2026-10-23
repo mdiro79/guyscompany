@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/db-setup.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -14,7 +14,10 @@
     "db:migrate": "drizzle-kit migrate",
     "assets:inspect": "node scripts/inspect-assets.cjs assets/raw",
     "assets:select": "node scripts/select-characters.cjs",
-    "assets:convert": "node scripts/convert-characters.cjs"
+    "assets:convert": "node scripts/convert-characters.cjs",
+    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "db:setup": "node --env-file=.env.local scripts/db-setup.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -55,5 +58,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

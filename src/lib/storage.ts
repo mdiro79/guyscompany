@@ -25,3 +25,18 @@ export async function removeObject(path: string) {
   if (isDemo) { mem().delete(path); return; }
   await supabaseAdmin().storage.from(STORAGE_BUCKET).remove([path]);
 }
+
+// Browser uploads go straight to Storage with a one-time signed URL (Vercel limits request bodies to ~4.5 MB).
+export async function createUploadUrl(path: string) {
+  const { data, error } = await supabaseAdmin().storage.from(STORAGE_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw new Error(error?.message ?? 'SIGN_FAILED');
+  return data.token;
+}
+
+export async function objectSize(path: string): Promise<number | null> {
+  const dir = path.slice(0, path.lastIndexOf('/'));
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const { data } = await supabaseAdmin().storage.from(STORAGE_BUCKET).list(dir, { search: name, limit: 1 });
+  const hit = data?.find((o) => o.name === name);
+  return hit ? Number((hit.metadata as { size?: number } | null)?.size ?? 0) : null;
+}

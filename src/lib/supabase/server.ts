@@ -2,7 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { env } from '@/lib/env';
+import { env, serverEnv } from '@/lib/env';
 
 export async function supabaseServer() {
   const cookieStore = await cookies();
@@ -22,7 +22,7 @@ export async function supabaseServer() {
 
 // Service-role client for admin operations (create/delete users, reset passwords, storage).
 export function supabaseAdmin() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = serverEnv().serviceRoleKey;
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
   return createClient(env.supabaseUrl, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }

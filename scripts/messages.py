@@ -32,6 +32,14 @@ M = {
   "tooShort": ("رمز باید حداقل ۸ کاراکتر باشد", "Password must be at least 8 characters"),
   "changed": ("رمز تغییر کرد", "Password changed"),
  },
+ "setup": {
+  "title": ("راه‌اندازی اولیه", "First-time setup"),
+  "intro": ("سایت به Supabase وصل شد. حساب ادمین را بسازید؛ بقیه‌ی حساب‌ها را بعداً از بخش مدیریت می‌سازید.", "The site is connected to Supabase. Create the admin account; other accounts are created later in Admin."),
+  "displayName": ("نام نمایشی", "Display name"), "create": ("ساخت حساب ادمین", "Create admin account"),
+  "code": ("کد راه‌اندازی", "Setup code"), "badCode": ("کد راه‌اندازی اشتباه است", "Wrong setup code"),
+  "usernameInvalid": ("نام کاربری ۳ تا ۲۴ حرف انگلیسی کوچک، عدد، . _ -", "3–24 chars: a-z, 0-9, . _ -"),
+  "done": ("راه‌اندازی قبلاً انجام شده", "Setup is already done"),
+ },
  "nav": {
   "home": ("خانه", "Home"), "projects": ("پروژه‌ها", "Projects"), "tasks": ("کارها", "Tasks"),
   "team": ("تیم", "Team"), "calendar": ("تقویم", "Calendar"), "files": ("فایل‌ها", "Files"),

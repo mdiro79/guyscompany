@@ -1,6 +1,21 @@
--- Run once in the Supabase SQL editor AFTER applying drizzle/*.sql (npm run db:migrate).
+-- Applied automatically on every Vercel build by scripts/db-setup.mjs (after the drizzle/*.sql migrations).
+-- Safe to run repeatedly. Can also be pasted into the Supabase SQL editor.
 -- The app writes through the server (Drizzle, service connection). The browser only reads
--- Realtime change events, so authenticated users get SELECT on non-secret tables.
+-- Realtime change events, so team members get SELECT on non-secret tables.
+-- Also turn OFF "Allow new users to sign up" in Authentication settings: accounts are created by the admin.
+
+-- A signed-in user counts as a member only if the admin created their profile.
+create or replace function public.is_member() returns boolean
+language sql stable security definer set search_path = public
+as $$ select exists (select 1 from profiles where id = auth.uid()) $$;
+
+do $$
+declare r record;
+begin
+  for r in select policyname, tablename from pg_policies where schemaname = 'public' loop
+    execute format('drop policy %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
 
 alter table profiles enable row level security;
 alter table projects enable row level security;
@@ -19,24 +34,24 @@ alter table office_visits enable row level security;
 alter table office_swap_requests enable row level security;
 alter table private_chat_invites enable row level security;
 
-create policy "read" on profiles for select to authenticated using (true);
-create policy "read" on projects for select to authenticated using (true);
-create policy "read" on tasks for select to authenticated using (true);
-create policy "read" on project_roles for select to authenticated using (true);
-create policy "read" on files for select to authenticated using (true);
+create policy "read" on profiles for select to authenticated using (public.is_member());
+create policy "read" on projects for select to authenticated using (public.is_member());
+create policy "read" on tasks for select to authenticated using (public.is_member());
+create policy "read" on project_roles for select to authenticated using (public.is_member());
+create policy "read" on files for select to authenticated using (public.is_member());
 create policy "read" on messages for select to authenticated using (
-  channel = 'team'
+  (channel = 'team' and public.is_member())
   or exists (select 1 from offices o where 'office:' || o.slot = channel and o.owner_id = auth.uid())
   or exists (select 1 from private_chat_invites i where 'office:' || i.slot = channel and i.invitee_id = auth.uid() and i.status = 'accepted')
 );
-create policy "read" on reactions for select to authenticated using (true);
-create policy "read" on polls for select to authenticated using (true);
+create policy "read" on reactions for select to authenticated using (public.is_member());
+create policy "read" on polls for select to authenticated using (public.is_member());
 -- Scores stay hidden: each member only sees their own vote rows.
 create policy "read own" on poll_votes for select to authenticated using (user_id = auth.uid());
 create policy "read own" on focus_items for select to authenticated using (user_id = auth.uid());
-create policy "read" on calendar_events for select to authenticated using (true);
+create policy "read" on calendar_events for select to authenticated using (public.is_member());
 create policy "read own" on notifications for select to authenticated using (user_id = auth.uid());
-create policy "read" on offices for select to authenticated using (true);
+create policy "read" on offices for select to authenticated using (public.is_member());
 create policy "read own" on office_visits for select to authenticated using (
   exists (select 1 from offices o where o.slot = office_visits.slot and o.owner_id = auth.uid())
 );
@@ -44,8 +59,17 @@ create policy "read own" on office_swap_requests for select to authenticated usi
 create policy "read own" on private_chat_invites for select to authenticated using (inviter_id = auth.uid() or invitee_id = auth.uid());
 
 -- Realtime change events for live refresh.
-alter publication supabase_realtime add table tasks, messages, reactions, notifications, polls, poll_votes, profiles,
-  offices, files, focus_items, calendar_events, projects, project_roles, office_swap_requests, private_chat_invites;
+do $$
+declare t text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
+  foreach t in array array['tasks','messages','reactions','notifications','polls','poll_votes','profiles','offices','files',
+    'focus_items','calendar_events','projects','project_roles','office_swap_requests','private_chat_invites'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
 
 -- Four fixed office slots (wall colour belongs to the slot).
 insert into offices (slot, wall_color) values (1, 'orange'), (2, 'teal'), (3, 'teal'), (4, 'orange') on conflict do nothing;
