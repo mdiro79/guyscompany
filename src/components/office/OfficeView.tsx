@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState } from
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown } from 'lucide-react';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
@@ -20,7 +20,7 @@ import { connectDoors } from './doors';
 import { canLook } from './Player';
 import { startTourFor, useTourStep } from './tour';
 import { TouchControls } from './TouchControls';
-import { OfficePanel, type OfficeSettings } from './OfficePanel';
+import { OfficePanel, type OfficeSettings, type OfficeTab } from './OfficePanel';
 import { MonitorDashboard } from './MonitorDashboard';
 import { Tutorial } from './Tutorial';
 import { TabCursor } from './TabCursor';
@@ -167,6 +167,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
     voice.setVolume(userId, v);
   }, [myPos, offices, voice]);
 
+  // Owner panel of one's office: closed by default (a small pill in the top bar), closed again on leaving.
+  const [officeTab, setOfficeTab] = useState<OfficeTab | null>(null);
+  const inOwnOffice = ui.currentSlot !== null && savedOffices.some((o) => o.slot === ui.currentSlot && o.ownerId === user.id);
+  useEffect(() => { if (!inOwnOffice) setOfficeTab(null); }, [inOwnOffice]);
+
   // Called inside the panel's transition, which keeps the optimistic change until the saved data arrives.
   const mySlot = savedOffices.find((o) => o.ownerId === user.id)?.slot;
   const changeMyOffice = useCallback((patch: OfficeSettings) => {
@@ -186,6 +191,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   const inMyOffice = !!current && current.ownerId === user.id;
   const Back = locale === 'fa' ? ArrowRight : ArrowLeft;
   const touring = tourStep !== null;
+  const officeControls = inMyOffice && !!myOffice && !ui.seatId && !touring;
   const showCursor = !isPhone && !ui.locked && !(working && ui.panel !== 'none');
   const it = ui.interact;
   const hint = ui.seatId ? (working ? null : t('standHint'))
@@ -238,13 +244,28 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
       {!working && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] short:p-2">
           <Link href="/" className="pointer-events-auto flex min-h-11 items-center gap-2 rounded-xl bg-black/55 px-3 text-sm backdrop-blur hover:bg-black/70"><Back className="size-4" /><span className="max-sm:hidden short:hidden">{t('back')}</span></Link>
-          <div className="min-w-0 rounded-xl bg-black/55 px-3 py-2 text-sm backdrop-blur">
-            <div className="truncate font-semibold">{place}</div>
-            {current && current.ownerId !== user.id && current.focus && <div className="text-xs text-[#9cc4ff]">{t('focusOn')}</div>}
-            {current && current.ownerId !== user.id && current.isPublic && <div className="text-xs text-white/70">{t('viewOnly')}</div>}
-          </div>
+          {officeControls ? (
+            // In one's own office the place name is the small "my office" button: the panel opens below it,
+            // and frosted glass, lock and focus show at a glance while it is closed.
+            <button type="button" onClick={() => setOfficeTab(officeTab ? null : 'settings')} aria-expanded={!!officeTab} title={t('myOffice')}
+              className={clsx('pointer-events-auto flex min-h-11 min-w-0 touch-manipulation items-center gap-2 rounded-xl px-3 text-sm backdrop-blur transition-colors',
+                officeTab ? 'bg-[#2f5d45]' : 'bg-black/55 hover:bg-black/70')}>
+              <SlidersHorizontal className="size-4 shrink-0" />
+              <span className="truncate font-semibold">{place}</span>
+              {myOffice.glass === 'frosted' && <EyeOff className="size-3.5 shrink-0 text-white/75" />}
+              {myOffice.locked && <Lock className="size-3.5 shrink-0 text-white/75" />}
+              {myOffice.focus && <Target className="size-3.5 shrink-0 text-[#9cc4ff]" />}
+              <ChevronDown className={clsx('size-4 shrink-0 opacity-70 transition-transform', officeTab && 'rotate-180')} />
+            </button>
+          ) : (
+            <div className="min-w-0 rounded-xl bg-black/55 px-3 py-2 text-sm backdrop-blur">
+              <div className="truncate font-semibold">{place}</div>
+              {current && current.ownerId !== user.id && current.focus && <div className="text-xs text-[#9cc4ff]">{t('focusOn')}</div>}
+              {current && current.ownerId !== user.id && current.isPublic && <div className="text-xs text-white/70">{t('viewOnly')}</div>}
+            </div>
+          )}
           <div className="pointer-events-auto ms-auto flex gap-2">
-            <LocaleSwitch dark className="max-sm:px-2.5" />
+            <LocaleSwitch dark className="max-sm:px-3 max-sm:[&>svg]:hidden" />
             <button type="button" onClick={voice.toggleMic} aria-label={t('mic')} className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', voice.micOn ? 'bg-[#22a559]' : 'bg-black/55')}>
               {voice.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
             </button>
@@ -294,8 +315,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
       )}
 
       {/* Owner controls inside one's own office */}
-      {inMyOffice && myOffice && !ui.seatId && !touring && (
-        <div className="absolute top-20 end-3 z-30 short:top-16"><OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} onChange={changeMyOffice} /></div>
+      {officeControls && officeTab && (
+        <div className="absolute top-[4.25rem] start-3 z-30 short:top-14">
+          <OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} onChange={changeMyOffice}
+            tab={officeTab} onTab={setOfficeTab} />
+        </div>
       )}
 
       {/* Private chat for invited guests inside the host's office */}

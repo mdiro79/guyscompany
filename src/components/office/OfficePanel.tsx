@@ -25,16 +25,18 @@ function Toggle({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () =
 
 // Owner controls shown while standing in one's own office. `onChange` applies a change at once
 // (glass, door and panel) and saves it; the change is undone if saving fails.
-export function OfficePanel({ office, profiles, me, privateMessages, files, onChange }: {
+export type OfficeTab = 'settings' | 'visitors' | 'chat';
+
+// The open panel; closed, it is the small "my office" pill in the office top bar (OfficeView).
+export function OfficePanel({ office, profiles, me, privateMessages, files, onChange, tab, onTab }: {
   office: Office; profiles: Profile[]; me: Profile; privateMessages: Message[]; files: FileMeta[];
-  onChange: (patch: OfficeSettings) => Promise<ActionResult>;
+  onChange: (patch: OfficeSettings) => Promise<ActionResult>; tab: OfficeTab; onTab: (tab: OfficeTab | null) => void;
 }) {
   const t = useTranslations('office');
   const tc = useTranslations('common');
   const locale = useLocale();
   const [, start] = useTransition();
   const [visits, setVisits] = useState<OfficeVisit[]>([]);
-  const [tab, setTab] = useState<'settings' | 'visitors' | 'chat' | null>('settings');
   const [invitee, setInvitee] = useState('');
   const [failed, setFailed] = useState(false);
   const set = (patch: OfficeSettings) => {
@@ -47,16 +49,16 @@ export function OfficePanel({ office, profiles, me, privateMessages, files, onCh
   useEffect(() => { if (tab === 'visitors') listVisitsAction(office.slot).then(setVisits); }, [tab, office.slot]);
   const name = (id: string) => profiles.find((p) => p.id === id)?.displayName ?? '—';
   return (
-    <div className="pointer-events-auto max-h-[calc(100dvh-6rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl bg-black/70 p-3 text-white backdrop-blur short:max-h-[calc(100dvh-4.5rem)]">
+    <div className="pointer-events-auto max-h-[calc(100dvh-6rem)] w-[min(22rem,calc(100vw-1.5rem))] shadow-xl overflow-y-auto rounded-2xl bg-black/70 p-3 text-white backdrop-blur short:max-h-[calc(100dvh-4.5rem)]">
       <div className="mb-2 flex items-center gap-1">
         <span className="me-auto text-sm font-semibold">{t('myOffice')}</span>
         {(['settings', 'visitors', 'chat'] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setTab(tab === k ? null : k)}
+          <button key={k} type="button" onClick={() => onTab(k)}
             className={clsx('flex size-11 touch-manipulation items-center justify-center rounded-lg', tab === k ? 'bg-white/25' : 'hover:bg-white/10')} aria-label={k} aria-pressed={tab === k}>
             {k === 'settings' ? <Target className="size-4" /> : k === 'visitors' ? <Users className="size-4" /> : <MessageSquare className="size-4" />}
           </button>
         ))}
-        {tab && <button type="button" className="flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-white/10" onClick={() => setTab(null)} aria-label={tc('close')}><X className="size-4" /></button>}
+        <button type="button" className="flex size-11 touch-manipulation items-center justify-center rounded-lg hover:bg-white/10" onClick={() => onTab(null)} aria-label={tc('close')}><X className="size-4" /></button>
       </div>
       {tab === 'settings' && (
         <div className="grid grid-cols-2 gap-2">
