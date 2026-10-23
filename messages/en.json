@@ -52,7 +52,8 @@
     "confirmPassword": "Confirm new password",
     "mismatch": "Passwords do not match",
     "tooShort": "Password must be at least 8 characters",
-    "changed": "Password changed"
+    "changed": "Password changed",
+    "serverError": "Could not reach the server; try again shortly."
   },
   "setup": {
     "title": "First-time setup",
@@ -63,6 +64,32 @@
     "badCode": "Wrong setup code",
     "usernameInvalid": "3–24 chars: a-z, 0-9, . _ -",
     "done": "Setup is already done"
+  },
+  "setupNotice": {
+    "configTitle": "Vercel setup is incomplete",
+    "configIntro": "These variables are missing in Vercel:",
+    "configFix": "In Vercel → Storage, connect the Supabase database to this project (or add the variables in Settings → Environment Variables), then redeploy.",
+    "dbTitle": "The database is not reachable",
+    "dbIntro": "The site could not connect to the Supabase database.",
+    "hint_tables": "The tables have not been created yet. Redeploy once in Vercel to create them.",
+    "hint_auth": "The database password or address is wrong. Reconnect the Supabase integration in Vercel.",
+    "hint_paused": "The Supabase project was not found or is paused. Restore it from the Supabase dashboard.",
+    "hint_network": "The database server did not answer. If the Supabase project is paused, restore it and try again.",
+    "hint_config": "The database address is not set.",
+    "hint_unknown": "Details are in the Vercel logs and on the server status page.",
+    "status": "Server status",
+    "retry": "Try again",
+    "code": "Code"
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "body": "This page could not load. Try again; if it keeps happening, check the server status.",
+    "retry": "Try again",
+    "home": "Home",
+    "status": "Server status",
+    "code": "Error code",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The address is wrong or the page no longer exists."
   },
   "nav": {
     "home": "Home",
@@ -152,7 +179,9 @@
     "empty": "No messages yet",
     "private": "Office {slot} private chat",
     "tooLarge": "File is larger than 20 MB",
-    "newMessages": "{n} new"
+    "newMessages": "{n} new",
+    "sendFailed": "Message not sent; try again",
+    "uploadFailed": "File upload failed"
   },
   "widgets": {
     "teamVote": "Team Vote",

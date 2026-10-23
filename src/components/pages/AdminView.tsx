@@ -1,7 +1,6 @@
 'use client';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { KeyRound, Trash2, UserPlus, Sparkles } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useShell } from '@/components/shell/ShellContext';
@@ -13,20 +12,19 @@ export function AdminView() {
   const t = useTranslations('admin');
   const tc = useTranslations('common');
   const locale = useLocale();
-  const router = useRouter();
   const { user, profiles, offices } = useShell();
   const [note, setNote] = useState('');
   const [, start] = useTransition();
   const [state, action, pending] = useActionState(createAccountAction, null);
   useEffect(() => {
-    if (state?.ok) { setNote(t('created', { password: state.data?.password ?? '' })); router.refresh(); }
+    if (state?.ok) setNote(t('created', { password: state.data?.password ?? '' }));
     else if (state?.error) setNote(t.has(state.error as 'usernameTaken') ? t(state.error as 'usernameTaken') : tc('error'));
-  }, [state, router, t, tc]);
+  }, [state, t, tc]);
   const run = (fn: () => Promise<{ ok: boolean; message?: string; data?: Record<string, string> }>) => start(async () => {
     const r = await fn();
     if (r.message === 'resetDone') setNote(t('resetDone', { password: r.data?.password ?? '' }));
     if (r.message === 'cleanupDone') setNote(t('cleanupDone', { visits: r.data?.visits ?? '0', notifications: r.data?.notifications ?? '0' }));
-    router.refresh();
+   
   });
 
   return (

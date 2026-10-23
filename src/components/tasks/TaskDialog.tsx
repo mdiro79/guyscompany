@@ -1,7 +1,6 @@
 'use client';
 import { useActionState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/Dialog';
 import { saveTaskAction } from '@/app/actions/tasks';
 import { TASK_COLUMNS, type Project, type Task, type TaskColumn } from '@/lib/data/types';
@@ -12,10 +11,9 @@ export function TaskDialog({ open, onClose, task, projects, defaultColumn = 'ide
 }) {
   const t = useTranslations('tasks');
   const tc = useTranslations('common');
-  const router = useRouter();
   const { profiles } = useShell();
   const [state, action, pending] = useActionState(saveTaskAction, null);
-  useEffect(() => { if (state?.ok) { onClose(); router.refresh(); } }, [state, onClose, router]);
+  useEffect(() => { if (state?.ok) onClose(); }, [state, onClose]);
   return (
     <Dialog open={open} onClose={onClose} title={task ? t('editTask') : t('newTask')}>
       <form action={action} className="space-y-3" key={task?.id ?? 'new'}>

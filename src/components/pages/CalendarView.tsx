@@ -2,11 +2,10 @@
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Dialog } from '@/components/ui/Dialog';
 import { createEventAction, deleteEventAction } from '@/app/actions/calendar';
-import { formatDate, formatNumber, formatTime } from '@/lib/format';
+import { formatDate, formatNumber, formatTime, todayIso as today, zonedDate } from '@/lib/format';
 import { toGregorian, toJalali, jalaliMonthLength } from '@/lib/jalali';
 import type { CalendarEvent, Task } from '@/lib/data/types';
 
@@ -35,21 +34,22 @@ export function CalendarView({ events, tasks }: { events: CalendarEvent[]; tasks
   const t = useTranslations('calendar');
   const tc = useTranslations('common');
   const locale = useLocale();
-  const router = useRouter();
   const persian = locale === 'fa';
-  const now = new Date();
-  const todayIso = iso(now.getFullYear(), now.getMonth() + 1, now.getDate());
-  const start = persian ? toJalali(now.getFullYear(), now.getMonth() + 1, now.getDate()) : { jy: now.getFullYear(), jm: now.getMonth() + 1 };
+  const todayIso = today();
+  const [ny, nm, nd] = todayIso.split('-').map(Number);
+  const start = persian ? toJalali(ny, nm, nd) : { jy: ny, jm: nm };
   const [ym, setYm] = useState({ y: start.jy, m: start.jm });
   const [selected, setSelected] = useState(todayIso);
   const [adding, setAdding] = useState(false);
   const [, startT] = useTransition();
   const [state, action, pending] = useActionState(createEventAction, null);
-  useEffect(() => { if (state?.ok) { setAdding(false); router.refresh(); } }, [state, router]);
+  useEffect(() => { if (state?.ok) setAdding(false); }, [state]);
 
   const cells = useMemo(() => monthCells(locale, ym.y, ym.m), [locale, ym]);
   const shift = (delta: number) => setYm(({ y, m }) => { const k = y * 12 + (m - 1) + delta; return { y: Math.floor(k / 12), m: (k % 12) + 1 }; });
-  const dayEvents = (d: string) => events.filter((e) => e.startsAt.slice(0, 10) <= d && e.endsAt.slice(0, 10) >= d);
+  // Event days in Tehran time (the stored values are UTC instants).
+  const spans = useMemo(() => events.map((e) => ({ e, from: zonedDate(e.startsAt), to: zonedDate(e.endsAt) })), [events]);
+  const dayEvents = (d: string) => spans.filter((x) => x.from <= d && x.to >= d).map((x) => x.e);
   const dayTasks = (d: string) => tasks.filter((x) => x.dueDate === d && x.column !== 'done');
   const headerDate = cells.find((c) => c.inMonth)!.iso;
   const weekdays = Array.from({ length: 7 }, (_, i) => formatDate(locale, new Date(Date.UTC(2024, 0, persian ? 6 + i : 1 + i)), { weekday: 'short' }));
@@ -91,7 +91,7 @@ export function CalendarView({ events, tasks }: { events: CalendarEvent[]; tasks
             <li key={e.id} className="flex items-center gap-2 rounded-xl bg-teal-soft px-3 py-2 text-sm">
               <span className="flex-1" dir="auto">{e.title}</span>
               <span className="text-xs text-muted" dir="ltr">{formatTime(locale, e.startsAt)}–{formatTime(locale, e.endsAt)}</span>
-              <button type="button" aria-label={tc('delete')} className="text-muted hover:text-danger" onClick={() => startT(async () => { await deleteEventAction(e.id); router.refresh(); })}><Trash2 className="size-4" /></button>
+              <button type="button" aria-label={tc('delete')} className="text-muted hover:text-danger" onClick={() => startT(async () => { await deleteEventAction(e.id); })}><Trash2 className="size-4" /></button>
             </li>
           ))}
           {dayTasks(selected).map((x) => <li key={x.id} className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{t('due', { title: x.title })}</li>)}

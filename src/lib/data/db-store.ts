@@ -1,7 +1,8 @@
 import 'server-only';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
-import { getDb, schema as s } from '@/db';
+import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
+import { describeDbError, isConnectionError } from '@/lib/db-errors';
 import type { DataStore, Message, Notification } from './types';
 
 type Row = Record<string, unknown>;
@@ -26,7 +27,7 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof s>;
 export function createDbStore(injected?: Db): DataStore {
   // Resolved per call so a stale serverless connection is replaced (see getDb).
   const db = () => injected ?? (getDb() as unknown as Db);
-  return {
+  const store: DataStore = {
     async listProfiles() { return isoAll(await db().select().from(s.profiles).orderBy(asc(s.profiles.createdAt))); },
     async getProfile(id) { const [r] = await db().select().from(s.profiles).where(eq(s.profiles.id, id)); return r ? iso(r) : null; },
     async getProfileByUsername(u) { const [r] = await db().select().from(s.profiles).where(eq(s.profiles.username, u)); return r ? iso(r) : null; },
@@ -132,4 +133,40 @@ export function createDbStore(injected?: Db): DataStore {
       return { visits: v.length, notifications: n.length };
     },
   };
+  return injected ? store : resilient(store);
 }
+
+const READ_TIMEOUT_MS = 8000;
+
+function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const t = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(`query took longer than ${ms} ms`), { code: 'QUERY_TIMEOUT' })), ms);
+  });
+  return Promise.race([p, t]).finally(() => clearTimeout(timer));
+}
+
+// A dead or hung connection (e.g. after the serverless instance was frozen) fails the query; it is retried
+// once on fresh connections. Reads also get a time limit (writes have none, so a slow write is never repeated).
+export function resilient(store: DataStore): DataStore {
+  const out = {} as Record<string, unknown>;
+  for (const [name, fn] of Object.entries(store) as [string, (...a: unknown[]) => Promise<unknown>][]) {
+    const read = /^(list|get)/.test(name);
+    const run = (args: unknown[]) => (read ? timeout(fn(...args), READ_TIMEOUT_MS) : fn(...args));
+    out[name] = async (...args: unknown[]) => {
+      let gen = dbGeneration();
+      try {
+        const p = run(args);
+        gen = dbGeneration(); // the query has picked its connection set synchronously
+        return await p;
+      } catch (e) {
+        if (!isConnectionError(e)) throw e;
+        console.warn(`[db] ${name} failed (${describeDbError(e).code}); retrying on a new connection`);
+        resetDb(0, gen);
+        return run(args);
+      }
+    };
+  }
+  return out as unknown as DataStore;
+}
+

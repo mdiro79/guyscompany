@@ -18,7 +18,7 @@ export function LoginForm({ demo, customAdmin }: { demo: boolean; customAdmin: b
         <label className="label" htmlFor="password">{t('password')}</label>
         <input id="password" name="password" type="password" dir="ltr" autoComplete="current-password" required className="input" />
       </div>
-      {state?.error && <p role="alert" className="text-sm text-danger">{t('invalid')}</p>}
+      {state?.error && <p role="alert" className="text-sm text-danger">{t(state.error === 'server' ? 'serverError' : 'invalid')}</p>}
       <button className="btn-primary w-full" disabled={pending}>{t('signIn')}</button>
       <p className="text-xs text-muted">{t('noSignup')}</p>
       {demo && !customAdmin && <p className="rounded-xl bg-accent-soft p-3 text-xs">{t('demoHint', { password: 'guys1234' })}</p>}

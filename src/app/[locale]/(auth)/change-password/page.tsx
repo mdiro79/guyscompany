@@ -1,10 +1,9 @@
-import { redirect } from 'next/navigation';
-import { getLocale } from 'next-intl/server';
-import { currentUser } from '@/lib/auth';
+import { requirePageUser } from '@/lib/auth';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ChangePasswordPage() {
-  const user = await currentUser();
-  if (!user) redirect(`/${await getLocale()}/login`);
+  const user = await requirePageUser();
   return <ChangePasswordForm forced={user.mustChangePassword} />;
 }

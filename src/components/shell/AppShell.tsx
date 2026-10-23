@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import { X, MessageCircle } from 'lucide-react';
@@ -24,13 +24,22 @@ export function AppShell({ data, notifications, messages, files, search, childre
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const [chat, setChat] = useState(false);
-  const [seen, setSeen] = useState(messages.length);
+  // The chat list is capped, so unread messages are counted from the last one seen rather than by length.
+  const lastId = messages.at(-1)?.id;
+  const [seenId, setSeenId] = useState(lastId);
+  const [inFrame, setInFrame] = useState(false);
   useLive(LIVE_TABLES);
   useEffect(() => { setDrawer(false); }, [pathname]);
-  useEffect(() => { if (chat) setSeen(messages.length); }, [chat, messages.length]);
+  useEffect(() => { if (chat) setSeenId(lastId); }, [chat, lastId]);
+  useEffect(() => { setInFrame(window.self !== window.top); }, []);
+  const unreadChat = useMemo(() => {
+    const from = seenId ? messages.findIndex((m) => m.id === seenId) + 1 : 0;
+    return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
+  }, [messages, seenId, data.user.id]);
   const fullBleed = pathname.startsWith('/office');
-  // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those).
-  const embed = useSearchParams().get('embed') === '1';
+  // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those). Links inside the
+  // monitor drop the ?embed flag, so being inside a frame counts too.
+  const embed = useSearchParams().get('embed') === '1' || inFrame;
   if (embed) {
     return (
       <ShellProvider value={data}>
@@ -60,7 +69,7 @@ export function AppShell({ data, notifications, messages, files, search, childre
                   <ChatPanel messages={messages} files={files} className="w-full" />
                 </aside>
               </div>
-              <MobileNav onChat={() => setChat(true)} onMenu={() => setDrawer(true)} unreadChat={Math.max(0, messages.length - seen)} />
+              <MobileNav onChat={() => setChat(true)} onMenu={() => setDrawer(true)} unreadChat={unreadChat} />
               <button type="button" onClick={() => setChat(true)} aria-label={t('nav.chat')}
                 className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden">
                 <MessageCircle className="size-6" />

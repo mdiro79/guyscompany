@@ -20,7 +20,14 @@ import { TouchControls } from './TouchControls';
 import { OfficePanel } from './OfficePanel';
 import { Tutorial } from './Tutorial';
 
-const OfficeScene = dynamic(() => import('./OfficeScene'), { ssr: false });
+const OfficeScene = dynamic(() => import('./OfficeScene'), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center bg-[#2a221c]">
+      <div className="size-12 animate-spin rounded-full border-4 border-white/20 border-t-[#f07a2a]" />
+    </div>
+  ),
+});
 
 export function OfficeView({ messages, privateChats, invitedSlots, files }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[] }) {
   const t = useTranslations('office');

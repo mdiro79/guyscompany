@@ -1,10 +1,10 @@
-import { currentUser } from '@/lib/auth';
+import { requirePageUser } from '@/lib/auth';
 import { store } from '@/lib/data';
 import { CHAT_PAGE_SIZE } from '@/lib/limits';
 import { OfficeView } from '@/components/office/OfficeView';
 
 export default async function OfficePage() {
-  const user = (await currentUser())!;
+  const user = await requirePageUser();
   const s = store();
   const [messages, offices, files] = await Promise.all([s.listMessages('team', CHAT_PAGE_SIZE), s.listOffices(), s.listFiles()]);
   const mine = offices.find((o) => o.ownerId === user.id);

@@ -28,7 +28,7 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
   const [note, setNote] = useState('');
   const [, start] = useTransition();
   const [state, action, pending] = useActionState(updateProfileAction, null);
-  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const myOffice = offices.find((o) => o.ownerId === user.id);
   const nameOf = (id: string) => profiles.find((p) => p.id === id)?.displayName ?? '—';
   const incoming = swaps.filter((s) => s.toUserId === user.id && s.status === 'pending');
@@ -96,7 +96,7 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
               return <option key={p.id} value={p.id}>{p.displayName}{o ? ` (${formatNumber(locale, o.slot)})` : ''}</option>;
             })}
           </select>
-          <button type="button" className="btn-primary" disabled={!swapTo} onClick={() => start(async () => { const r = await requestSwapAction(swapTo); setNote(r.ok ? t('requestSent') : tc('error')); router.refresh(); })}>{tc('send')}</button>
+          <button type="button" className="btn-primary" disabled={!swapTo} onClick={() => start(async () => { const r = await requestSwapAction(swapTo); setNote(r.ok ? t('requestSent') : tc('error')); })}>{tc('send')}</button>
         </div>
         {note && <p className="text-sm text-brand">{note}</p>}
         {incoming.length > 0 && <div>

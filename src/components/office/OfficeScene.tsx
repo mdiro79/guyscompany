@@ -1,5 +1,5 @@
 'use client';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
@@ -7,6 +7,7 @@ import { Furniture } from './Furniture';
 import { Player, type Pose } from './Player';
 import { Avatars, Receptionist } from './Avatars';
 import { FirstPersonArms } from './FirstPersonArms';
+import { preloadCharacter } from '@/components/three/CharacterModel';
 import { MonitorFrame } from './MonitorFrame';
 import { OFFICES } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
@@ -37,6 +38,8 @@ function Lights({ low }: { low: boolean }) {
 }
 
 export default function OfficeScene(p: SceneProps) {
+  // Teammates' characters download in the background, so they appear as soon as someone walks in.
+  useEffect(() => { new Set(p.profiles.map((x) => x.characterId)).forEach(preloadCharacter); }, [p.profiles]);
   return (
     <Canvas
       dpr={p.lowQuality ? 1 : [1, 1.75]}

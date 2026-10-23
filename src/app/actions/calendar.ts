@@ -3,13 +3,15 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { store } from '@/lib/data';
 import { removeObject } from '@/lib/storage';
+import { fromZonedLocal } from '@/lib/format';
 import { fail, okResult, type ActionResult } from './result';
 
 export async function createEventAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const title = String(form.get('title') ?? '').trim().slice(0, 200);
-  const startsAt = new Date(String(form.get('startsAt') ?? ''));
-  const endsAt = new Date(String(form.get('endsAt') ?? form.get('startsAt') ?? ''));
+  // datetime-local inputs carry no zone; they mean Tehran time (the server itself runs on UTC).
+  const startsAt = fromZonedLocal(String(form.get('startsAt') ?? ''));
+  const endsAt = fromZonedLocal(String(form.get('endsAt') || form.get('startsAt') || ''));
   if (!title || Number.isNaN(startsAt.getTime())) return fail('error');
   const end = Number.isNaN(endsAt.getTime()) || endsAt < startsAt ? new Date(startsAt.getTime() + 3600000) : endsAt;
   await store().createEvent({ title, startsAt: startsAt.toISOString(), endsAt: end.toISOString(), createdBy: user.id });

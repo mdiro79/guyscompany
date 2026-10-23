@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { MessageCircle, MoreHorizontal, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { sendMessageAction, toggleReactionAction } from '@/app/actions/chat';
@@ -20,7 +19,6 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
 }) {
   const t = useTranslations('chat');
   const locale = useLocale();
-  const router = useRouter();
   const { user, profiles } = useShell();
   const [text, setText] = useState('');
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -30,20 +28,27 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // The list is capped, so follow the newest message id rather than the count.
+  const lastId = messages.at(-1)?.id;
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages.length]);
+  }, [lastId]);
 
-  const send = (body: string, fileId: string | null = null) => start(async () => {
-    const r = await sendMessageAction(channel, body, fileId);
-    if (r.ok) { setText(''); router.refresh(); } else setError(t('empty'));
-  });
+  // The box clears right away; the text comes back if sending fails.
+  const send = (body: string, fileId: string | null = null) => {
+    setError(null);
+    setText('');
+    start(async () => {
+      const r = await sendMessageAction(channel, body, fileId).catch(() => null);
+      if (!r?.ok) { setText((cur) => cur || body); setError(t('sendFailed')); }
+    });
+  };
 
   const upload = async (file: File) => {
     setError(null);
     if (file.size > MAX_FILE_BYTES) { setError(t('tooLarge')); return; }
     let id: string;
-    try { id = await uploadFile(file); } catch { setError(t('tooLarge')); return; }
+    try { id = await uploadFile(file); } catch { setError(t('uploadFailed')); return; }
     send(text, id);
   };
 
@@ -85,7 +90,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
                 )}
                 <div className="mt-1 flex flex-wrap items-center gap-1">
                   {grouped.map(([emoji, users]) => (
-                    <button key={emoji} type="button" onClick={() => start(async () => { await toggleReactionAction(m.id, emoji); router.refresh(); })}
+                    <button key={emoji} type="button" onClick={() => start(async () => { await toggleReactionAction(m.id, emoji); })}
                       className={clsx('chip gap-1 border', users.includes(user.id) ? 'border-brand bg-brand-soft' : 'border-line bg-surface')}>
                       {emoji} <span>{users.length}</span>
                     </button>
@@ -96,7 +101,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
                       <div className="card absolute bottom-8 start-0 z-10 flex gap-1 p-1">
                         {QUICK.map((e) => (
                           <button key={e} type="button" className="rounded-lg p-1.5 text-lg hover:bg-surface-2"
-                            onClick={() => { setReactFor(null); start(async () => { await toggleReactionAction(m.id, e); router.refresh(); }); }}>{e}</button>
+                            onClick={() => { setReactFor(null); start(async () => { await toggleReactionAction(m.id, e); }); }}>{e}</button>
                         ))}
                       </div>
                     )}

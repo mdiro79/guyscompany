@@ -2,7 +2,6 @@
 import { useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { Target, Plus, X, ChevronDown } from 'lucide-react';
 import { addFocusAction, toggleFocusAction, deleteFocusAction } from '@/app/actions/misc';
 import { formatDate, formatNumber } from '@/lib/format';
@@ -11,11 +10,10 @@ import type { FocusItem } from '@/lib/data/types';
 export function TodaysFocus({ items }: { items: FocusItem[] }) {
   const t = useTranslations('widgets');
   const locale = useLocale();
-  const router = useRouter();
   const [text, setText] = useState('');
   const [open, setOpen] = useState(true);
   const [, start] = useTransition();
-  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const done = items.filter((i) => i.done).length;
   return (
     <section className="card relative overflow-hidden p-4">

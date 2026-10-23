@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { LayoutGrid, List, GanttChart, Plus, Lightbulb, RefreshCw, Eye, CheckCircle2, CalendarRange } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useProfile, useShell } from '@/components/shell/ShellContext';
@@ -86,13 +86,12 @@ export function TaskViews({ tasks, projects, compact }: { tasks: Task[]; project
 
 function Column({ column, tasks, hiddenOnMobile, onEdit, onAdd }: { column: TaskColumn; tasks: Task[]; hiddenOnMobile: boolean; onEdit: (t: Task) => void; onAdd: () => void }) {
   const t = useTranslations('tasks');
-  const router = useRouter();
   const [over, setOver] = useState(false);
   const [, start] = useTransition();
   const { icon: Icon, bg, fg } = COL_STYLE[column];
   return (
     <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-      onDrop={(e) => { setOver(false); const id = e.dataTransfer.getData('text/task'); if (id) start(async () => { await moveTaskAction(id, column); router.refresh(); }); }}
+      onDrop={(e) => { setOver(false); const id = e.dataTransfer.getData('text/task'); if (id) start(async () => { await moveTaskAction(id, column); }); }}
       className={clsx('rounded-2xl p-2.5 transition-shadow', bg, hiddenOnMobile && 'hidden md:block', over && 'ring-2 ring-brand')}>
       <div className="mb-2 flex items-center gap-2 px-1">
         <Icon className={clsx('size-5', fg)} />

@@ -64,7 +64,10 @@ export async function moveTaskAction(id: string, column: TaskColumn) {
 }
 
 export async function deleteTaskAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
+  // Same rule as the card menu: the creator or an admin.
+  const task = (await store().listTasks()).find((t) => t.id === id);
+  if (!task || (user.role !== 'admin' && task.createdBy !== user.id)) return fail('forbidden');
   await store().deleteTask(id);
   revalidatePath('/', 'layout');
   return okResult();

@@ -11,13 +11,10 @@ export async function sendMessageAction(channel: string, body: string, fileId: s
   if (!text && !fileId) return fail('error');
   if (!(await canUseChannel(user.id, channel))) return fail('forbidden');
   await store().createMessage({ channel, authorId: user.id, body: text, fileId });
-  // @username mentions notify the mentioned member.
-  const profiles = await store().listProfiles();
-  for (const p of profiles) {
-    if (p.id !== user.id && new RegExp(`@${p.username}\\b`, 'i').test(text)) {
-      await store().createNotification({ userId: p.id, kind: 'mention', payload: { name: user.displayName } });
-    }
-  }
+  // @username mentions notify the mentioned member (usernames may contain '.', so match literally).
+  const mentioned = new Set(Array.from(text.toLowerCase().matchAll(/@([a-z0-9_.-]{3,24})/g), (m) => m[1].replace(/\.+$/, '')));
+  const targets = (await store().listProfiles()).filter((p) => p.id !== user.id && mentioned.has(p.username));
+  await Promise.all(targets.map((p) => store().createNotification({ userId: p.id, kind: 'mention', payload: { name: user.displayName } })));
   revalidatePath('/', 'layout');
   return okResult();
 }

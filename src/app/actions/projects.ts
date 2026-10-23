@@ -59,7 +59,11 @@ export async function volunteerRoleAction(id: string, join: boolean) {
 }
 
 export async function deleteRoleAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
+  // Same rule as the project card: the project manager or an admin.
+  const role = (await store().listRoles()).find((r) => r.id === id);
+  const project = role && (await store().listProjects()).find((p) => p.id === role.projectId);
+  if (!role || (user.role !== 'admin' && project?.managerId !== user.id)) return fail('forbidden');
   await store().deleteRole(id);
   revalidatePath('/', 'layout');
   return okResult();

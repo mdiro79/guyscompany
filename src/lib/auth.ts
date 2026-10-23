@@ -1,10 +1,14 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getLocale } from 'next-intl/server';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { isDemo, usernameToEmail } from '@/lib/env';
+import { isDemo, serverEnv, usernameToEmail } from '@/lib/env';
 import { store, type Profile } from '@/lib/data';
 import { supabaseServer, supabaseAdmin } from '@/lib/supabase/server';
 import { DEMO_PASSWORD } from '@/lib/data/seed';
+import { verifyHs256 } from '@/lib/jwt';
 
 const DEMO_COOKIE = 'gc_demo_session';
 const demoSecret = () => process.env.CRON_SECRET || 'guyscompany-demo-secret';
@@ -31,14 +35,35 @@ async function demoUserId(): Promise<string | null> {
   return id;
 }
 
-export async function currentUser(): Promise<Profile | null> {
-  if (isDemo) {
-    const id = await demoUserId();
-    return id ? store().getProfile(id) : null;
+async function sessionUserId(): Promise<string | null> {
+  if (isDemo) return demoUserId();
+  try {
+    const supabase = await supabaseServer();
+    // The middleware has already refreshed an expired session, so this reads the cookie without a request.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    const local = verifyHs256(session.access_token, serverEnv().jwtSecret);
+    if (local !== undefined) return local;
+    // Asymmetric signing keys are verified locally against the cached JWKS; legacy keys fall back to the Auth server.
+    const { data } = await supabase.auth.getClaims(session.access_token);
+    return typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
+  } catch (e) {
+    console.error('[auth] session check failed:', e);
+    return null;
   }
-  const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getUser();
-  return data.user ? store().getProfile(data.user.id) : null;
+}
+
+// Memoised per request: the layout and the page share one session check and one profile query.
+export const currentUser = cache(async (): Promise<Profile | null> => {
+  const id = await sessionUserId();
+  return id ? store().getProfile(id) : null;
+});
+
+// For pages: layouts and pages render in parallel, so a page cannot rely on the layout's redirect.
+export async function requirePageUser(): Promise<Profile> {
+  const user = await currentUser();
+  if (!user) redirect(`/${await getLocale()}/login`);
+  return user;
 }
 
 export async function requireUser(): Promise<Profile> {

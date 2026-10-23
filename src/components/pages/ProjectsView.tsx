@@ -1,7 +1,6 @@
 'use client';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { Plus, Pencil, Trash2, UserPlus, UserMinus } from 'lucide-react';
 import { Dialog } from '@/components/ui/Dialog';
 import { Avatar } from '@/components/ui/Avatar';
@@ -14,16 +13,15 @@ export function ProjectsView({ projects, tasks, roles }: { projects: Project[]; 
   const t = useTranslations('projects');
   const tc = useTranslations('common');
   const locale = useLocale();
-  const router = useRouter();
   const { user, profiles } = useShell();
   const [editing, setEditing] = useState<Project | 'new' | null>(null);
   const [roleFor, setRoleFor] = useState<string | null>(null);
   const [, start] = useTransition();
-  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const [state, action, pending] = useActionState(saveProjectAction, null);
   const [roleState, roleAction, rolePending] = useActionState(createRoleAction, null);
-  useEffect(() => { if (state?.ok) { setEditing(null); router.refresh(); } }, [state, router]);
-  useEffect(() => { if (roleState?.ok) { setRoleFor(null); router.refresh(); } }, [roleState, router]);
+  useEffect(() => { if (state?.ok) setEditing(null); }, [state]);
+  useEffect(() => { if (roleState?.ok) setRoleFor(null); }, [roleState]);
   const project = editing && editing !== 'new' ? editing : null;
 
   return (

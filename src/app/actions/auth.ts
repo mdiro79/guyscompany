@@ -7,7 +7,13 @@ import { fail, type ActionResult } from './result';
 export async function loginAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const username = String(form.get('username') ?? '');
   const password = String(form.get('password') ?? '');
-  const user = await signIn(username, password);
+  let user;
+  try {
+    user = await signIn(username, password);
+  } catch (e) {
+    console.error('[login] sign-in failed:', e);
+    return fail('server', { username });
+  }
   if (!user) return fail('invalid', { username });
   const locale = await getLocale();
   redirect({ href: user.mustChangePassword ? '/change-password' : '/', locale });

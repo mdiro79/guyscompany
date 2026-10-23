@@ -40,6 +40,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, isPh
   const circles = useMemo(() => propColliders(), []);
   const seats = useMemo(() => allSeats(), []);
   const doors = useMemo(() => blockingDoors(offices, viewerId, invitedSlots), [offices, viewerId, invitedSlots]);
+  const segments = useMemo(() => [...walls, ...doors], [walls, doors]);
   const pos = useRef<Vec2>([...SPAWN.pos]);
   const yaw = useRef(SPAWN.yaw), pitch = useRef(-0.05);
   const bob = useRef(0);
@@ -70,15 +71,17 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, isPh
     };
     const click = () => { if (!isPhone && !officeUi.get().seatId) el.requestPointerLock?.(); };
     const lock = () => officeUi.set({ locked: document.pointerLockElement === el });
+    const blur = () => keys.current.clear();
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
-    window.addEventListener('blur', () => keys.current.clear());
+    window.addEventListener('blur', blur);
     document.addEventListener('mousemove', move);
     document.addEventListener('pointerlockchange', lock);
     el.addEventListener('click', click);
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
       document.removeEventListener('mousemove', move);
       document.removeEventListener('pointerlockchange', lock);
       el.removeEventListener('click', click);
@@ -126,7 +129,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, isPh
         if (seat) {
           // Stand up a step behind the chair.
           const back: Vec2 = [seat.pos[0] + Math.sin(seat.facing) * 0.7, seat.pos[1] + Math.cos(seat.facing) * 0.7];
-          pos.current = resolveCollisions(back, PLAYER_RADIUS, [...walls, ...doors], circles);
+          pos.current = resolveCollisions(back, PLAYER_RADIUS, segments, circles);
         }
         officeUi.set({ seatId: null, panel: 'none' });
       } else if (nearest) {
@@ -172,7 +175,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, isPh
         const sin = Math.sin(yaw.current), cos = Math.cos(yaw.current);
         const dx = (-sin * f + cos * r) * speed * dt;
         const dz = (-cos * f - sin * r) * speed * dt;
-        pos.current = resolveCollisions([pos.current[0] + dx, pos.current[1] + dz], PLAYER_RADIUS, [...walls, ...doors], circles);
+        pos.current = resolveCollisions([pos.current[0] + dx, pos.current[1] + dz], PLAYER_RADIUS, segments, circles);
         moving = run ? 2 : 1;
         bob.current += dt * (run ? 13 : 9);
       }

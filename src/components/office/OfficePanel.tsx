@@ -2,7 +2,6 @@
 import { useEffect, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { Lock, Unlock, Eye, EyeOff, Target, Globe, Users, MessageSquare, X } from 'lucide-react';
 import type { Office, OfficeVisit, Profile, Message, FileMeta } from '@/lib/data/types';
 import { updateMyOfficeAction, listVisitsAction, inviteToChatAction } from '@/app/actions/offices';
@@ -16,12 +15,11 @@ export function OfficePanel({ office, profiles, me, privateMessages, files }: {
   const t = useTranslations('office');
   const tc = useTranslations('common');
   const locale = useLocale();
-  const router = useRouter();
   const [, start] = useTransition();
   const [visits, setVisits] = useState<OfficeVisit[]>([]);
   const [tab, setTab] = useState<'settings' | 'visitors' | 'chat' | null>('settings');
   const [invitee, setInvitee] = useState('');
-  const set = (patch: Partial<Office>) => start(async () => { await updateMyOfficeAction(patch); router.refresh(); });
+  const set = (patch: Partial<Office>) => start(async () => { await updateMyOfficeAction(patch); });
   useEffect(() => { if (tab === 'visitors') listVisitsAction(office.slot).then(setVisits); }, [tab, office.slot]);
   const name = (id: string) => profiles.find((p) => p.id === id)?.displayName ?? '—';
   const Toggle = ({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () => void; icon: typeof Lock; label: string }) => (
@@ -66,7 +64,7 @@ export function OfficePanel({ office, profiles, me, privateMessages, files }: {
               <option value="">{t('invite')}…</option>
               {profiles.filter((p) => p.id !== me.id).map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
             </select>
-            <button type="button" className="btn-primary min-h-10" disabled={!invitee} onClick={() => start(async () => { await inviteToChatAction(invitee); setInvitee(''); router.refresh(); })}>{tc('send')}</button>
+            <button type="button" className="btn-primary min-h-10" disabled={!invitee} onClick={() => start(async () => { await inviteToChatAction(invitee); setInvitee(''); })}>{tc('send')}</button>
           </div>
           <div className="h-72 overflow-hidden rounded-xl bg-surface text-ink">
             <ChatPanel channel={`office:${office.slot}`} messages={privateMessages} files={files} title={t('privateChat')} className="h-full" />

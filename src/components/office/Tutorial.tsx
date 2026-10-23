@@ -1,7 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { setTutorialDoneAction } from '@/app/actions/profile';
 
 const STEPS = ['s1', 's2', 's3', 's4', 's5', 's6'] as const;
@@ -9,10 +8,9 @@ const STEPS = ['s1', 's2', 's3', 's4', 's5', 's6'] as const;
 // Guided tour by the receptionist; shown on first visit (replayable from the user panel).
 export function Tutorial({ onDone }: { onDone: () => void }) {
   const t = useTranslations('tutorial');
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [, start] = useTransition();
-  const finish = () => start(async () => { await setTutorialDoneAction(true); onDone(); router.refresh(); });
+  const finish = () => start(async () => { await setTutorialDoneAction(true); onDone(); });
   return (
     <div className="pointer-events-auto absolute inset-x-3 top-20 z-30 mx-auto max-w-md sm:top-auto sm:bottom-10 rounded-2xl bg-white/95 p-4 text-[#1f2a24] shadow-xl sm:bottom-10">
       <div className="mb-1 flex items-center gap-2 text-sm font-semibold">

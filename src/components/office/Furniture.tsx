@@ -5,12 +5,21 @@ import * as THREE from 'three';
 import { props, type Prop } from './layout';
 
 // Kenney models ship with unlit materials; convert them to lit ones so the warm lighting applies.
+// One material per colour is shared by every prop (the office has ~100 meshes but only a few colours).
+const litMaterials = new Map<string, THREE.MeshStandardMaterial>();
+function litMaterial(color: THREE.Color) {
+  const key = color.getHexString();
+  let m = litMaterials.get(key);
+  if (!m) { m = new THREE.MeshStandardMaterial({ color: color.clone(), roughness: 0.75, metalness: 0.05 }); litMaterials.set(key, m); }
+  return m;
+}
+
 function prepare(scene: THREE.Object3D) {
   scene.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const src = m.material as THREE.MeshBasicMaterial;
-    m.material = new THREE.MeshStandardMaterial({ color: src.color?.clone() ?? new THREE.Color('#ccc'), roughness: 0.75, metalness: 0.05 });
+    m.material = litMaterial(src.color ?? new THREE.Color('#ccc'));
   });
 }
 

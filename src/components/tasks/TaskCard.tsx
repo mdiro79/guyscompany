@@ -2,7 +2,6 @@
 import { useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { MoreVertical } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useProfile, useShell } from '@/components/shell/ShellContext';
@@ -25,13 +24,12 @@ export function useDueLabel() {
 export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () => void; draggable?: boolean }) {
   const t = useTranslations('tasks');
   const tc = useTranslations('common');
-  const router = useRouter();
   const { user } = useShell();
   const assignee = useProfile(task.assigneeId);
   const due = useDueLabel();
   const [menu, setMenu] = useState(false);
   const [, start] = useTransition();
-  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const overdue = task.dueDate && task.column !== 'done' && daysFromToday(task.dueDate) < 0;
 
   return (

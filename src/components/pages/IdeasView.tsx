@@ -2,7 +2,6 @@
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { Plus, Lock, EyeOff, Gavel, ArrowUpRight } from 'lucide-react';
 import { Dialog } from '@/components/ui/Dialog';
 import { useShell } from '@/components/shell/ShellContext';
@@ -17,14 +16,13 @@ export function IdeasView({ polls, votes, ideas, projects }: { polls: Poll[]; vo
   const tc = useTranslations('common');
   const tw = useTranslations('widgets');
   const locale = useLocale();
-  const router = useRouter();
   const { user, profiles } = useShell();
   const [creating, setCreating] = useState(false);
   const [decision, setDecision] = useState<Record<string, string>>({});
   const [, start] = useTransition();
-  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); router.refresh(); });
+  const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const [state, action, pending] = useActionState(createPollAction, null);
-  useEffect(() => { if (state?.ok) { setCreating(false); router.refresh(); } }, [state, router]);
+  useEffect(() => { if (state?.ok) setCreating(false); }, [state]);
   const { ranked, tie } = rankClosedPolls(polls, votes);
   const managerOf = (p: Poll) => {
     const task = ideas.find((x) => x.id === p.taskId);
