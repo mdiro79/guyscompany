@@ -1,2 +1,7 @@
 assets/raw/
 node_modules/
+.next/
+.env*.local
+.env
+next-env.d.ts
+*.tsbuildinfo

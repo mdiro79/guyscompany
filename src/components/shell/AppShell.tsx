@@ -1,0 +1,74 @@
+'use client';
+import { useEffect, useState, type ReactNode } from 'react';
+import clsx from 'clsx';
+import { useTranslations } from 'next-intl';
+import { X, MessageCircle } from 'lucide-react';
+import { usePathname } from '@/i18n/navigation';
+import { useLive } from '@/lib/live';
+import { ChatPanel } from '@/components/chat/ChatPanel';
+import { PresenceProvider } from '@/components/presence/PresenceProvider';
+import { VoiceProvider } from '@/components/voice/VoiceProvider';
+import type { FileMeta, Message, Notification } from '@/lib/data/types';
+import { ShellProvider, type ShellData } from './ShellContext';
+import { Sidebar } from './Sidebar';
+import { TopBar, type SearchItem } from './TopBar';
+import { MobileNav } from './MobileNav';
+
+const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
+
+export function AppShell({ data, notifications, messages, files, search, children }: {
+  data: ShellData; notifications: Notification[]; messages: Message[]; files: FileMeta[]; search: SearchItem[]; children: ReactNode;
+}) {
+  const t = useTranslations();
+  const pathname = usePathname();
+  const [drawer, setDrawer] = useState(false);
+  const [chat, setChat] = useState(false);
+  const [seen, setSeen] = useState(messages.length);
+  useLive(LIVE_TABLES);
+  useEffect(() => { setDrawer(false); }, [pathname]);
+  useEffect(() => { if (chat) setSeen(messages.length); }, [chat, messages.length]);
+  const fullBleed = pathname.startsWith('/office');
+
+  return (
+    <ShellProvider value={data}>
+      <PresenceProvider>
+        <VoiceProvider>
+          {fullBleed ? children : (
+            <div className="flex min-h-dvh flex-col">
+              {data.demo && <div className="bg-accent px-4 py-1 text-center text-xs text-white">{t('common.demoBanner')}</div>}
+              <TopBar notifications={notifications} search={search} onMenu={() => setDrawer(true)} />
+              <div className="flex flex-1">
+                <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-64 shrink-0 border-e border-line lg:block"><Sidebar /></aside>
+                <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-4">{children}</main>
+                <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex 2xl:w-96">
+                  <ChatPanel messages={messages} files={files} className="w-full" />
+                </aside>
+              </div>
+              <MobileNav onChat={() => setChat(true)} onMenu={() => setDrawer(true)} unreadChat={Math.max(0, messages.length - seen)} />
+              <button type="button" onClick={() => setChat(true)} aria-label={t('nav.chat')}
+                className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden">
+                <MessageCircle className="size-6" />
+              </button>
+              {/* Drawer (phone/tablet) */}
+              <div className={clsx('fixed inset-0 z-40 lg:hidden', drawer ? 'visible' : 'invisible')}>
+                <div className={clsx('absolute inset-0 bg-black/40 transition-opacity', drawer ? 'opacity-100' : 'opacity-0')} onClick={() => setDrawer(false)} />
+                <div className={clsx('absolute inset-y-0 start-0 w-[min(20rem,85vw)] bg-bg shadow-xl transition-transform',
+                  drawer ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full')}>
+                  <button type="button" className="icon-btn absolute top-2 end-2 z-10" onClick={() => setDrawer(false)} aria-label={t('common.close')}><X className="size-5" /></button>
+                  <Sidebar onNavigate={() => setDrawer(false)} />
+                </div>
+              </div>
+              {/* Full-screen chat (below xl) */}
+              {chat && (
+                <div className="fixed inset-0 z-50 flex flex-col bg-surface xl:hidden">
+                  <button type="button" className="icon-btn absolute top-3 end-3 z-10" onClick={() => setChat(false)} aria-label={t('common.close')}><X className="size-5" /></button>
+                  <ChatPanel messages={messages} files={files} className="h-full pb-[env(safe-area-inset-bottom)]" />
+                </div>
+              )}
+            </div>
+          )}
+        </VoiceProvider>
+      </PresenceProvider>
+    </ShellProvider>
+  );
+}

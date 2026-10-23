@@ -1,0 +1,34 @@
+<!doctype html><html><body style="margin:0">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+const S = 192;
+const chars = await (await fetch('/characters.json')).json();
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(S, S); renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+const kayAnims = (await loader.loadAsync('/models/animations/Rig_Medium_General.glb')).animations;
+const out = {};
+for (const c of chars) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 2.4));
+  const d = new THREE.DirectionalLight(0xffe2b8, 2.2); d.position.set(1.5, 3, 4); scene.add(d);
+  const g = await loader.loadAsync(c.model);
+  const obj = g.scene; scene.add(obj);
+  const clips = g.animations.length ? g.animations : kayAnims;
+  const idle = clips.find(a => /^idle/i.test(a.name)) || clips.find(a => /idle/i.test(a.name)) || clips[0];
+  if (idle) { const m = new THREE.AnimationMixer(obj); m.clipAction(idle).play(); m.update(0.4); }
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  // Frame the upper ~60% of the model (head and shoulders for humanoids).
+  const focusY = box.max.y - size.y * 0.32, span = Math.max(size.y * 0.62, size.x * 0.8);
+  const cam = new THREE.PerspectiveCamera(28, 1, 0.01, 1000);
+  const dist = span / (2 * Math.tan(THREE.MathUtils.degToRad(14)));
+  cam.position.set(ctr.x + dist * 0.18, focusY + span * 0.05, box.max.z + dist); cam.lookAt(ctr.x, focusY, ctr.z);
+  renderer.setClearColor(0x000000, 0); renderer.render(scene, cam);
+  out[c.id] = renderer.domElement.toDataURL('image/png');
+}
+window.__thumbs = out;
+</script></body></html>
