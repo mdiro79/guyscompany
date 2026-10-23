@@ -4,9 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Activity, Home, RotateCw } from 'lucide-react';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
+import { isEmbedded } from '@/lib/device';
 
 const AUTO_RETRY_KEY = 'gc_error_auto_retry';
 const AUTO_RETRY_EVERY_MS = 30_000;
+const RETRY_WATCHDOG_MS = 12_000;
 // Fallback when sessionStorage is blocked, so the automatic retry can never loop.
 let lastAutoRetry = 0;
 // After a new deploy an open page asks for code or server actions that no longer exist; only a reload fixes it.
@@ -25,9 +27,17 @@ export function ErrorView({ error, reset }: { error: Error & { digest?: string }
     setRetryOf(error);
     startTransition(() => { router.refresh(); reset(); });
   }, [error, router, reset]);
+  // A retry whose request hangs never settles (the button stayed on "Trying again…"): reload the page instead.
+  useEffect(() => {
+    if (!retrying) return;
+    const id = setTimeout(() => window.location.reload(), RETRY_WATCHDOG_MS);
+    return () => clearTimeout(id);
+  }, [retrying]);
 
   useEffect(() => {
     console.error(error);
+    // On the office desk monitor the office reloads the dashboard itself (see MonitorDashboard).
+    if (isEmbedded()) { window.parent.postMessage({ type: 'gc-embed-error' }, window.location.origin); return; }
     let last = lastAutoRetry;
     try { last = Math.max(last, Number(sessionStorage.getItem(AUTO_RETRY_KEY)) || 0); } catch { /* storage blocked */ }
     if (Date.now() - last < AUTO_RETRY_EVERY_MS) return;

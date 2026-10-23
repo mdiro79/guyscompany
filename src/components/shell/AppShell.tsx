@@ -6,7 +6,7 @@ import { X, MessageCircle } from 'lucide-react';
 import { isEmbedded } from '@/lib/device';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname } from '@/i18n/navigation';
-import { useLive } from '@/lib/live';
+import { useLive, setLivePaused } from '@/lib/live';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { PresenceProvider } from '@/components/presence/PresenceProvider';
 import { VoiceProvider } from '@/components/voice/VoiceProvider';
@@ -43,6 +43,16 @@ export function AppShell({ data, notifications, messages, files, search, childre
   const [framed, setFramed] = useState(false);
   useEffect(() => setFramed(isEmbedded()), []);
   const embed = embedParam || framed;
+  // Inside the office the dashboard stays loaded while hidden (instant monitor); the office says when it is shown.
+  useEffect(() => {
+    if (!embed) return;
+    const h = (e: MessageEvent) => {
+      if (e.origin === window.location.origin && e.source === window.parent && e.data?.type === 'gc-monitor-visible') setLivePaused(!e.data.visible);
+    };
+    window.addEventListener('message', h);
+    window.parent.postMessage({ type: 'gc-embed-hello' }, window.location.origin);
+    return () => window.removeEventListener('message', h);
+  }, [embed]);
   if (embed) {
     const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office');
     return (

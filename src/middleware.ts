@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import createIntlMiddleware from 'next-intl/middleware';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { routing } from './i18n/routing';
+import { fetchWithTimeout } from './lib/fetch-timeout';
 
 const intl = createIntlMiddleware(routing);
 const LOCALES = routing.locales.join('|');
@@ -28,6 +29,7 @@ export async function middleware(request: NextRequest) {
   if (url && key && hasSession) {
     try {
       const supabase = createServerClient(url, key, {
+        global: { fetch: fetchWithTimeout(6000) },
         cookies: {
           getAll: () => request.cookies.getAll(),
           setAll: (list) => {

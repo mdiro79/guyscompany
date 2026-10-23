@@ -4,6 +4,16 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 const DEBOUNCE_MS = 400;
+const PAUSE_EVENT = 'gc-live-pause';
+let paused = false;
+
+// Pauses live refreshes while the page is not seen although its tab is visible: the dashboard kept
+// loaded (hidden) inside the office for the desk monitor. Changes made meanwhile refresh once on resume.
+export function setLivePaused(value: boolean) {
+  if (paused === value) return;
+  paused = value;
+  window.dispatchEvent(new Event(PAUSE_EVENT));
+}
 const FALLBACK_POLL_MS = 15000;
 const STALE_AFTER_HIDDEN_MS = 30000;
 
@@ -17,25 +27,26 @@ export function useLive(tables: string[], intervalMs = 5000) {
     let dirty = false;
     let hiddenAt = 0;
     let poll: ReturnType<typeof setInterval> | null = null;
-    const visible = () => document.visibilityState === 'visible';
+    const visible = () => document.visibilityState === 'visible' && !paused;
     const refresh = () => {
       if (!visible()) { dirty = true; return; }
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => { dirty = false; router.refresh(); }, DEBOUNCE_MS);
     };
     const onVisibility = () => {
-      if (!visible()) { hiddenAt = Date.now(); return; }
+      if (!visible()) { hiddenAt ||= Date.now(); return; }
       // Mobile browsers suspend sockets in the background, so a long absence may have missed events.
       if (dirty || (hiddenAt && Date.now() - hiddenAt > STALE_AFTER_HIDDEN_MS)) refresh();
       hiddenAt = 0;
     };
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener(PAUSE_EVENT, onVisibility);
     const startPolling = (ms: number) => { poll ??= setInterval(() => { if (visible()) router.refresh(); }, ms); };
 
     const supabase = supabaseBrowser();
     if (!supabase) {
       startPolling(intervalMs);
-      return () => { if (poll) clearInterval(poll); if (timer) clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); };
+      return () => { if (poll) clearInterval(poll); if (timer) clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); window.removeEventListener(PAUSE_EVENT, onVisibility); };
     }
     const channel = supabase.channel(`live:${key}`);
     for (const table of key.split(',')) {
@@ -50,6 +61,7 @@ export function useLive(tables: string[], intervalMs = 5000) {
       if (poll) clearInterval(poll);
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(PAUSE_EVENT, onVisibility);
       supabase.removeChannel(channel);
     };
   }, [key, intervalMs, router]);

@@ -167,6 +167,9 @@ M = {
   "keyMove": ("حرکت در دفتر", "Move in the office"),
  },
  "admin": {
+  "recentErrors": ("خطاهای اخیر سرور", "Recent server errors"),
+  "recentErrorsNote": ("کد خطایی که کاربر روی صفحه‌ی خطا می‌بیند را اینجا پیدا کنید. فقط همین سرور، از آخرین راه‌اندازی.", "Find the code a user saw on the error screen here. This server only, since its last start."),
+  "noErrors": ("خطایی ثبت نشده است.", "No errors recorded."),
   "title": ("مدیریت", "Admin"), "accounts": ("حساب‌ها", "Accounts"), "newAccount": ("حساب جدید", "New account"),
   "username": ("نام کاربری (انگلیسی)", "Username"), "displayName": ("نام نمایشی", "Display name"), "jobTitle": ("سمت", "Job title"),
   "role": ("نقش", "Role"), "role_admin": ("ادمین", "Admin"), "role_member": ("عضو", "Member"),
@@ -208,6 +211,9 @@ M = {
   "exit": ("خروج", "Exit"), "receptionist": ("منشی", "Receptionist"),
   "embedded": ("دفتر سه‌بعدی داخل مانیتور باز نمی‌شود.", "The 3D office can't open inside the monitor."),
   "saveFailed": ("ذخیره نشد؛ دوباره امتحان کنید", "Not saved; try again"),
+  "loadingDashboard": ("در حال بارگذاری داشبورد…", "Loading the dashboard…"),
+  "reconnectingDashboard": ("داشبورد بارگذاری نشد؛ دوباره امتحان می‌کنم…", "The dashboard did not load; trying again…"),
+  "dashboardFailed": ("داشبورد باز نشد. اتصال اینترنت را بررسی کنید.", "The dashboard could not open. Check your connection."),
   "olderMessage": ("پیام قبلی", "Older message"), "newerMessage": ("پیام بعدی", "Newer message"),
   "meeting": {
    "title": ("جلسه‌ی تیم", "Team Meeting"), "subtitle": ("ایده بدهید، با هم بسازید.", "Share ideas. Build together."),

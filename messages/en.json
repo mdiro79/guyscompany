@@ -279,6 +279,9 @@
     "keyMove": "Move in the office"
   },
   "admin": {
+    "recentErrors": "Recent server errors",
+    "recentErrorsNote": "Find the code a user saw on the error screen here. This server only, since its last start.",
+    "noErrors": "No errors recorded.",
     "title": "Admin",
     "accounts": "Accounts",
     "newAccount": "New account",
@@ -358,6 +361,9 @@
     "receptionist": "Receptionist",
     "embedded": "The 3D office can't open inside the monitor.",
     "saveFailed": "Not saved; try again",
+    "loadingDashboard": "Loading the dashboard…",
+    "reconnectingDashboard": "The dashboard did not load; trying again…",
+    "dashboardFailed": "The dashboard could not open. Check your connection.",
     "olderMessage": "Older message",
     "newerMessage": "Newer message",
     "meeting": {

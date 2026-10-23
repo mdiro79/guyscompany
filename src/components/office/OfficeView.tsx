@@ -21,6 +21,7 @@ import { canLook } from './Player';
 import { startTourFor, useTourStep } from './tour';
 import { TouchControls } from './TouchControls';
 import { OfficePanel, type OfficeSettings } from './OfficePanel';
+import { MonitorDashboard } from './MonitorDashboard';
 import { Tutorial } from './Tutorial';
 import { TabCursor } from './TabCursor';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -38,12 +39,14 @@ function SceneLoading() {
 
 const OfficeScene = dynamic(() => import('./OfficeScene'), { ssr: false, loading: SceneLoading });
 const SEATS = allSeats();
+const MONITOR_PRELOAD_MS = 8000;
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
 
 export function OfficeView({ messages, privateChats, invitedSlots, files }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[] }) {
   const t = useTranslations('office');
   const te = useTranslations('emotes');
+  const tErr = useTranslations('errors');
   const locale = useLocale();
   const { user, profiles, offices: savedOffices } = useShell();
   // The owner's office settings apply at once (glass, door, panel) while they save; failures roll back.
@@ -77,6 +80,9 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   const working = !!seat?.monitor; // at a desk with the dashboard on the monitor
 
   useEffect(() => { officeUi.set({ lowQuality: isPhone }); }, [isPhone]);
+  // The desk dashboard loads in the background once the office had time to load, so sitting down is instant.
+  const [preloadMonitor, setPreloadMonitor] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setPreloadMonitor(true), MONITOR_PRELOAD_MS); return () => clearTimeout(id); }, []);
   useEffect(() => connectDoors(mesh), [mesh]);
   // First visit: the receptionist starts her tour once the scene had a moment to load.
   const tutorialDone = useRef(user.tutorialDone);
@@ -214,7 +220,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}
       <div id="gc-monitor-frame" className="absolute z-20 hidden overflow-hidden bg-white shadow-2xl">
-        {ui.panel !== 'none' && <iframe title="dashboard" src={`/${locale}?embed=1`} className="size-full border-0" />}
+        <MonitorDashboard src={`/${locale}?embed=1`} show={ui.panel !== 'none'} preload={preloadMonitor}
+          labels={{ loading: t('loadingDashboard'), retrying: t('reconnectingDashboard'), failed: t('dashboardFailed'), retry: tErr('retry') }} />
       </div>
 
       {/* Working at the computer: only fullscreen and exit. In fullscreen they sit in their own bar above the dashboard. */}

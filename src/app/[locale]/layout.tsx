@@ -33,7 +33,8 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   const messages = await getMessages();
   return (
     <html lang={locale} dir={localeDirection(locale)} className={theme} suppressHydrationWarning>
-      <body className="min-h-dvh antialiased">
+      {/* data-gc marks our own pages (the office monitor tells them apart from a hosting error page). */}
+      <body className="min-h-dvh antialiased" data-gc="app">
         <NextIntlClientProvider messages={messages} locale={locale}>{children}</NextIntlClientProvider>
       </body>
     </html>
