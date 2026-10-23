@@ -3,7 +3,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
-import type { DataStore, Message, Notification } from './types';
+import type { DataStore, Message, Notification, Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -88,6 +88,21 @@ export function createDbStore(injected?: Db): DataStore {
     async updateFocus(id, userId, patch) { await db().update(s.focusItems).set(patch).where(and(eq(s.focusItems.id, id), eq(s.focusItems.userId, userId))); },
     async deleteFocus(id, userId) { await db().delete(s.focusItems).where(and(eq(s.focusItems.id, id), eq(s.focusItems.userId, userId))); },
 
+    async listTodos(userId, doneSince) {
+      return isoAll<Todo>(await db().select().from(s.todos).where(and(eq(s.todos.userId, userId),
+        or(isNull(s.todos.clearedAt), gte(s.todos.doneAt, new Date(doneSince))))).orderBy(asc(s.todos.createdAt)));
+    },
+    async createTodo(t) { const [r] = await db().insert(s.todos).values(t).returning(); return iso<Todo>(r); },
+    async updateTodo(id, userId, patch) { await db().update(s.todos).set(dates(patch)).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
+    async deleteTodo(id, userId) { await db().delete(s.todos).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
+    async clearDoneTodos(userId) {
+      await db().update(s.todos).set({ clearedAt: new Date() }).where(and(eq(s.todos.userId, userId), eq(s.todos.done, true), isNull(s.todos.clearedAt)));
+    },
+    async countOpenTodos(userId) {
+      const [{ n }] = await db().select({ n: sql<number>`count(*)` }).from(s.todos).where(and(eq(s.todos.userId, userId), eq(s.todos.done, false)));
+      return Number(n);
+    },
+
     async listEvents(from, to) {
       return isoAll(await db().select().from(s.calendarEvents)
         .where(and(gte(s.calendarEvents.endsAt, new Date(from)), lte(s.calendarEvents.startsAt, new Date(to))))
@@ -125,12 +140,13 @@ export function createDbStore(injected?: Db): DataStore {
     async createInvite(i) { const [r] = await db().insert(s.privateChatInvites).values(i).returning(); return iso(r); },
     async updateInvite(id, status) { const [r] = await db().update(s.privateChatInvites).set({ status }).where(eq(s.privateChatInvites.id, id)).returning(); return r ? iso(r) : null; },
 
-    async purge(visitsBefore, notificationsBefore) {
+    async purge(visitsBefore, notificationsBefore, todosBefore) {
       const v = await db().delete(s.officeVisits).where(lt(s.officeVisits.visitedAt, new Date(visitsBefore))).returning({ id: s.officeVisits.id });
       const n = await db().delete(s.notifications)
         .where(and(isNotNull(s.notifications.readAt), lt(s.notifications.readAt, new Date(notificationsBefore))))
         .returning({ id: s.notifications.id });
-      return { visits: v.length, notifications: n.length };
+      const t = await db().delete(s.todos).where(and(isNotNull(s.todos.clearedAt), lt(s.todos.clearedAt, new Date(todosBefore)))).returning({ id: s.todos.id });
+      return { visits: v.length, notifications: n.length, todos: t.length };
     },
   };
   return injected ? store : resilient(store);

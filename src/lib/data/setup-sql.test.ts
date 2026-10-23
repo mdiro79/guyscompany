@@ -22,5 +22,7 @@ it('supabase-setup.sql applies cleanly after the migration', async () => {
   const offices = await pg.query<{ n: number }>('select count(*)::int as n from offices');
   expect(offices.rows[0].n).toBe(4);
   const policies = await pg.query<{ n: number }>('select count(*)::int as n from pg_policies');
-  expect(policies.rows[0].n).toBe(16);
+  expect(policies.rows[0].n).toBe(17);
+  const realtime = await pg.query<{ n: number }>("select count(*)::int as n from pg_publication_tables where tablename = 'todos'");
+  expect(realtime.rows[0].n).toBe(1);
 });

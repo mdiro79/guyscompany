@@ -1,5 +1,5 @@
 import type {
-  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem,
+  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
 import { createSeed } from './seed';
@@ -20,6 +20,7 @@ export function createMemoryStore(): DataStore {
     polls: seed.polls as Poll[],
     votes: [] as PollVote[],
     focus: seed.focus as FocusItem[],
+    todos: seed.todos as Todo[],
     events: seed.events as CalendarEvent[],
     notifications: seed.notifications as Notification[],
     offices: seed.offices as Office[],
@@ -103,6 +104,13 @@ export function createMemoryStore(): DataStore {
     async updateFocus(id, userId, patch) { patchIn(db.focus, (f) => f.id === id && f.userId === userId, patch); },
     async deleteFocus(id, userId) { db.focus = db.focus.filter((f) => !(f.id === id && f.userId === userId)); },
 
+    async listTodos(userId, doneSince) { return clone(db.todos.filter((t) => t.userId === userId && (!t.clearedAt || (t.doneAt ?? '') >= doneSince))); },
+    async createTodo(t) { const x: Todo = { ...t, id: uuid(), done: false, doneAt: null, clearedAt: null, createdAt: now() }; db.todos.push(x); return clone(x); },
+    async updateTodo(id, userId, patch) { patchIn(db.todos, (t) => t.id === id && t.userId === userId, patch); },
+    async deleteTodo(id, userId) { db.todos = db.todos.filter((t) => !(t.id === id && t.userId === userId)); },
+    async clearDoneTodos(userId) { for (const t of db.todos) if (t.userId === userId && t.done && !t.clearedAt) t.clearedAt = now(); },
+    async countOpenTodos(userId) { return db.todos.filter((t) => t.userId === userId && !t.done).length; },
+
     async listEvents(from, to) { return clone(db.events.filter((e) => e.endsAt >= from && e.startsAt <= to)); },
     async createEvent(e) { const x = { ...e, id: uuid() }; db.events.push(x); return clone(x); },
     async deleteEvent(id) { db.events = db.events.filter((e) => e.id !== id); },
@@ -126,11 +134,12 @@ export function createMemoryStore(): DataStore {
     async createInvite(i) { const x: ChatInvite = { ...i, id: uuid(), status: 'pending', createdAt: now() }; db.invites.push(x); return clone(x); },
     async updateInvite(id, status) { return clone(patchIn(db.invites, (i) => i.id === id, { status }) ?? null); },
 
-    async purge(visitsBefore, notificationsBefore) {
-      const v = db.visits.length, n = db.notifications.length;
+    async purge(visitsBefore, notificationsBefore, todosBefore) {
+      const v = db.visits.length, n = db.notifications.length, t = db.todos.length;
       db.visits = db.visits.filter((x) => x.visitedAt >= visitsBefore);
       db.notifications = db.notifications.filter((x) => !x.readAt || x.readAt >= notificationsBefore);
-      return { visits: v - db.visits.length, notifications: n - db.notifications.length };
+      db.todos = db.todos.filter((x) => !x.clearedAt || x.clearedAt >= todosBefore);
+      return { visits: v - db.visits.length, notifications: n - db.notifications.length, todos: t - db.todos.length };
     },
   };
 }

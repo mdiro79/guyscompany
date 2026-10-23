@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, boolean, integer, timestamp, date, jsonb, primaryKey, pgEnum, index, check,
+  pgTable, uuid, text, boolean, integer, smallint, timestamp, date, jsonb, primaryKey, pgEnum, index, check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -114,6 +114,20 @@ export const focusItems = pgTable('focus_items', {
   text: text('text').notNull(),
   done: boolean('done').notNull().default(false),
 });
+
+// Personal to-do list (private to its owner). Cleared done items stay a while for the streak, then the cleanup cron removes them.
+export const todos = pgTable('todos', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  done: boolean('done').notNull().default(false),
+  doneAt: timestamp('done_at', { withTimezone: true }),
+  due: date('due'),
+  priority: smallint('priority').notNull().default(0),
+  starred: boolean('starred').notNull().default(false),
+  clearedAt: timestamp('cleared_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('todos_user_idx').on(t.userId), check('priority_range', sql`${t.priority} between 0 and 2`)]);
 
 export const calendarEvents = pgTable('calendar_events', {
   id: uuid('id').primaryKey().defaultRandom(),

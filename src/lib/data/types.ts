@@ -102,6 +102,20 @@ export interface FocusItem {
   done: boolean;
 }
 
+export interface Todo {
+  id: string;
+  userId: string;
+  title: string;
+  done: boolean;
+  doneAt: string | null;
+  due: string | null; // YYYY-MM-DD, team time zone
+  priority: 0 | 1 | 2;
+  starred: boolean;
+  clearedAt: string | null; // done and cleared from the list (kept for the streak)
+  createdAt: string;
+}
+export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred'>>;
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -198,6 +212,14 @@ export interface DataStore {
   updateFocus(id: string, userId: string, patch: Partial<Pick<FocusItem, 'done' | 'text'>>): Promise<void>;
   deleteFocus(id: string, userId: string): Promise<void>;
 
+  // Open and done to-dos, plus cleared ones finished since `doneSinceIso` (for the streak).
+  listTodos(userId: string, doneSinceIso: string): Promise<Todo[]>;
+  createTodo(t: Pick<Todo, 'userId' | 'title' | 'due' | 'priority' | 'starred'>): Promise<Todo>;
+  updateTodo(id: string, userId: string, patch: TodoPatch): Promise<void>;
+  deleteTodo(id: string, userId: string): Promise<void>;
+  clearDoneTodos(userId: string): Promise<void>;
+  countOpenTodos(userId: string): Promise<number>;
+
   listEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]>;
   createEvent(e: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent>;
   deleteEvent(id: string): Promise<void>;
@@ -217,5 +239,5 @@ export interface DataStore {
   createInvite(i: Pick<ChatInvite, 'slot' | 'inviterId' | 'inviteeId'>): Promise<ChatInvite>;
   updateInvite(id: string, status: RequestStatus): Promise<ChatInvite | null>;
 
-  purge(visitsBeforeIso: string, readNotificationsBeforeIso: string): Promise<{ visits: number; notifications: number }>;
+  purge(visitsBeforeIso: string, readNotificationsBeforeIso: string, clearedTodosBeforeIso: string): Promise<{ visits: number; notifications: number; todos: number }>;
 }

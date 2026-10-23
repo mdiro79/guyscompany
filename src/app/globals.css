@@ -90,3 +90,12 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 .gc-glow { animation: gc-glow 1.6s ease-in-out infinite; }
 .gc-typing { background-image: repeating-linear-gradient(90deg, #3ee07a 0 14px, #2a9d5a 14px 28px); animation: gc-typing .9s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .gc-twinkle, .gc-glow, .gc-typing { animation: none; } }
+
+/* Personal to-dos: the check pops and a small confetti burst flies out. */
+@keyframes gc-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes gc-burst { 0% { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(.6); opacity: 0; } }
+@keyframes gc-rise { 0% { transform: translateY(6px); opacity: 0; } 15%, 80% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-4px); opacity: 0; } }
+.gc-pop { animation: gc-pop .35s cubic-bezier(.3,1.6,.5,1) both; }
+.gc-burst { animation: gc-burst .8s cubic-bezier(.2,.7,.3,1) forwards; }
+.gc-rise { animation: gc-rise 2.6s ease forwards; }
+@media (prefers-reduced-motion: reduce) { .gc-pop, .gc-burst, .gc-rise { animation: none; } }

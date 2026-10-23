@@ -6,20 +6,26 @@ import { Hero } from '@/components/Hero';
 import { TaskViews } from '@/components/tasks/TaskViews';
 import { TeamVote } from '@/components/widgets/TeamVote';
 import { TodaysFocus } from '@/components/widgets/TodaysFocus';
+import { PersonalTodos } from '@/components/widgets/PersonalTodos';
+import { CLEARED_TODO_RETENTION_DAYS } from '@/lib/limits';
 import { OfficeMapWidget } from '@/components/widgets/OfficeMapWidget';
 
 export default async function HomePage() {
   const user = await requirePageUser();
   const s = store();
-  const [tasks, projects, polls, votes, focus] = await Promise.all([s.listTasks(), s.listProjects(), s.listPolls(), s.listVotes(), s.listFocus(user.id, todayIso())]);
+  const streakSince = new Date(Date.now() - CLEARED_TODO_RETENTION_DAYS * 86400000).toISOString();
+  const [tasks, projects, polls, votes, focus, todos] = await Promise.all([
+    s.listTasks(), s.listProjects(), s.listPolls(), s.listVotes(), s.listFocus(user.id, todayIso()), s.listTodos(user.id, streakSince),
+  ]);
   const poll = polls.find((p) => !isPollClosed(p)) ?? polls[0] ?? null;
   return (
     <div className="space-y-4">
       <Hero />
       <TaskViews tasks={tasks} projects={projects} compact />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3">
         <TeamVote poll={poll} summary={poll ? summarizePoll(poll, redactVotes(polls, votes, user.id), user.id) : null} />
         <TodaysFocus items={focus} />
+        <PersonalTodos todos={todos} today={todayIso()} />
         <OfficeMapWidget />
       </div>
     </div>
