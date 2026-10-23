@@ -1,3 +1,4 @@
 # Source asset archives stay in the repo but are not uploaded to Vercel.
+# (assets/characters.json is needed by the build, so only the raw packs are excluded.)
 *.zip
-assets/
+assets/raw/
