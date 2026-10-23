@@ -108,7 +108,7 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
         <shapeGeometry args={[shape]} />
         <meshStandardMaterial map={tex} roughness={0.85} />
       </mesh>
-      <mesh rotation-x={Math.PI / 2} position-y={WALL_HEIGHT}>
+      <mesh rotation-x={-Math.PI / 2} position-y={WALL_HEIGHT}>
         <shapeGeometry args={[shape]} />
         <meshBasicMaterial color="#d8cab3" side={THREE.DoubleSide} />
       </mesh>

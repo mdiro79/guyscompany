@@ -11,6 +11,7 @@ const sizes = { desktop: { width: 1440, height: 1000 }, phone: { width: 390, hei
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   for (const [name, viewport] of Object.entries(sizes)) {
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, isMobile: name === 'phone', hasTouch: name === 'phone' });
+    if (process.env.DARK) await ctx.addCookies([{ name: 'gc_theme', value: 'dark', url: base }]);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log(`[${name}] pageerror:`, e.message));
     page.on('console', (m) => { if (m.type() === 'error') console.log(`[${name}] console:`, m.text()); });

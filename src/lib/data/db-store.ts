@@ -1,4 +1,5 @@
 import 'server-only';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { getDb, schema as s } from '@/db';
 import type { DataStore, Message, Notification } from './types';
@@ -19,8 +20,10 @@ const dates = <T extends Row>(patch: T) => {
   return out;
 };
 
-export function createDbStore(): DataStore {
-  const db = getDb();
+export type Db = PgDatabase<PgQueryResultHKT, typeof s>;
+
+// `db` is injectable for tests (PGlite); production uses the Supabase pooler connection.
+export function createDbStore(db: Db = getDb() as unknown as Db): DataStore {
   return {
     async listProfiles() { return isoAll(await db.select().from(s.profiles).orderBy(asc(s.profiles.createdAt))); },
     async getProfile(id) { const [r] = await db.select().from(s.profiles).where(eq(s.profiles.id, id)); return r ? iso(r) : null; },

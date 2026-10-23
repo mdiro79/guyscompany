@@ -2,6 +2,6 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
-  resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
-  test: { include: ['src/**/*.test.ts'] },
+  resolve: { alias: { '@': path.resolve(__dirname, 'src'), 'server-only': path.resolve(__dirname, 'src/test/empty.ts') } },
+  test: { include: ['src/**/*.test.ts'], testTimeout: 30000 },
 });
