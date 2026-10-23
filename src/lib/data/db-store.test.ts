@@ -85,6 +85,14 @@ describe('db store', () => {
     const file = await store.createFile({ name: 'a.txt', storagePath: 'x/a.txt', size: 3, mime: 'text/plain', uploadedBy: A });
     expect((await store.getFile(file.id))?.name).toBe('a.txt');
   });
+  it('room settings: upsert, partial update and range check', async () => {
+    expect(await store.getRoom('conference')).toBeNull();
+    expect(await store.updateRoom('conference', { light: 30 })).toMatchObject({ id: 'conference', light: 30, warmth: 40, frost: 0 });
+    const r = await store.updateRoom('conference', { frost: 80, warmth: 10 });
+    expect(r).toMatchObject({ light: 30, warmth: 10, frost: 80 });
+    expect((await store.getRoom('conference'))?.frost).toBe(80);
+    await expect(store.updateRoom('conference', { light: 150 })).rejects.toThrow();
+  });
   it('personal to-dos: private, done/cleared, streak window and cleanup', async () => {
     const t = await store.createTodo({ userId: A, title: 'buy bread', due: '2026-10-25', priority: 2, starred: true });
     expect(t).toMatchObject({ title: 'buy bread', due: '2026-10-25', priority: 2, starred: true, done: false, doneAt: null, clearedAt: null });

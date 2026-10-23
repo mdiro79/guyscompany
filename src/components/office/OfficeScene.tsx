@@ -14,6 +14,7 @@ import { preloadCharacter } from '@/components/three/CharacterModel';
 import { MonitorFrame } from './MonitorFrame';
 import { TourBubbleAnchor } from './TourBubbleAnchor';
 import { ConferenceRoom } from './ConferenceRoom';
+import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
 import type { MeetingLabels } from './textures';
 import { OFFICES, RECEPTION_Z, SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
@@ -32,7 +33,7 @@ const Effects = lazy(() => import('./Effects'));
 // darker floor, so surfaces get gentle shading and reflections instead of flat colour.
 function SoftEnvironment() {
   return (
-    <Environment resolution={64} frames={1} environmentIntensity={0.4}>
+    <Environment resolution={64} frames={1} environmentIntensity={ENV_INTENSITY}>
       <color attach="background" args={['#b9a58c']} />
       <Lightformer form="rect" intensity={2.4} color="#fff1dc" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[40, 40, 1]} />
       <Lightformer form="rect" intensity={0.9} color="#f6dcc0" position={[0, 2, -20]} scale={[40, 4, 1]} />
@@ -46,11 +47,10 @@ function SoftEnvironment() {
 function Lights({ low }: { low: boolean }) {
   return (
     <>
-      <hemisphereLight args={['#fff3df', '#9a7a5a', low ? 1.5 : 0.7]} />
+      <hemisphereLight name={HEMI_NAME} args={['#fff3df', '#9a7a5a', hemiIntensity(low)]} />
       <ambientLight intensity={0.12} color="#ffd9a8" />
       {!low && (
         <>
-          <pointLight position={[0, 1.9, 0]} intensity={7} distance={8} color="#ffd8a0" />
           <pointLight position={[0, 2.6, RECEPTION_Z]} intensity={10} distance={9} color="#ffd8a0" />
           <pointLight position={[-11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
           <pointLight position={[11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />

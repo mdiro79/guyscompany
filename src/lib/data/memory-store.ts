@@ -1,5 +1,5 @@
 import type {
-  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo,
+  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, Room,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
 import { createSeed } from './seed';
@@ -21,6 +21,7 @@ export function createMemoryStore(): DataStore {
     votes: [] as PollVote[],
     focus: seed.focus as FocusItem[],
     todos: seed.todos as Todo[],
+    rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
     notifications: seed.notifications as Notification[],
     offices: seed.offices as Office[],
@@ -110,6 +111,14 @@ export function createMemoryStore(): DataStore {
     async deleteTodo(id, userId) { db.todos = db.todos.filter((t) => !(t.id === id && t.userId === userId)); },
     async clearDoneTodos(userId) { for (const t of db.todos) if (t.userId === userId && t.done && !t.clearedAt) t.clearedAt = now(); },
     async countOpenTodos(userId) { return db.todos.filter((t) => t.userId === userId && !t.done).length; },
+
+    async getRoom(id) { const r = db.rooms.find((x) => x.id === id); return r ? clone(r) : null; },
+    async updateRoom(id, patch) {
+      let r = db.rooms.find((x) => x.id === id);
+      if (!r) { r = { id, light: 100, warmth: 40, frost: 0, updatedAt: now() }; db.rooms.push(r); }
+      Object.assign(r, patch, { updatedAt: now() });
+      return clone(r);
+    },
 
     async listEvents(from, to) { return clone(db.events.filter((e) => e.endsAt >= from && e.startsAt <= to)); },
     async createEvent(e) { const x = { ...e, id: uuid() }; db.events.push(x); return clone(x); },

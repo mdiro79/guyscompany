@@ -3,7 +3,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
-import type { DataStore, Message, Notification, Todo } from './types';
+import type { DataStore, Message, Notification, Room, Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -101,6 +101,13 @@ export function createDbStore(injected?: Db): DataStore {
     async countOpenTodos(userId) {
       const [{ n }] = await db().select({ n: sql<number>`count(*)` }).from(s.todos).where(and(eq(s.todos.userId, userId), eq(s.todos.done, false)));
       return Number(n);
+    },
+
+    async getRoom(id) { const [r] = await db().select().from(s.rooms).where(eq(s.rooms.id, id)); return r ? iso<Room>(r) : null; },
+    async updateRoom(id, patch) {
+      const [r] = await db().insert(s.rooms).values({ id, ...patch, updatedAt: new Date() })
+        .onConflictDoUpdate({ target: s.rooms.id, set: { ...patch, updatedAt: new Date() } }).returning();
+      return iso<Room>(r);
     },
 
     async listEvents(from, to) {

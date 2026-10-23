@@ -11,12 +11,14 @@ import { useVoice } from '@/components/voice/VoiceContext';
 import { getMesh } from '@/lib/realtime/mesh';
 import { useDevice, isEmbedded } from '@/lib/device';
 import { recordVisitAction, updateMyOfficeAction } from '@/app/actions/offices';
-import type { FileMeta, Message } from '@/lib/data/types';
+import type { FileMeta, Message, Room } from '@/lib/data/types';
 import { useOfficeNet } from './useOfficeNet';
 import { officeUi, input, useOfficeUi } from './store';
 import { EMOTES } from './emotes';
 import { officeAt, inConference, areaAt, allSeats, SPAWN } from './layout';
 import { connectDoors } from './doors';
+import { connectRoomControls, roomControls } from './roomControls';
+import { RoomControls } from './RoomControls';
 import { canLook } from './Player';
 import { startTourFor, useTourStep } from './tour';
 import { TouchControls } from './TouchControls';
@@ -43,7 +45,7 @@ const MONITOR_PRELOAD_MS = 8000;
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
 
-export function OfficeView({ messages, privateChats, invitedSlots, files }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[] }) {
+export function OfficeView({ messages, privateChats, invitedSlots, files, room }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null }) {
   const t = useTranslations('office');
   const te = useTranslations('emotes');
   const tErr = useTranslations('errors');
@@ -84,6 +86,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   const [preloadMonitor, setPreloadMonitor] = useState(false);
   useEffect(() => { const id = setTimeout(() => setPreloadMonitor(true), MONITOR_PRELOAD_MS); return () => clearTimeout(id); }, []);
   useEffect(() => connectDoors(mesh), [mesh]);
+  // Conference room light and glass: live from the others over WebRTC, the saved value from the page data.
+  useEffect(() => connectRoomControls(mesh), [mesh]);
+  useEffect(() => { if (room) roomControls.load(room); }, [room]);
+  // The wall panel's controls close when you leave the room.
+  useEffect(() => { if (!ui.inConference) officeUi.set({ roomPanel: false }); }, [ui.inConference]);
   // First visit: the receptionist starts her tour once the scene had a moment to load.
   const tutorialDone = useRef(user.tutorialDone);
   useEffect(() => {
@@ -106,7 +113,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
     const id = setTimeout(() => officeUi.set({ myEmote: null }), Math.max(0, ui.myEmote.until - Date.now()));
     return () => clearTimeout(id);
   }, [ui.myEmote]);
-  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null }), []);
+  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false }), []);
   // Leaving the office restores full volume for everyone (proximity only applies in 3D).
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -136,7 +143,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
       }
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
-      if (e.code === 'Escape') officeUi.set({ emoteWheel: false, selectedUserId: null });
+      if (e.code === 'Escape') officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false });
       const n = Number(e.key);
       if (officeUi.get().emoteWheel && n >= 1 && n <= 9) sendEmote(EMOTES[n - 1].id);
     };
@@ -198,11 +205,13 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
     : !it ? null
       : it.kind === 'seat' ? t('pressE')
         : it.kind === 'guide' ? t('pressTalk')
+          : it.kind === 'panel' ? t('pressPanel')
           : !it.allowed ? t('noAccess') : it.open ? t('pressClose') : t('pressOpen');
   const action = ui.seatId ? { icon: Hand, label: t('stand') }
     : !it ? null
       : it.kind === 'seat' ? { icon: Armchair, label: t('sit') }
         : it.kind === 'guide' ? { icon: MessageSquare, label: t('talk') }
+          : it.kind === 'panel' ? { icon: SlidersHorizontal, label: t('roomControls') }
           : !it.allowed ? { icon: Lock, label: t('noAccess'), disabled: true }
             : { icon: it.open ? DoorClosed : DoorOpen, label: it.open ? t('closeDoor') : t('openDoor') };
 
@@ -288,7 +297,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
       )}
 
       {/* Contextual action (phones; on computers it's E) */}
-      {isPhone && !working && !touring && action && (
+      {isPhone && !working && !touring && action && !ui.roomPanel && (
         <div className="absolute end-4 bottom-6 z-40 pb-[env(safe-area-inset-bottom)] short:bottom-3">
           <button type="button" disabled={'disabled' in action} className="flex min-h-14 items-center gap-2 rounded-2xl bg-[#2f5d45] px-5 text-base font-semibold shadow-lg disabled:bg-[#d9443c]/90 short:min-h-12"
             onClick={() => { input.action = true; }}>
@@ -320,6 +329,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
           <OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} onChange={changeMyOffice}
             tab={officeTab} onTab={setOfficeTab} />
         </div>
+      )}
+
+      {/* Conference room wall panel: light and glass */}
+      {ui.roomPanel && !ui.seatId && !touring && (
+        <div className="absolute top-[4.25rem] end-3 z-30 short:top-14"><RoomControls onClose={() => officeUi.set({ roomPanel: false })} /></div>
       )}
 
       {/* Private chat for invited guests inside the host's office */}

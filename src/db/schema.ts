@@ -129,6 +129,15 @@ export const todos = pgTable('todos', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('todos_user_idx').on(t.userId), check('priority_range', sql`${t.priority} between 0 and 2`)]);
 
+// Shared room settings changed from a wall panel (the conference room: light and glass frosting, 0–100).
+export const rooms = pgTable('rooms', {
+  id: text('id').primaryKey(),
+  light: smallint('light').notNull().default(100),
+  warmth: smallint('warmth').notNull().default(40),
+  frost: smallint('frost').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check('room_ranges', sql`${t.light} between 0 and 100 and ${t.warmth} between 0 and 100 and ${t.frost} between 0 and 100`)]);
+
 export const calendarEvents = pgTable('calendar_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),

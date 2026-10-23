@@ -17,7 +17,7 @@ import { TopBar, type SearchItem } from './TopBar';
 import { MobileNav } from './MobileNav';
 import { NAV, ADMIN_NAV, isActive } from './nav';
 
-const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
+const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
 
 export function AppShell({ data, notifications, messages, files, search, children }: {
   data: ShellData; notifications: Notification[]; messages: Message[]; files: FileMeta[]; search: SearchItem[]; children: ReactNode;

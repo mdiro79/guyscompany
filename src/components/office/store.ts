@@ -4,7 +4,7 @@ import type { EmoteId } from './emotes';
 
 export type PanelMode = 'none' | 'monitor' | 'fullscreen';
 // What E (or the phone action button) would do right now.
-export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' };
+export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' };
 
 export interface OfficeUiState {
   locked: boolean; // pointer lock active
@@ -14,6 +14,7 @@ export interface OfficeUiState {
   interact: Interact | null;
   currentSlot: number | null; // office the player stands in
   inConference: boolean;
+  roomPanel: boolean; // the conference wall panel's controls are open
   lowQuality: boolean;
   myEmote: { id: EmoteId; until: number } | null;
   tutorialStep: number | null;
@@ -21,7 +22,7 @@ export interface OfficeUiState {
 }
 
 let state: OfficeUiState = {
-  locked: false, seatId: null, panel: 'none', emoteWheel: false, interact: null, currentSlot: null, inConference: false,
+  locked: false, seatId: null, panel: 'none', emoteWheel: false, interact: null, currentSlot: null, inConference: false, roomPanel: false,
   lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null,
 };
 const listeners = new Set<() => void>();

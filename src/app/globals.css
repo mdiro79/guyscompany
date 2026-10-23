@@ -99,3 +99,10 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 .gc-burst { animation: gc-burst .8s cubic-bezier(.2,.7,.3,1) forwards; }
 .gc-rise { animation: gc-rise 2.6s ease forwards; }
 @media (prefers-reduced-motion: reduce) { .gc-pop, .gc-burst, .gc-rise { animation: none; } }
+
+/* Range sliders of the office's wall panel: a coloured track, the filled part and a round white knob. */
+.gc-range { appearance: none; background: transparent; }
+.gc-range::-webkit-slider-runnable-track { height: 10px; border-radius: 999px; background: var(--track); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.gc-range::-moz-range-track { height: 10px; border-radius: 999px; background: var(--track); }
+.gc-range::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; margin-top: -7px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.gc-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }

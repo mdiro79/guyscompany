@@ -7,6 +7,7 @@ import { doorAllowed } from './Player';
 import { DOORS, doorAngles, isDoorOpen } from './doors';
 import { buildWalls, OFFICES, WALL_HEIGHT, H, OUT, SOUTH, PORCH, CONF_RADIUS, RECEPTION_Z, guideLines, type DoorDef, type Segment } from './layout';
 import { wallWash } from './textures';
+import { confGlass } from './conferenceGlass';
 
 // Brighter than white, so lamps glow (bloom) in high quality; plain white otherwise.
 const LAMP = new THREE.Color(1.9, 1.75, 1.45);
@@ -48,7 +49,8 @@ function wallColor(w: Segment) {
   return o ? COLORS[o.wallColor] : COLORS.cream;
 }
 
-function WallPiece({ w, color, glass, frosted }: { w: Segment; color: string; glass: boolean; frosted: boolean }) {
+// `shared`: the conference ring's glass, whose frosting is set from its wall panel (see conferenceGlass).
+function WallPiece({ w, color, glass, frosted, shared }: { w: Segment; color: string; glass: boolean; frosted: boolean; shared?: typeof confGlass }) {
   const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
   const angle = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
   const pos: [number, number, number] = [(w.a[0] + w.b[0]) / 2, WALL_HEIGHT / 2, (w.a[1] + w.b[1]) / 2];
@@ -63,15 +65,24 @@ function WallPiece({ w, color, glass, frosted }: { w: Segment; color: string; gl
   // Clear glass is slightly tinted and carries a frosted band at eye level so it reads as glass.
   return (
     <group position={[pos[0], 0, pos[2]]} rotation-y={-angle}>
-      <mesh position-y={WALL_HEIGHT / 2}>
-        <boxGeometry args={[len, WALL_HEIGHT - 0.1, 0.04]} />
-        <meshStandardMaterial color={frosted ? '#f4f1ec' : COLORS.glass} transparent opacity={frosted ? 0.9 : 0.4} roughness={frosted ? 0.9 : 0.2} metalness={0} depthWrite={frosted} />
-      </mesh>
-      {!frosted && (
-        <mesh position-y={1.25}>
-          <boxGeometry args={[len, 0.42, 0.05]} />
-          <meshStandardMaterial color="#f7f4ee" transparent opacity={0.55} roughness={0.9} depthWrite={false} />
-        </mesh>
+      {shared ? (
+        <>
+          <mesh position-y={WALL_HEIGHT / 2} material={shared.pane}><boxGeometry args={[len, WALL_HEIGHT - 0.1, 0.04]} /></mesh>
+          <mesh position-y={1.25} material={shared.band}><boxGeometry args={[len, 0.42, 0.05]} /></mesh>
+        </>
+      ) : (
+        <>
+          <mesh position-y={WALL_HEIGHT / 2}>
+            <boxGeometry args={[len, WALL_HEIGHT - 0.1, 0.04]} />
+            <meshStandardMaterial color={frosted ? '#f4f1ec' : COLORS.glass} transparent opacity={frosted ? 0.9 : 0.4} roughness={frosted ? 0.9 : 0.2} metalness={0} depthWrite={frosted} />
+          </mesh>
+          {!frosted && (
+            <mesh position-y={1.25}>
+              <boxGeometry args={[len, 0.42, 0.05]} />
+              <meshStandardMaterial color="#f7f4ee" transparent opacity={0.55} roughness={0.9} depthWrite={false} />
+            </mesh>
+          )}
+        </>
       )}
       {[-len / 2, len / 2].map((x) => (
         <mesh key={x} position={[x, WALL_HEIGHT / 2, 0]}><boxGeometry args={[0.06, WALL_HEIGHT, 0.08]} /><meshStandardMaterial color={COLORS.trim} /></mesh>
@@ -97,12 +108,14 @@ function Door({ def, allowed }: { def: DoorDef; allowed: boolean }) {
   const height = def.kind === 'entrance' ? 2.2 : 2.1;
   return (
     <group ref={ref} position={[def.hinge[0], 0, def.hinge[1]]}>
-      <mesh position={[def.width / 2, height / 2, 0]}>
-        <boxGeometry args={[def.width - 0.04, height, 0.06]} />
-        {glassDoor
-          ? <meshStandardMaterial color={COLORS.glass} transparent opacity={0.5} roughness={0.2} depthWrite={false} />
-          : <meshStandardMaterial color={COLORS.wood} roughness={0.7} />}
-      </mesh>
+      {glassDoor ? (
+        <mesh position={[def.width / 2, height / 2, 0]} material={confGlass.pane}><boxGeometry args={[def.width - 0.04, height, 0.06]} /></mesh>
+      ) : (
+        <mesh position={[def.width / 2, height / 2, 0]}>
+          <boxGeometry args={[def.width - 0.04, height, 0.06]} />
+          <meshStandardMaterial color={COLORS.wood} roughness={0.7} />
+        </mesh>
+      )}
       {glassDoor && <mesh position={[def.width / 2, height / 2, 0]}><boxGeometry args={[def.width - 0.02, 0.06, 0.07]} /><meshStandardMaterial color={COLORS.trim} /></mesh>}
       {[-1, 1].map((s) => (
         <mesh key={s} position={[def.width - 0.15, 1.0, s * 0.06]}><sphereGeometry args={[0.04, 10, 8]} /><meshStandardMaterial color="#d8c28a" metalness={0.6} roughness={0.3} /></mesh>
@@ -152,7 +165,7 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
       {walls.map((w, i) => {
         const o = officeState(w.slot);
         const frosted = w.kind === 'glass' && !!o && o.glass === 'frosted';
-        return <WallPiece key={i} w={w} color={wallColor(w)} glass={w.kind === 'glass'} frosted={frosted} />;
+        return <WallPiece key={i} w={w} color={wallColor(w)} glass={w.kind === 'glass'} frosted={frosted} shared={w.kind === 'glass' && onConferenceRing(w) ? confGlass : undefined} />;
       })}
       {DOORS.map((d) => <Door key={d.id} def={d} allowed={doorAllowed(d, offices, viewerId, invitedSlots)} />)}
       <GuideLines />

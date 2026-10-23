@@ -400,6 +400,31 @@
     "receptionist": "Receptionist",
     "embedded": "The 3D office can't open inside the monitor.",
     "saveFailed": "Not saved; try again",
+    "pressPanel": "Press E for the light and glass",
+    "roomControls": "Light & glass",
+    "room": {
+      "title": "Conference room panel",
+      "close": "Close",
+      "light": "Light",
+      "brightness": "Brightness",
+      "warmth": "Light colour",
+      "warm": "Warm",
+      "cool": "Cool",
+      "scene": {
+        "meeting": "Meeting",
+        "presentation": "Present",
+        "relax": "Relax",
+        "off": "Off"
+      },
+      "glass": "Glass",
+      "frost": "Frosting",
+      "glassLevel": {
+        "clear": "Clear",
+        "half": "Half",
+        "frosted": "Frosted"
+      },
+      "shared": "Changes apply for everyone in the office and are saved."
+    },
     "loadingDashboard": "Loading the dashboard…",
     "reconnectingDashboard": "The dashboard did not load; trying again…",
     "dashboardFailed": "The dashboard could not open. Check your connection.",

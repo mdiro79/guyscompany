@@ -1,13 +1,18 @@
 'use client';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import {
-  buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS,
+  buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS, CONF_WALL_PANEL,
   WALL_HEIGHT, type Segment,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
-import { tableWood, oak, slats, carpet, panelWash, floorGlow, frond, tabletScreen, paintScreen, type MeetingLabels } from './textures';
+import { tableWood, oak, slats, carpet, panelWash, floorGlow, frond, tabletScreen, paintScreen, paintRoomPanel, type MeetingLabels } from './textures';
+import { roomControls, useRoomSettings } from './roomControls';
+import { useConferenceGlass } from './conferenceGlass';
+import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
+import { officeUi, useOfficeUi } from './store';
 
 // The round conference room after the owner's reference image: a large light-oak table with a planter
 // in the middle and a glowing ring under its pedestal, light-blue armchairs with white frames, a tablet
@@ -28,6 +33,14 @@ const mat = {
   soil: new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 1 }),
   leaf: new THREE.MeshStandardMaterial({ color: '#5f9446', roughness: 0.8 }),
 };
+
+// Lit parts that follow the wall panel (brightness and colour), updated every frame by RoomLights.
+const lit = {
+  ring: new THREE.MeshBasicMaterial({ color: LIGHT.clone(), toneMapped: false }),
+  disc: new THREE.MeshStandardMaterial({ color: '#f7eee0', emissive: '#ffe9c8', emissiveIntensity: 0.06 }),
+  plinth: new THREE.MeshStandardMaterial({ color: '#fff2dc', emissive: '#ffd9a0', emissiveIntensity: 0.9 }),
+};
+const WARM = new THREE.Color('#ffbf73'), COOL = new THREE.Color('#eaf1ff');
 
 // Built once per page (canvas textures exist only in the browser).
 const textured = (() => {
@@ -136,7 +149,7 @@ function Table() {
       <Fronds count={7} length={0.32} width={0.18} tilt={[0.1, 0.35]} y={H - 0.03} seed={6} bend={0.3} />
       {/* pedestal, its plinth and the glowing ring on the carpet */}
       <mesh position-y={(H - 0.07) / 2} material={m.oak}><cylinderGeometry args={[0.58, 0.88, H - 0.07, 64, 1, true]} /></mesh>
-      <mesh position-y={0.025}><cylinderGeometry args={[0.9, 0.92, 0.05, 64]} /><meshStandardMaterial color="#fff2dc" emissive="#ffd9a0" emissiveIntensity={0.9} /></mesh>
+      <mesh position-y={0.025} material={lit.plinth}><cylinderGeometry args={[0.9, 0.92, 0.05, 64]} /></mesh>
       <mesh position-y={0.012} rotation-x={-Math.PI / 2} material={m.glow}><planeGeometry args={[2.7, 2.7]} /></mesh>
       <GroundShadow size={[R * 2.25, R * 2.25]} opacity={0.3} y={0.008} />
     </group>
@@ -215,11 +228,11 @@ function Ceiling() {
   return (
     <group position-y={WALL_HEIGHT}>
       <mesh position-y={-0.012} rotation-x={Math.PI / 2}><circleGeometry args={[CONF_RADIUS - 0.08, 96]} /><meshStandardMaterial color="#f5ede1" roughness={1} /></mesh>
-      <mesh position-y={-0.02} rotation-x={Math.PI / 2}><torusGeometry args={[2.45, 0.045, 10, 128]} /><meshBasicMaterial color={LIGHT} toneMapped={false} /></mesh>
-      <mesh position-y={-0.016} rotation-x={Math.PI / 2}><circleGeometry args={[2.4, 96]} /><meshStandardMaterial color="#f7eee0" emissive="#ffe9c8" emissiveIntensity={0.06} /></mesh>
+      <mesh position-y={-0.02} rotation-x={Math.PI / 2} material={lit.ring}><torusGeometry args={[2.45, 0.045, 10, 128]} /></mesh>
+      <mesh position-y={-0.016} rotation-x={Math.PI / 2} material={lit.disc}><circleGeometry args={[2.4, 96]} /></mesh>
       {Array.from({ length: 10 }, (_, i) => {
         const a = (i / 10) * Math.PI * 2;
-        return <mesh key={i} position={[Math.sin(a) * 3.6, -0.018, Math.cos(a) * 3.6]} rotation-x={Math.PI / 2}><circleGeometry args={[0.06, 16]} /><meshBasicMaterial color={LIGHT} toneMapped={false} /></mesh>;
+        return <mesh key={i} position={[Math.sin(a) * 3.6, -0.018, Math.cos(a) * 3.6]} rotation-x={Math.PI / 2} material={lit.ring}><circleGeometry args={[0.06, 16]} /></mesh>;
       })}
     </group>
   );
@@ -248,12 +261,75 @@ export function ConferenceRoom({ labels, lowQuality }: { labels: MeetingLabels; 
       <Credenza />
       {CONF_PLANTS.map((p) => <Palm key={p[0]} pos={p} />)}
       <Ceiling />
-      {!lowQuality && (
+      <WallPanel />
+      <RoomLights low={lowQuality} />
+    </group>
+  );
+}
+
+// The room's lights as set on the wall panel: brightness and warm/cool colour of the ceiling light, the
+// ring and downlights, the glow under the table; inside the room the general light dims with them.
+// Changes glide over a fraction of a second. The screen and tablets keep their own light (presentations).
+function RoomLights({ low }: { low: boolean }) {
+  const main = useRef<THREE.PointLight>(null);
+  const screen = useRef<THREE.PointLight>(null);
+  const under = useRef<THREE.PointLight>(null);
+  const { scene } = useThree();
+  const hemi = useRef<THREE.HemisphereLight | null>(null);
+  const cur = useRef({ b: -1, w: -1, a: 1 });
+  const tint = useMemo(() => new THREE.Color(), []);
+  useConferenceGlass();
+  useFrame((_, dt) => {
+    const s = roomControls.get(), c = cur.current, k = 1 - Math.exp(-dt * 6);
+    c.b = c.b < 0 ? s.light / 100 : c.b + (s.light / 100 - c.b) * k;
+    c.w = c.w < 0 ? s.warmth / 100 : c.w + (s.warmth / 100 - c.w) * k;
+    const ambient = officeUi.get().inConference ? 0.3 + 0.7 * c.b : 1;
+    c.a += (ambient - c.a) * k;
+    tint.lerpColors(COOL, WARM, c.w);
+    if (main.current) { main.current.intensity = 8 * c.b; main.current.color.copy(tint); }
+    if (screen.current) screen.current.intensity = 1.2 + 1.3 * c.b;
+    if (under.current) { under.current.intensity = 1.6 * c.b; under.current.color.copy(tint); }
+    lit.ring.color.copy(tint).multiplyScalar(0.3 + 1.7 * c.b);
+    lit.disc.emissive.copy(tint); lit.disc.emissiveIntensity = 0.1 * c.b;
+    lit.plinth.emissive.copy(tint); lit.plinth.emissiveIntensity = 0.9 * c.b;
+    textured().glow.opacity = c.b;
+    hemi.current ??= scene.getObjectByName(HEMI_NAME) as THREE.HemisphereLight | null;
+    if (hemi.current) hemi.current.intensity = hemiIntensity(low) * c.a;
+    scene.environmentIntensity = ENV_INTENSITY * c.a;
+  });
+  return (
+    <>
+      <pointLight ref={main} position={[0, 1.9, 0]} intensity={8} distance={8} color="#ffd8a0" />
+      {!low && (
         <>
-          <pointLight position={[0, CONF_SCREEN.bottom + CONF_SCREEN.height / 2, CONF_SCREEN.z + 1]} intensity={2.5} distance={4.5} color="#b9c4ff" />
-          <pointLight position={[0, 0.2, 0]} intensity={1.6} distance={2.2} color="#ffd39a" />
+          <pointLight ref={screen} position={[0, CONF_SCREEN.bottom + CONF_SCREEN.height / 2, CONF_SCREEN.z + 1]} intensity={2.5} distance={4.5} color="#b9c4ff" />
+          <pointLight ref={under} position={[0, 0.2, 0]} intensity={1.6} distance={2.2} color="#ffd39a" />
         </>
       )}
+    </>
+  );
+}
+
+// Smart panel on the glass beside the door. Its screen shows the current light and glass; it lights up
+// when you can use it (E, or the action button on phones), which opens the controls (RoomControls).
+function WallPanel() {
+  const s = useRoomSettings();
+  const active = useOfficeUi((u) => u.interact?.kind === 'panel' || u.roomPanel);
+  const { tex, cv } = useMemo(() => {
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 384;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return { tex, cv };
+  }, []);
+  useEffect(() => { paintRoomPanel(cv, s); tex.needsUpdate = true; }, [cv, tex, s]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  const [x, z] = CONF_WALL_PANEL.pos;
+  return (
+    <group position={[x, CONF_WALL_PANEL.y, z]} rotation-y={CONF_WALL_PANEL.facing}>
+      {active && <mesh position-z={-0.004}><planeGeometry args={[0.25, 0.35]} /><meshBasicMaterial color="#5fe0cf" toneMapped={false} transparent opacity={0.85} /></mesh>}
+      <RoundedBox args={[0.21, 0.31, 0.022]} radius={0.01} smoothness={2} material={mat.frame} />
+      <mesh position-z={0.0115}><planeGeometry args={[0.18, 0.27]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
     </group>
   );
 }

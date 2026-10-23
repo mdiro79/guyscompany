@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
-import { buildWalls, doorSegments, propColliders, allSeats, officeAt, inConference, doorCenter, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
+import { buildWalls, doorSegments, propColliders, allSeats, officeAt, inConference, doorCenter, CONF_WALL_PANEL, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
 import { resolveCollisions } from './collision';
 import { input, officeUi, type Interact } from './store';
 import { DOORS, doorLeaves, isDoorOpen, toggleDoor, setDoor } from './doors';
@@ -187,6 +187,12 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         const d = Math.hypot(c[0] - pos.current[0], c[1] - pos.current[1]);
         if (d < 1.7 && ahead(c, d)) cand.push({ i: { kind: 'door', id: door.id, open: isDoorOpen(door.id), allowed: doorAllowed(door, offices, viewerId, invitedSlots) }, d: d + 0.2 });
       }
+      const pd = Math.hypot(CONF_WALL_PANEL.pos[0] - pos.current[0], CONF_WALL_PANEL.pos[1] - pos.current[1]);
+      if (pd < 1.5 && ahead(CONF_WALL_PANEL.pos, pd) && inConference(pos.current[0], pos.current[1])) {
+        // Looking straight at the panel wins over a nearby chair.
+        const facing = ((CONF_WALL_PANEL.pos[0] - pos.current[0]) * fx + (CONF_WALL_PANEL.pos[1] - pos.current[1]) * fz) / (pd || 1);
+        cand.push({ i: { kind: 'panel' }, d: facing > 0.8 ? pd * 0.4 : pd + 0.1 });
+      }
       const gd = Math.hypot(guide.pos[0] - pos.current[0], guide.pos[1] - pos.current[1]);
       if (guide.seated && gd < 2.4 && ahead(guide.pos, gd)) cand.push({ i: { kind: 'guide' }, d: gd });
       interact = cand.sort((a, b) => a.d - b.d)[0]?.i ?? null;
@@ -213,6 +219,9 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         lastInteract.current = '';
       } else if (interact?.kind === 'door' && interact.allowed) {
         toggleDoor(interact.id);
+      } else if (interact?.kind === 'panel') {
+        document.exitPointerLock?.();
+        officeUi.set({ roomPanel: true });
       } else if (interact?.kind === 'guide') {
         startTourFor(offRef.current.offices, offRef.current.viewerId);
       }

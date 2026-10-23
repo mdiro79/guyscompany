@@ -212,3 +212,29 @@ export const tabletScreen = once(() => {
   g.fillStyle = '#3ecf6e'; g.beginPath(); g.roundRect(40, 250, 64, 24, 12); g.fill();
   return texture(c);
 });
+
+// Screen of the conference room's wall panel: light (bulb in the current colour, level and bar) and glass.
+export function paintRoomPanel(c: HTMLCanvasElement, s: { light: number; warmth: number; frost: number }) {
+  const W = c.width, H = c.height, g = c.getContext('2d')!;
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#1d2740'); bg.addColorStop(1, '#111827');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const warm = s.warmth / 100;
+  const tint = `rgb(${Math.round(234 + 21 * warm)},${Math.round(241 - 50 * warm)},${Math.round(255 - 140 * warm)})`;
+  const bar = (y: number, v: number, color: string) => {
+    g.fillStyle = 'rgba(255,255,255,0.14)'; g.beginPath(); g.roundRect(28, y, W - 56, 14, 7); g.fill();
+    if (v > 0) { g.fillStyle = color; g.beginPath(); g.roundRect(28, y, Math.max(14, (W - 56) * v / 100), 14, 7); g.fill(); }
+  };
+  g.textAlign = 'center'; g.fillStyle = '#ffffff'; g.font = '600 46px "Inter Variable", system-ui, sans-serif';
+  // light
+  g.save(); g.globalAlpha = 0.25 + 0.75 * (s.light / 100);
+  g.beginPath(); g.arc(W / 2, 74, 40, 0, Math.PI * 2); g.fillStyle = tint; g.globalAlpha *= 0.25; g.fill(); g.restore();
+  drawIcon(g, 'shareIdea', W / 2, 74, 54, s.light ? tint : 'rgba(255,255,255,0.45)', 2.2);
+  g.fillStyle = '#ffffff'; g.fillText(`${s.light}%`, W / 2, 168);
+  bar(186, s.light, tint);
+  // glass
+  drawIcon(g, 'blinds', W / 2, 262, 44, 'rgba(255,255,255,0.85)', 2);
+  g.font = '600 36px "Inter Variable", system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,0.9)';
+  g.fillText(`${s.frost}%`, W / 2, 330);
+  bar(346, s.frost, '#bfe9e1');
+}

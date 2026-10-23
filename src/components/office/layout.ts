@@ -145,6 +145,11 @@ export const CONF_SEATS = 8;
 export const CONF_SCREEN = { z: -CONF_RADIUS + 0.56, width: 3.0, height: 1.69, bottom: 0.98 };
 export const CONF_CREDENZA = { z: -CONF_RADIUS + 0.68, halfWidth: 1.45, halfDepth: 0.2, height: 0.58 };
 export const CONF_PLANTS: Vec2[] = [[-2.25, -3.2], [2.25, -3.2]];
+// Smart wall panel for the room's light and glass: inside, on the glass right of the door as you come in.
+export const CONF_WALL_PANEL = (() => {
+  const a = 0.36, r = CONF_RADIUS - 0.05;
+  return { pos: [Math.sin(a) * r, Math.cos(a) * r] as Vec2, y: 1.3, facing: a + Math.PI };
+})();
 
 export function conferenceSeats(): Seat[] {
   return Array.from({ length: CONF_SEATS }, (_, i) => {

@@ -116,6 +116,10 @@ export interface Todo {
 }
 export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred'>>;
 
+// Conference room light (brightness, warmth) and glass frosting, each 0–100.
+export interface RoomSettings { light: number; warmth: number; frost: number }
+export interface Room extends RoomSettings { id: string; updatedAt: string }
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -219,6 +223,9 @@ export interface DataStore {
   deleteTodo(id: string, userId: string): Promise<void>;
   clearDoneTodos(userId: string): Promise<void>;
   countOpenTodos(userId: string): Promise<number>;
+
+  getRoom(id: string): Promise<Room | null>;
+  updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;
 
   listEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]>;
   createEvent(e: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent>;
