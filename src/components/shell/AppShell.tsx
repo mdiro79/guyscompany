@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import { X, MessageCircle } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { usePathname } from '@/i18n/navigation';
 import { useLive } from '@/lib/live';
 import { ChatPanel } from '@/components/chat/ChatPanel';
@@ -28,6 +29,21 @@ export function AppShell({ data, notifications, messages, files, search, childre
   useEffect(() => { setDrawer(false); }, [pathname]);
   useEffect(() => { if (chat) setSeen(messages.length); }, [chat, messages.length]);
   const fullBleed = pathname.startsWith('/office');
+  // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those).
+  const embed = useSearchParams().get('embed') === '1';
+  if (embed) {
+    return (
+      <ShellProvider value={data}>
+        <div className="flex min-h-dvh flex-col">
+          <TopBar notifications={notifications} search={search} onMenu={() => {}} />
+          <div className="flex flex-1">
+            <main className="min-w-0 flex-1 p-3 sm:p-4">{children}</main>
+            <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex"><ChatPanel messages={messages} files={files} className="w-full" /></aside>
+          </div>
+        </div>
+      </ShellProvider>
+    );
+  }
 
   return (
     <ShellProvider value={data}>

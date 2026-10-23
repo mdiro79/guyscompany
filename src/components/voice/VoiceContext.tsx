@@ -11,8 +11,10 @@ export interface VoiceState {
   allMuted: boolean;
   error: string | null;
   peerCount: number;
-  // Speaking level 0..1 per user id (local + remote).
-  levels: Record<string, number>;
+  // Speaking level 0..1 for a user (read every frame, no re-render).
+  getLevel(userId: string): number;
+  // Proximity volume 0..1 for a user's voice, set by the 3D office.
+  setVolume(userId: string, volume: number): void;
   toggleMic(): void;
   useMicHere(): void;
   toggleMuteAll(): void;
@@ -20,8 +22,8 @@ export interface VoiceState {
 
 const noop = () => {};
 export const VoiceCtx = createContext<VoiceState>({
-  activeDevice: null, thisDevice: 'computer', micOn: false, allMuted: false, error: null, peerCount: 0, levels: {},
-  toggleMic: noop, useMicHere: noop, toggleMuteAll: noop,
+  activeDevice: null, thisDevice: 'computer', micOn: false, allMuted: false, error: null, peerCount: 0,
+  getLevel: () => 0, setVolume: noop, toggleMic: noop, useMicHere: noop, toggleMuteAll: noop,
 });
 
 export const useVoice = () => useContext(VoiceCtx);

@@ -46,7 +46,7 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
         {task.needsVolunteer && <span className="chip bg-accent-soft text-accent ring-1 ring-accent/30">{t('needsVolunteer')}</span>}
       </div>
       <div className="mt-3 flex items-center gap-2 text-xs text-muted">
-        {assignee ? <><Avatar profile={assignee} size="sm" /><span className="truncate text-ink">{assignee.displayName}</span></> : <span>{tc('unassigned')}</span>}
+        {assignee ? <span className="flex min-w-0 items-center gap-1.5" title={assignee.displayName}><Avatar profile={assignee} size="sm" /><span className="hidden truncate text-ink 2xl:inline">{assignee.displayName}</span></span> : <span className="truncate">{tc('unassigned')}</span>}
         {task.dueDate && <span className={clsx('ms-1 whitespace-nowrap', overdue && 'text-danger')}>{due(task.dueDate)}</span>}
         {task.needsVolunteer && !task.assigneeId && (
           <button type="button" className="ms-auto rounded-lg bg-accent px-2 py-1 text-[11px] font-medium text-white" onClick={() => run(() => volunteerTaskAction(task.id))}>{t('volunteer')}</button>

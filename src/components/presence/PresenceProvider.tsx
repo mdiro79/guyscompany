@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getRoom, type PresenceMeta } from '@/lib/realtime/room';
 import { useShell } from '@/components/shell/ShellContext';
-import { detectDevice } from '@/lib/device';
+import { detectDevice, isEmbedded } from '@/lib/device';
 import type { Profile } from '@/lib/data/types';
 import { PresenceCtx } from './PresenceContext';
 
@@ -10,6 +10,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user, demo } = useShell();
   const [peers, setPeers] = useState<PresenceMeta[]>([]);
   useEffect(() => {
+    if (isEmbedded()) return;
     const room = getRoom();
     const off = room.onPresence(setPeers);
     room.track({ userId: user.id, device: detectDevice(), micActive: false });

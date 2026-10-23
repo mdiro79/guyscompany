@@ -107,3 +107,6 @@ function localRoom(): Room {
     serverOffsetMs: () => 0,
   };
 }
+
+// Epoch milliseconds corrected towards the server clock (used for last-command-wins ordering).
+export const syncedNow = () => Date.now() + (room?.serverOffsetMs() ?? 0);

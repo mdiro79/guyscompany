@@ -157,6 +157,10 @@ M = {
   "controlsMobile": ("جوی‌استیک حرکت · کشیدن برای نگاه", "Joystick to move · drag to look"),
   "viewOnly": ("دفتر پابلیک: فقط مشاهده", "Public office: view only"), "action": ("اکشن", "Action"),
   "here": ("{n} نفر در دفتر", "{n} in the office"), "you": ("شما", "You"),
+  "focusMode": ("حالت تمرکز", "Focus mode"), "privateChat": ("چت خصوصی", "Private chat"),
+  "back": ("داشبورد", "Dashboard"), "corridor": ("راهرو", "Corridor"), "lounge": ("استراحت", "Lounge"),
+  "mic": ("میکروفون", "Microphone"), "standHint": ("برای بلند شدن E را بزنید", "Press E to stand up"),
+  "noAccess": ("ورود به این دفتر ممکن نیست", "You can't enter this office"),
  },
  "emotes": {
   "smile": ("لبخند", "Smile"), "laugh": ("خنده", "Laugh"), "surprise": ("تعجب", "Surprise"), "sad": ("ناراحتی", "Sad"),

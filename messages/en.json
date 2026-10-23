@@ -294,7 +294,15 @@
     "viewOnly": "Public office: view only",
     "action": "Action",
     "here": "{n} in the office",
-    "you": "You"
+    "you": "You",
+    "focusMode": "Focus mode",
+    "privateChat": "Private chat",
+    "back": "Dashboard",
+    "corridor": "Corridor",
+    "lounge": "Lounge",
+    "mic": "Microphone",
+    "standHint": "Press E to stand up",
+    "noAccess": "You can't enter this office"
   },
   "emotes": {
     "smile": "Smile",

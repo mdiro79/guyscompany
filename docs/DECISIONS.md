@@ -8,3 +8,6 @@
 - Emotes: shown as a bubble above each character's head (no face plane on the model).
 - Sitting for characters without a sit animation: posed in code; flying characters hover above the chair.
 - Source zips stay in the repo but are excluded from the site (`.vercelignore`; only `public/models/` is served).
+- Office door rules for visitors: locked or frosted → closed; private → only members with an accepted private-chat invite; public → open, view only (only the owner sits at the desk).
+- Talking without a mouth: the head nods and the arms move with the voice level (owner decision); emotes show in a bubble above the head.
+- Furniture: Kenney Furniture Kit (CC0) from a GitHub mirror (github.com/ETdoFresh/kenney.nl); walls, glass, doors, floor lines are built in code.
