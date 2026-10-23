@@ -3,6 +3,9 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import clsx from 'clsx';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatTime } from '@/lib/format';
 import type { Message, Profile } from '@/lib/data/types';
 import { CharacterModel, CHARACTER_HEIGHT, type Motion } from '@/components/three/CharacterModel';
 import { getCharacter, isFlying } from '@/lib/characters';
@@ -11,39 +14,75 @@ import { allSeats } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 import { emoteEmoji } from './emotes';
 import { officeUi, useOfficeUi } from './store';
+import { Nameplate } from './Nameplate';
+import { SpeechBubble, BubbleButton, TAIL_HEIGHT } from './SpeechBubble';
 
 const SEATS = allSeats();
 const BUBBLE_MS = 15000;
+const TOP_SAFE = 84; // below the office top bar
 
-function Bubble({ profile, messages, emote, onSelect }: { profile: Profile; messages: Message[]; emote: string | null; onSelect: () => void }) {
+const STATUS_DOT: Record<string, string> = { online: '#3ee07a', busy: '#f5a524', focus: '#6aa8ff' };
+
+// Strings and locale for the labels (drei's <Html> renders in its own React root, outside next-intl).
+export interface AvatarLabels { locale: string; older: string; newer: string }
+
+function Bubble({ profile, messages, emote, talk, labels, onSelect }: {
+  profile: Profile; messages: Message[]; emote: string | null; talk: number; labels: AvatarLabels; onSelect: () => void;
+}) {
   const selected = useOfficeUi((s) => s.selectedUserId === profile.id);
   const [seen, setSeen] = useState(messages.length);
+  // Message shown while browsing the history (tap the bubble or the name); null = the newest.
+  const [at, setAt] = useState<number | null>(null);
   const latest = messages.at(-1);
   const fresh = latest && Date.now() - new Date(latest.createdAt).getTime() < BUBBLE_MS;
   const unread = Math.max(0, messages.length - seen);
-  useEffect(() => { if (selected) setSeen(messages.length); }, [selected, messages.length]);
+  useEffect(() => { if (selected) setSeen(messages.length); else setAt(null); }, [selected, messages.length]);
+  // Close up the bubble would leave the top of the screen: it slides down (over the character) and drops its tail.
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const plateRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const b = bubbleRef.current, n = plateRef.current;
+      if (b && n) {
+        const shift = Math.max(0, TOP_SAFE - (n.getBoundingClientRect().top - b.offsetHeight));
+        b.style.transform = shift ? `translateY(${shift}px)` : '';
+        b.dataset.tail = shift ? '0' : '1';
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const index = Math.min(at ?? messages.length - 1, messages.length - 1);
+  const shown = selected ? messages[index] : latest;
+  const open = selected ? messages.length > 0 : !!(emote || fresh);
   return (
-    <div dir="ltr" className="pointer-events-auto flex w-max max-w-56 -translate-y-full flex-col items-center gap-1" onClick={(e) => { e.stopPropagation(); onSelect(); }}>
-      {selected && (
-        <div className="max-h-48 w-56 space-y-1 overflow-y-auto rounded-xl bg-white/95 p-2 text-xs text-[#1f2a24] shadow-lg">
-          {messages.slice(-6).map((m) => <p key={m.id} dir="auto" className="rounded-lg bg-[#f4efe6] px-2 py-1">{m.body || '📎'}</p>)}
-          {messages.length === 0 && <p className="text-center opacity-60">—</p>}
+    <div dir="ltr" className="pointer-events-auto flex w-max -translate-y-full cursor-pointer flex-col items-center" onClick={(e) => { e.stopPropagation(); onSelect(); }}>
+      {open && (
+        <div ref={bubbleRef} className="group relative z-10 w-64" style={{ paddingBottom: TAIL_HEIGHT - 6 }}>
+          <SpeechBubble characterId={profile.characterId} title={profile.displayName}
+            chip={selected ? `${index + 1}/${messages.length}` : shown ? formatTime(labels.locale, shown.createdAt) : undefined}
+            action={selected && messages.length > 1 ? (
+              <>
+                <BubbleButton onClick={() => setAt(Math.max(0, index - 1))} disabled={index === 0} label={labels.older}><ChevronLeft className="size-5" /></BubbleButton>
+                <BubbleButton onClick={() => setAt(Math.min(messages.length - 1, index + 1))} disabled={index === messages.length - 1} label={labels.newer}><ChevronRight className="size-5" /></BubbleButton>
+              </>
+            ) : undefined}>
+            {emote && !selected ? <span className="text-3xl leading-none">{emote}</span>
+              : <p className={clsx('break-words whitespace-pre-wrap', !selected && 'line-clamp-3')}>{shown?.body || '📎'}</p>}
+          </SpeechBubble>
         </div>
       )}
-      {!selected && (emote || fresh) && (
-        <div className="max-w-52 rounded-2xl bg-white/95 px-3 py-1.5 text-center text-sm text-[#1f2a24] shadow-md" dir="auto">
-          {emote ? <span className="text-2xl leading-none">{emote}</span> : <span className="line-clamp-2">{latest?.body}</span>}
-        </div>
-      )}
-      <div data-avatar-label className="flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white">
-        {profile.displayName}
-        {unread > 0 && !selected && <span className="rounded-full bg-[#f07a2a] px-1.5 text-[10px]">{unread}</span>}
+      <div ref={plateRef} data-avatar-label>
+        <Nameplate name={profile.displayName} characterId={profile.characterId} dot={STATUS_DOT[profile.status] ?? STATUS_DOT.online}
+          level={talk} unread={selected ? 0 : unread} />
       </div>
     </div>
   );
 }
 
-function RemoteCharacter({ remotes, profile, messages }: { remotes: React.RefObject<Map<string, RemoteAvatar>>; profile: Profile; messages: Message[] }) {
+function RemoteCharacter({ remotes, profile, messages, labels }: { remotes: React.RefObject<Map<string, RemoteAvatar>>; profile: Profile; messages: Message[]; labels: AvatarLabels }) {
   const group = useRef<THREE.Group>(null);
   const voice = useVoice();
   const [motion, setMotion] = useState<Motion>('idle');
@@ -80,15 +119,15 @@ function RemoteCharacter({ remotes, profile, messages }: { remotes: React.RefObj
     <group ref={group}>
       <Suspense fallback={null}><CharacterModel characterId={profile.characterId} motion={motion} talkLevel={talk} /></Suspense>
       <Html position={[0, CHARACTER_HEIGHT + 0.12, 0]} center zIndexRange={[20, 0]} style={{ direction: "ltr" }}>
-        <Bubble profile={profile} messages={messages} emote={emote}
+        <Bubble profile={profile} messages={messages} emote={emote} talk={talk} labels={labels}
           onSelect={() => officeUi.set({ selectedUserId: officeUi.get().selectedUserId === profile.id ? null : profile.id })} />
       </Html>
     </group>
   );
 }
 
-export function Avatars({ remotes, profiles, messages, voiceDistance }: {
-  remotes: React.RefObject<Map<string, RemoteAvatar>>; profiles: Profile[]; messages: Message[];
+export function Avatars({ remotes, profiles, messages, labels, voiceDistance }: {
+  remotes: React.RefObject<Map<string, RemoteAvatar>>; profiles: Profile[]; messages: Message[]; labels: AvatarLabels;
   voiceDistance: (pos: [number, number], userId: string) => void;
 }) {
   const [visible, setVisible] = useState<string[]>([]);
@@ -103,7 +142,7 @@ export function Avatars({ remotes, profiles, messages, voiceDistance }: {
       {visible.map((id) => {
         const profile = profiles.find((p) => p.id === id);
         if (!profile) return null;
-        return <RemoteCharacter key={id} remotes={remotes} profile={profile} messages={messages.filter((m) => m.authorId === id)} />;
+        return <RemoteCharacter key={id} remotes={remotes} profile={profile} messages={messages.filter((m) => m.authorId === id)} labels={labels} />;
       })}
     </>
   );

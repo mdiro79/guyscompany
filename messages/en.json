@@ -357,7 +357,9 @@
     "exit": "Exit",
     "receptionist": "Receptionist",
     "embedded": "The 3D office can't open inside the monitor.",
-    "saveFailed": "Not saved; try again"
+    "saveFailed": "Not saved; try again",
+    "olderMessage": "Older message",
+    "newerMessage": "Newer message"
   },
   "emotes": {
     "smile": "Smile",

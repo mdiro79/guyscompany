@@ -208,6 +208,7 @@ M = {
   "exit": ("خروج", "Exit"), "receptionist": ("منشی", "Receptionist"),
   "embedded": ("دفتر سه‌بعدی داخل مانیتور باز نمی‌شود.", "The 3D office can't open inside the monitor."),
   "saveFailed": ("ذخیره نشد؛ دوباره امتحان کنید", "Not saved; try again"),
+  "olderMessage": ("پیام قبلی", "Older message"), "newerMessage": ("پیام بعدی", "Newer message"),
  },
  "emotes": {
   "smile": ("لبخند", "Smile"), "laugh": ("خنده", "Laugh"), "surprise": ("تعجب", "Surprise"), "sad": ("ناراحتی", "Sad"),

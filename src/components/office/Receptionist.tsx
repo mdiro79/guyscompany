@@ -5,6 +5,7 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { CharacterModel, CHARACTER_HEIGHT, type Motion } from '@/components/three/CharacterModel';
 import { RECEPTIONIST_SEAT } from './layout';
+import { Nameplate } from './Nameplate';
 import { tour, guide, me, pointAt, GUIDE_SPEED } from './tour';
 
 export const RECEPTIONIST_CHARACTER = 'kaykit-ranger';
@@ -49,7 +50,7 @@ export function Receptionist({ label }: { label: string }) {
       <Suspense fallback={null}><CharacterModel characterId={RECEPTIONIST_CHARACTER} motion={motion} typing={motion === 'sit'} /></Suspense>
       {motion === 'sit' && (
         <Html position={[0, CHARACTER_HEIGHT + 0.25, 0]} center zIndexRange={[10, 0]} style={{ direction: 'ltr' }}>
-          <div className="-translate-y-full rounded-full bg-[#2f5d45] px-2.5 py-0.5 text-[11px] whitespace-nowrap text-white">{label}</div>
+          <div className="-translate-y-full"><Nameplate name={label} crown typing /></div>
         </Html>
       )}
     </group>

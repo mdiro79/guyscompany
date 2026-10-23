@@ -7,7 +7,7 @@ import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
 import { Furniture } from './Furniture';
 import { Player, type Pose } from './Player';
-import { Avatars } from './Avatars';
+import { Avatars, type AvatarLabels } from './Avatars';
 import { Receptionist } from './Receptionist';
 import { FirstPersonArms } from './FirstPersonArms';
 import { preloadCharacter } from '@/components/three/CharacterModel';
@@ -18,7 +18,7 @@ import type { RemoteAvatar } from './useOfficeNet';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; messages: Message[]; invitedSlots: number[];
-  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string;
+  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string; avatarLabels: AvatarLabels;
   remotes: React.RefObject<Map<string, RemoteAvatar>>; external: React.RefObject<Pose | null>;
   onPose: (p: Pose) => void; voiceDistance: (pos: [number, number], userId: string) => void;
 }
@@ -105,7 +105,7 @@ export default function OfficeScene(p: SceneProps) {
         <Building offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} />
         <Furniture />
         <Receptionist label={p.receptionLabel} />
-        <Avatars remotes={p.remotes} profiles={p.profiles} messages={p.messages} voiceDistance={p.voiceDistance} />
+        <Avatars remotes={p.remotes} profiles={p.profiles} messages={p.messages} labels={p.avatarLabels} voiceDistance={p.voiceDistance} />
         <FirstPersonArms characterId={p.user.characterId} userId={p.user.id} />
         <SceneReady onReady={markReady} />
       </Suspense>
