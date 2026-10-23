@@ -1,6 +1,8 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useProgress } from '@react-three/drei';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
 import { Furniture } from './Furniture';
@@ -16,7 +18,7 @@ import type { RemoteAvatar } from './useOfficeNet';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; messages: Message[]; invitedSlots: number[];
-  lowQuality: boolean; isPhone: boolean; receptionLabel: string;
+  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string;
   remotes: React.RefObject<Map<string, RemoteAvatar>>; external: React.RefObject<Pose | null>;
   onPose: (p: Pose) => void; voiceDistance: (pos: [number, number], userId: string) => void;
 }
@@ -41,10 +43,36 @@ function Lights({ low }: { low: boolean }) {
   );
 }
 
-export default function OfficeScene(p: SceneProps) {
-  // Teammates' characters download in the background, so they appear as soon as someone walks in.
-  useEffect(() => { new Set(p.profiles.map((x) => x.characterId)).forEach(preloadCharacter); }, [p.profiles]);
+// Rendered inside the Suspense boundary after the models, so it mounts only once all of them are ready.
+function SceneReady({ onReady }: { onReady: () => void }) {
+  useEffect(() => { onReady(); }, [onReady]);
+  return null;
+}
+
+// Real download progress of the office models (three.js loading manager), over the canvas until ready.
+function LoadingOverlay({ label, ready }: { label: string; ready: boolean }) {
+  const { progress } = useProgress();
+  const [shown, setShown] = useState(0);
+  const [gone, setGone] = useState(false);
+  // Items are discovered while loading, so the raw value can step back; the bar only moves forward.
+  useEffect(() => { setShown((s) => Math.max(s, ready ? 100 : Math.min(progress, 99))); }, [progress, ready]);
+  useEffect(() => { if (!ready) return; const id = setTimeout(() => setGone(true), 400); return () => clearTimeout(id); }, [ready]);
+  if (gone) return null;
   return (
+    <div className={`pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-[#2a221c] transition-opacity duration-300 ${ready ? 'opacity-0' : 'opacity-100'}`}>
+      <div className="w-[min(20rem,80vw)]"><ProgressBar percent={shown} label={label} dark /></div>
+    </div>
+  );
+}
+
+export default function OfficeScene(p: SceneProps) {
+  const [ready, setReady] = useState(false);
+  const markReady = useCallback(() => setReady(true), []);
+  // Teammates' characters download after the office itself, so they don't hold up the first view.
+  useEffect(() => { if (ready) new Set(p.profiles.map((x) => x.characterId)).forEach(preloadCharacter); }, [ready, p.profiles]);
+  return (
+    <>
+    <LoadingOverlay label={p.loadingLabel} ready={ready} />
     <Canvas
       dpr={p.lowQuality ? 1 : [1, 1.75]}
       gl={{ antialias: !p.lowQuality, powerPreference: p.lowQuality ? 'low-power' : 'high-performance' }}
@@ -60,10 +88,12 @@ export default function OfficeScene(p: SceneProps) {
         <Receptionist label={p.receptionLabel} />
         <Avatars remotes={p.remotes} profiles={p.profiles} messages={p.messages} voiceDistance={p.voiceDistance} />
         <FirstPersonArms characterId={p.user.characterId} userId={p.user.id} />
+        <SceneReady onReady={markReady} />
       </Suspense>
       <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />
       <MonitorFrame />
       <TourBubbleAnchor />
     </Canvas>
+    </>
   );
 }

@@ -30,7 +30,7 @@ const [base, out] = process.argv.slice(2);
   console.log('after change', new URL(tina.url()).pathname);
   await tina.goto(`${base}/en/office`);
   await tina.waitForTimeout(9000);
-  const tutorial = await tina.isVisible('text=Tutorial with the receptionist');
+  const tutorial = await tina.isVisible('#gc-tour-bubble');
   console.log('tutorial visible', tutorial);
   await tina.screenshot({ path: `${out}/e2e-tutorial-phone.png` });
   await browser.close();

@@ -23,15 +23,19 @@ import { TouchControls } from './TouchControls';
 import { OfficePanel } from './OfficePanel';
 import { Tutorial } from './Tutorial';
 import { TabCursor } from './TabCursor';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 
-const OfficeScene = dynamic(() => import('./OfficeScene'), {
-  ssr: false,
-  loading: () => (
+// Shown while the 3D code downloads; the scene then reports real model progress from where this leaves off.
+function SceneLoading() {
+  const t = useTranslations('office');
+  return (
     <div className="absolute inset-0 flex items-center justify-center bg-[#2a221c]">
-      <div className="size-12 animate-spin rounded-full border-4 border-white/20 border-t-[#f07a2a]" />
+      <div className="w-[min(20rem,80vw)]"><ProgressBar percent={0} label={t('loadingModels')} dark /></div>
     </div>
-  ),
-});
+  );
+}
+
+const OfficeScene = dynamic(() => import('./OfficeScene'), { ssr: false, loading: SceneLoading });
 const SEATS = allSeats();
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
@@ -189,7 +193,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   return (
     <div id="gc-office" className={clsx('fixed inset-0 bg-[#2a221c] text-white select-none', showCursor && 'cursor-none [&_*]:cursor-none')}>
       <OfficeScene user={user} profiles={profiles} offices={offices} messages={messages} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
-        receptionLabel={t('receptionist')} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+        receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
       {isPhone && !touring && !working && <TouchControls lookOnly={!!ui.seatId} />}
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}

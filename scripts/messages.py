@@ -32,6 +32,8 @@ M = {
   "tooShort": ("رمز باید حداقل ۸ کاراکتر باشد", "Password must be at least 8 characters"),
   "changed": ("رمز تغییر کرد", "Password changed"),
   "serverError": ("ارتباط با سرور برقرار نشد؛ کمی بعد دوباره امتحان کنید.", "Could not reach the server; try again shortly."),
+  "signingIn": ("در حال بررسی نام کاربری و رمز…", "Checking your username and password…"),
+  "openingDashboard": ("در حال آماده‌سازی داشبورد…", "Preparing your dashboard…"),
  },
  "setup": {
   "title": ("راه‌اندازی اولیه", "First-time setup"),
@@ -177,6 +179,7 @@ M = {
  },
  "office": {
   "title": ("دفتر سه‌بعدی", "3D office"), "loading": ("در حال ساخت دفتر…", "Building the office…"),
+  "loadingModels": ("در حال بارگذاری مدل‌های سه‌بعدی…", "Loading 3D models…"),
   "clickToLook": ("برای نگاه کردن کلیک کنید یا Tab بزنید", "Click or press Tab to look around"),
   "cursorHint": ("Tab: برگشت به نگاه با ماوس", "Tab: back to mouse look"),
   "sit": ("نشستن", "Sit"), "stand": ("بلند شدن", "Stand up"), "pressE": ("برای نشستن E را بزنید", "Press E to sit"),

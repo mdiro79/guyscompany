@@ -53,7 +53,9 @@
     "mismatch": "Passwords do not match",
     "tooShort": "Password must be at least 8 characters",
     "changed": "Password changed",
-    "serverError": "Could not reach the server; try again shortly."
+    "serverError": "Could not reach the server; try again shortly.",
+    "signingIn": "Checking your username and password…",
+    "openingDashboard": "Preparing your dashboard…"
   },
   "setup": {
     "title": "First-time setup",
@@ -302,6 +304,7 @@
   "office": {
     "title": "3D office",
     "loading": "Building the office…",
+    "loadingModels": "Loading 3D models…",
     "clickToLook": "Click or press Tab to look around",
     "cursorHint": "Tab: back to mouse look",
     "sit": "Sit",
