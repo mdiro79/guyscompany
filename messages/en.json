@@ -87,6 +87,7 @@
     "title": "Something went wrong",
     "body": "This page could not load. Try again; if it keeps happening, check the server status.",
     "retry": "Try again",
+    "retrying": "Trying again…",
     "home": "Home",
     "status": "Server status",
     "code": "Error code",
@@ -183,6 +184,7 @@
     "tooLarge": "File is larger than 20 MB",
     "newMessages": "{n} new",
     "sendFailed": "Message not sent; try again",
+    "sending": "Sending…",
     "uploadFailed": "File upload failed"
   },
   "widgets": {
@@ -354,7 +356,8 @@
     "pressTalk": "Press E for the receptionist's tour",
     "exit": "Exit",
     "receptionist": "Receptionist",
-    "embedded": "The 3D office can't open inside the monitor."
+    "embedded": "The 3D office can't open inside the monitor.",
+    "saveFailed": "Not saved; try again"
   },
   "emotes": {
     "smile": "Smile",

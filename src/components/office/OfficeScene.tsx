@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { useProgress } from '@react-three/drei';
+import { PerformanceMonitor, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
@@ -65,8 +65,25 @@ function LoadingOverlay({ label, ready }: { label: string; ready: boolean }) {
   );
 }
 
+// Pixels rendered per CSS pixel. Phone screens have 3, so rendering at 1 looked blurry and jagged;
+// low quality now means fewer lights and at most 1.5, high quality up to 2. If the frame rate drops,
+// the scale steps down towards 1 (and back up when there is headroom again).
+const MAX_DPR = { low: 1.5, high: 2 };
+// Sharper only gives way when movement is really choppy (drei's default already steps down below 50 fps).
+const FPS_BOUNDS = (): [number, number] => [30, 55];
+function useRenderScale(low: boolean) {
+  const max = Math.max(1, Math.min(window.devicePixelRatio || 1, low ? MAX_DPR.low : MAX_DPR.high));
+  const [share, setShare] = useState(1);
+  return {
+    dpr: 1 + (max - 1) * share,
+    decline: () => setShare((x) => Math.max(0, x - 0.34)),
+    incline: () => setShare((x) => Math.min(1, x + 0.34)),
+  };
+}
+
 export default function OfficeScene(p: SceneProps) {
   const [ready, setReady] = useState(false);
+  const scale = useRenderScale(p.lowQuality);
   const markReady = useCallback(() => setReady(true), []);
   // Teammates' characters download after the office itself, so they don't hold up the first view.
   useEffect(() => { if (ready) new Set(p.profiles.map((x) => x.characterId)).forEach(preloadCharacter); }, [ready, p.profiles]);
@@ -74,11 +91,13 @@ export default function OfficeScene(p: SceneProps) {
     <>
     <LoadingOverlay label={p.loadingLabel} ready={ready} />
     <Canvas
-      dpr={p.lowQuality ? 1 : [1, 1.75]}
-      gl={{ antialias: !p.lowQuality, powerPreference: p.lowQuality ? 'low-power' : 'high-performance' }}
+      dpr={scale.dpr}
+      // Fixed when the canvas is created, so it cannot follow the quality toggle; edges stay smooth on phones too.
+      gl={{ antialias: true, powerPreference: 'high-performance' }}
       camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 90, position: [SPAWN.pos[0], 1.6, SPAWN.pos[1]] }}
       style={{ touchAction: 'none' }}
     >
+      <PerformanceMonitor bounds={FPS_BOUNDS} onDecline={scale.decline} onIncline={scale.incline} flipflops={4} />
       <color attach="background" args={['#2a221c']} />
       <fog attach="fog" args={['#2a221c', 24, 55]} />
       <Lights low={p.lowQuality} />

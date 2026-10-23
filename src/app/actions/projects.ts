@@ -2,9 +2,9 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { store } from '@/lib/data';
-import { fail, okResult, type ActionResult } from './result';
+import { fail, okResult, guard, type ActionResult } from './result';
 
-export async function saveProjectAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+export const saveProjectAction = guard(async function saveProjectAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const name = String(form.get('name') ?? '').trim().slice(0, 120);
   const description = String(form.get('description') ?? '').trim().slice(0, 2000);
@@ -20,16 +20,16 @@ export async function saveProjectAction(_: ActionResult | null, form: FormData):
   }
   revalidatePath('/', 'layout');
   return okResult('saved');
-}
+});
 
-export async function deleteProjectAction(id: string) {
+export const deleteProjectAction = guard(async function deleteProjectAction(id: string) {
   const user = await requireUser();
   const p = (await store().listProjects()).find((x) => x.id === id);
   if (!p || (user.role !== 'admin' && p.managerId !== user.id)) return fail('forbidden');
   await store().deleteProject(id);
   revalidatePath('/', 'layout');
   return okResult();
-}
+});
 
 // Roles are managed by the project manager (or an admin), as in the UI.
 async function canManageProject(user: { id: string; role: string }, projectId: string) {
@@ -37,7 +37,7 @@ async function canManageProject(user: { id: string; role: string }, projectId: s
   return !!p && (user.role === 'admin' || p.managerId === user.id);
 }
 
-export async function createRoleAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+export const createRoleAction = guard(async function createRoleAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const projectId = String(form.get('projectId') ?? '');
   const name = String(form.get('name') ?? '').trim().slice(0, 80);
@@ -46,9 +46,9 @@ export async function createRoleAction(_: ActionResult | null, form: FormData): 
   await store().createRole({ projectId, name, description: String(form.get('description') ?? '').trim().slice(0, 500) });
   revalidatePath('/', 'layout');
   return okResult('saved');
-}
+});
 
-export async function volunteerRoleAction(id: string, join: boolean) {
+export const volunteerRoleAction = guard(async function volunteerRoleAction(id: string, join: boolean) {
   const user = await requireUser();
   const role = (await store().listRoles()).find((r) => r.id === id);
   if (!role) return fail('error');
@@ -63,13 +63,13 @@ export async function volunteerRoleAction(id: string, join: boolean) {
   }
   revalidatePath('/', 'layout');
   return okResult();
-}
+});
 
-export async function deleteRoleAction(id: string) {
+export const deleteRoleAction = guard(async function deleteRoleAction(id: string) {
   const user = await requireUser();
   const role = (await store().listRoles()).find((r) => r.id === id);
   if (!role || !(await canManageProject(user, role.projectId))) return fail('forbidden');
   await store().deleteRole(id);
   revalidatePath('/', 'layout');
   return okResult();
-}
+});

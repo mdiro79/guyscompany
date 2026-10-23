@@ -17,5 +17,23 @@ export function describeDbError(e: unknown): { code: string; hint: DbHint } {
   return { code, hint: 'unknown' };
 }
 
+// Server-side refusals of the Supabase pooler or Postgres while connecting or under load:
+// too many connections, server starting or shutting down, a pooler handler that exited.
+const BUSY_CODES = new Set(['53300', '57P01', '57P02', '57P03', '08000', '08001', '08003', '08004', '08006']);
+const BUSY_MESSAGE = /max ?client|too many (clients|connections)|EDBHANDLEREXITED|connection (terminated|closed)|server closed the connection|pool.*(timeout|exhausted)/i;
+// Failures before anything was sent to the database, so even a write can be repeated safely.
+const NOT_SENT = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'CONNECT_TIMEOUT', '53300', '57P03', '08001', '08004']);
+
+const messageOf = (e: unknown): string => {
+  const err = e as { message?: unknown; cause?: unknown } | null;
+  return `${typeof err?.message === 'string' ? err.message : ''} ${err?.cause ? messageOf(err.cause) : ''}`;
+};
+
 // Connection-level failures that are safe to retry on a fresh connection.
-export const isConnectionError = (e: unknown) => NETWORK.has(describeDbError(e).code);
+export const isConnectionError = (e: unknown) => {
+  const { code } = describeDbError(e);
+  return NETWORK.has(code) || BUSY_CODES.has(code) || BUSY_MESSAGE.test(messageOf(e));
+};
+
+// Connection failures where the query certainly never reached the database (safe to retry writes).
+export const isNotSentError = (e: unknown) => NOT_SENT.has(describeDbError(e).code) || /max ?client|too many (clients|connections)/i.test(messageOf(e));

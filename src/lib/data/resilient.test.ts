@@ -24,3 +24,16 @@ it('gives up after the second failure', async () => {
   await expect(s.listTasks()).rejects.toThrow('ECONNRESET');
   expect(listTasks).toHaveBeenCalledTimes(2);
 });
+
+it('repeats a write only when it never reached the database', async () => {
+  const updateOffice = vi.fn().mockRejectedValueOnce(fails('ECONNREFUSED')).mockResolvedValueOnce(undefined);
+  const s = resilient({ updateOffice } as unknown as DataStore);
+  await expect(s.updateOffice(1, { locked: true })).resolves.toBeUndefined();
+  expect(updateOffice).toHaveBeenCalledTimes(2);
+
+  // A connection lost mid-write may already have applied it: no second attempt.
+  const createMessage = vi.fn().mockRejectedValue(fails('CONNECTION_CLOSED'));
+  const t = resilient({ createMessage } as unknown as DataStore);
+  await expect(t.createMessage({ channel: 'team', authorId: null, body: 'x', fileId: null })).rejects.toThrow('CONNECTION_CLOSED');
+  expect(createMessage).toHaveBeenCalledTimes(1);
+});

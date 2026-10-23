@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
 import { MessageCircle, MoreHorizontal, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus } from 'lucide-react';
@@ -10,11 +10,15 @@ import { MAX_FILE_BYTES } from '@/lib/limits';
 import { uploadFile } from '@/lib/upload';
 import type { FileMeta, Message } from '@/lib/data/types';
 import { useShell } from '@/components/shell/ShellContext';
+import { onNewMessage } from '@/lib/live-messages';
 
 const QUICK = ['👍', '🔥', '❤️', '😂', '🎉', '👏'];
 const EMOJI = ['😀', '😂', '😍', '🤔', '😎', '😴', '😢', '😡', '👍', '👌', '🙏', '🔥', '❤️', '🎉', '✅', '🚀', '☕', '💡'];
 
-export function ChatPanel({ channel = 'team', messages, files, title, className }: {
+const PENDING = 'pending:';
+const byTime = (a: Message, b: Message) => a.createdAt.localeCompare(b.createdAt);
+
+export function ChatPanel({ channel = 'team', messages: saved, files, title, className }: {
   channel?: string; messages: Message[]; files: FileMeta[]; title?: string; className?: string;
 }) {
   const t = useTranslations('chat');
@@ -24,9 +28,28 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [reactFor, setReactFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  // Messages not yet in the server data: our own while sending (and once saved) and others' from Realtime.
+  // They show at once; the next page refresh brings them in `saved` and the local copies are dropped.
+  const [local, setLocal] = useState<Message[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => onNewMessage((m) => {
+    if (m.channel !== channel) return;
+    setLocal((l) => {
+      if (l.some((x) => x.id === m.id)) return l;
+      // Our own message can arrive here before the send finishes: it takes the place of its "sending" copy.
+      const own = m.authorId === user.id ? l.findIndex((x) => x.id.startsWith(PENDING) && x.body === m.body && x.fileId === m.fileId) : -1;
+      return own < 0 ? [...l, m] : l.map((x, i) => (i === own ? m : x));
+    });
+  }), [channel, user.id]);
+  const savedIds = useMemo(() => new Set(saved.map((m) => m.id)), [saved]);
+  useEffect(() => { setLocal((l) => (l.some((m) => savedIds.has(m.id)) ? l.filter((m) => !savedIds.has(m.id)) : l)); }, [savedIds]);
+  const messages = useMemo(() => {
+    const extra = local.filter((m) => !savedIds.has(m.id));
+    return extra.length ? [...saved, ...extra].sort(byTime) : saved;
+  }, [saved, local, savedIds]);
 
   // The list is capped, so follow the newest message id rather than the count.
   const lastId = messages.at(-1)?.id;
@@ -34,13 +57,23 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [lastId]);
 
-  // The box clears right away; the text comes back if sending fails.
+  // The message shows right away as "sending"; the text comes back if sending fails.
   const send = (body: string, fileId: string | null = null) => {
     setError(null);
     setText('');
+    const tempId = `${PENDING}${crypto.randomUUID()}`;
+    setLocal((l) => [...l, { id: tempId, channel, authorId: user.id, body: body.trim(), fileId, createdAt: new Date().toISOString(), reactions: [] }]);
     start(async () => {
       const r = await sendMessageAction(channel, body, fileId).catch(() => null);
-      if (!r?.ok) { setText((cur) => cur || body); setError(t('sendFailed')); }
+      if (r?.ok && r.sent) {
+        const sent = r.sent;
+        // Realtime may have delivered it already.
+        setLocal((l) => (l.some((m) => m.id === sent.id) ? l.filter((m) => m.id !== tempId) : l.map((m) => (m.id === tempId ? sent : m))));
+        return;
+      }
+      setLocal((l) => l.filter((m) => m.id !== tempId));
+      setText((cur) => cur || body);
+      setError(t('sendFailed'));
     });
   };
 
@@ -69,6 +102,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
           const author = byId(m.authorId);
           const file = m.fileId ? files.find((f) => f.id === m.fileId) : null;
           const mine = m.authorId === user.id;
+          const sending = m.id.startsWith(PENDING);
           const grouped = Object.entries(m.reactions.reduce<Record<string, string[]>>((acc, r) => { (acc[r.emoji] ??= []).push(r.userId); return acc; }, {}));
           return (
             <div key={m.id} className="flex gap-3">
@@ -76,10 +110,10 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className="text-sm font-semibold">{author?.displayName ?? '—'}</span>
-                  <span className="text-[11px] text-muted" dir="ltr">{formatTime(locale, m.createdAt)}</span>
+                  <span className="text-[11px] text-muted" dir={sending ? undefined : 'ltr'}>{sending ? t('sending') : formatTime(locale, m.createdAt)}</span>
                 </div>
                 {m.body && (
-                  <div dir="auto" className={clsx('mt-1 whitespace-pre-wrap break-words rounded-2xl rounded-ss-md px-3 py-2 text-sm leading-6', mine ? 'bg-brand-soft' : 'bg-surface-2')}>{m.body}</div>
+                  <div dir="auto" className={clsx('mt-1 whitespace-pre-wrap break-words rounded-2xl rounded-ss-md px-3 py-2 text-sm leading-6', mine ? 'bg-brand-soft' : 'bg-surface-2', sending && 'opacity-60')}>{m.body}</div>
                 )}
                 {file && (
                   <a href={`/api/files/${file.id}`} className="mt-1 flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:bg-surface-2">
@@ -88,7 +122,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
                     <Download className="size-5 text-muted" />
                   </a>
                 )}
-                <div className="mt-1 flex flex-wrap items-center gap-1">
+                {!sending && <div className="mt-1 flex flex-wrap items-center gap-1">
                   {grouped.map(([emoji, users]) => (
                     <button key={emoji} type="button" onClick={() => start(async () => { await toggleReactionAction(m.id, emoji); })}
                       className={clsx('chip gap-1 border', users.includes(user.id) ? 'border-brand bg-brand-soft' : 'border-line bg-surface')}>
@@ -106,7 +140,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
                       </div>
                     )}
                   </div>
-                </div>
+                </div>}
               </div>
             </div>
           );
@@ -126,7 +160,7 @@ export function ChatPanel({ channel = 'team', messages, files, title, className 
           <button type="button" className="icon-btn" aria-label={t('emoji')} onClick={() => setEmojiOpen((x) => !x)}><Smile className="size-5" /></button>
           <button type="button" className="icon-btn" aria-label={t('attach')} onClick={() => fileInput.current?.click()}><Paperclip className="size-5" /></button>
           <input ref={fileInput} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-          <button className="ms-auto flex size-11 items-center justify-center rounded-full bg-brand text-brand-ink disabled:opacity-50" disabled={pending || !text.trim()} aria-label={t('placeholder')}>
+          <button className="ms-auto flex size-11 items-center justify-center rounded-full bg-brand text-brand-ink disabled:opacity-50" disabled={!text.trim()} aria-label={t('placeholder')}>
             <Send className="size-5 rtl:-scale-x-100" />
           </button>
         </div>

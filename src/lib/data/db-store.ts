@@ -2,7 +2,7 @@ import 'server-only';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
-import { describeDbError, isConnectionError } from '@/lib/db-errors';
+import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
 import type { DataStore, Message, Notification } from './types';
 
 type Row = Record<string, unknown>;
@@ -146,8 +146,12 @@ function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, t]).finally(() => clearTimeout(timer));
 }
 
-// A dead or hung connection (e.g. after the serverless instance was frozen) fails the query; it is retried
-// once on fresh connections. Reads also get a time limit (writes have none, so a slow write is never repeated).
+const RETRY_DELAY_MS = 250;
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// A dead or hung connection (e.g. after the serverless instance was frozen) or a busy pooler fails the query;
+// reads are retried once on fresh connections. Writes are retried only when the query certainly never
+// reached the database, so a write is never applied twice. Reads also get a time limit (writes have none).
 export function resilient(store: DataStore): DataStore {
   const out = {} as Record<string, unknown>;
   for (const [name, fn] of Object.entries(store) as [string, (...a: unknown[]) => Promise<unknown>][]) {
@@ -160,9 +164,10 @@ export function resilient(store: DataStore): DataStore {
         gen = dbGeneration(); // the query has picked its connection set synchronously
         return await p;
       } catch (e) {
-        if (!isConnectionError(e)) throw e;
+        if (!(read ? isConnectionError(e) : isNotSentError(e))) throw e;
         console.warn(`[db] ${name} failed (${describeDbError(e).code}); retrying on a new connection`);
         resetDb(0, gen);
+        await wait(RETRY_DELAY_MS);
         return run(args);
       }
     };

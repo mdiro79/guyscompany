@@ -63,6 +63,7 @@ M = {
   "title": ("مشکلی پیش آمد", "Something went wrong"),
   "body": ("این صفحه بارگذاری نشد. دوباره تلاش کنید؛ اگر تکرار شد، وضعیت سرور را ببینید.", "This page could not load. Try again; if it keeps happening, check the server status."),
   "retry": ("تلاش دوباره", "Try again"),
+  "retrying": ("در حال تلاش دوباره…", "Trying again…"),
   "home": ("صفحه‌ی اصلی", "Home"),
   "status": ("وضعیت سرور", "Server status"),
   "code": ("کد خطا", "Error code"),
@@ -117,7 +118,7 @@ M = {
   "groupChat": ("گفتگوی گروهی", "Group chat"), "attach": ("پیوست فایل", "Attach file"), "emoji": ("ایموجی", "Emoji"),
   "react": ("واکنش", "React"), "empty": ("هنوز پیامی نیست", "No messages yet"), "private": ("چت خصوصی دفتر {slot}", "Office {slot} private chat"),
   "tooLarge": ("حجم فایل بیش از ۲۰ مگابایت است", "File is larger than 20 MB"), "newMessages": ("{n} پیام جدید", "{n} new"),
-  "sendFailed": ("پیام ارسال نشد؛ دوباره امتحان کنید", "Message not sent; try again"), "uploadFailed": ("آپلود فایل انجام نشد", "File upload failed"),
+  "sendFailed": ("پیام ارسال نشد؛ دوباره امتحان کنید", "Message not sent; try again"), "sending": ("در حال ارسال…", "Sending…"), "uploadFailed": ("آپلود فایل انجام نشد", "File upload failed"),
  },
  "widgets": {
   "teamVote": ("رأی تیم", "Team Vote"), "hiddenScore": ("نمره‌ها تا پایان مخفی است", "Scores are hidden until the end"),
@@ -206,6 +207,7 @@ M = {
   "talk": ("صحبت با منشی", "Talk to the receptionist"), "pressTalk": ("برای راهنمای منشی E را بزنید", "Press E for the receptionist's tour"),
   "exit": ("خروج", "Exit"), "receptionist": ("منشی", "Receptionist"),
   "embedded": ("دفتر سه‌بعدی داخل مانیتور باز نمی‌شود.", "The 3D office can't open inside the monitor."),
+  "saveFailed": ("ذخیره نشد؛ دوباره امتحان کنید", "Not saved; try again"),
  },
  "emotes": {
   "smile": ("لبخند", "Smile"), "laugh": ("خنده", "Laugh"), "surprise": ("تعجب", "Surprise"), "sad": ("ناراحتی", "Sad"),

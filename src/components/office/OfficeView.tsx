@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
@@ -10,7 +10,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { useVoice } from '@/components/voice/VoiceContext';
 import { getMesh } from '@/lib/realtime/mesh';
 import { useDevice, isEmbedded } from '@/lib/device';
-import { recordVisitAction } from '@/app/actions/offices';
+import { recordVisitAction, updateMyOfficeAction } from '@/app/actions/offices';
 import type { FileMeta, Message } from '@/lib/data/types';
 import { useOfficeNet } from './useOfficeNet';
 import { officeUi, input, useOfficeUi } from './store';
@@ -20,10 +20,11 @@ import { connectDoors } from './doors';
 import { canLook } from './Player';
 import { startTourFor, useTourStep } from './tour';
 import { TouchControls } from './TouchControls';
-import { OfficePanel } from './OfficePanel';
+import { OfficePanel, type OfficeSettings } from './OfficePanel';
 import { Tutorial } from './Tutorial';
 import { TabCursor } from './TabCursor';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 
 // Shown while the 3D code downloads; the scene then reports real model progress from where this leaves off.
 function SceneLoading() {
@@ -44,7 +45,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   const t = useTranslations('office');
   const te = useTranslations('emotes');
   const locale = useLocale();
-  const { user, profiles, offices } = useShell();
+  const { user, profiles, offices: savedOffices } = useShell();
+  // The owner's office settings apply at once (glass, door, panel) while they save; failures roll back.
+  const [offices, applyOffice] = useOptimistic(savedOffices, (list, { slot, patch }: { slot: number; patch: OfficeSettings }) =>
+    list.map((o) => (o.slot === slot ? { ...o, ...patch } : o)));
   const voice = useVoice();
   const device = useDevice();
   const isPhone = device === 'phone';
@@ -152,6 +156,13 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
     voice.setVolume(userId, v);
   }, [myPos, offices, voice]);
 
+  // Called inside the panel's transition, which keeps the optimistic change until the saved data arrives.
+  const mySlot = savedOffices.find((o) => o.ownerId === user.id)?.slot;
+  const changeMyOffice = useCallback((patch: OfficeSettings) => {
+    if (mySlot !== undefined) applyOffice({ slot: mySlot, patch });
+    return updateMyOfficeAction(patch);
+  }, [mySlot, applyOffice]);
+
   if (embedded) {
     return <div className="flex min-h-dvh items-center justify-center p-6 text-center text-muted">{t('embedded')}</div>;
   }
@@ -221,6 +232,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
             {current && current.ownerId !== user.id && current.isPublic && <div className="text-xs text-white/70">{t('viewOnly')}</div>}
           </div>
           <div className="pointer-events-auto ms-auto flex gap-2">
+            <LocaleSwitch dark className="max-sm:px-2.5" />
             <button type="button" onClick={voice.toggleMic} aria-label={t('mic')} className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', voice.micOn ? 'bg-[#22a559]' : 'bg-black/55')}>
               {voice.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
             </button>
@@ -271,7 +283,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
 
       {/* Owner controls inside one's own office */}
       {inMyOffice && myOffice && !ui.seatId && !touring && (
-        <div className="absolute top-20 end-3 z-30 short:top-16"><OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} /></div>
+        <div className="absolute top-20 end-3 z-30 short:top-16"><OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} onChange={changeMyOffice} /></div>
       )}
 
       {/* Private chat for invited guests inside the host's office */}
