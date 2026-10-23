@@ -9,5 +9,5 @@ export default async function LoginPage() {
   const user = await currentUser();
   if (user) redirect(`/${await getLocale()}`);
   if (await needsSetup()) redirect(`/${await getLocale()}/setup`);
-  return <LoginForm demo={isDemo} />;
+  return <LoginForm demo={isDemo} customAdmin={!!process.env.ADMIN_USERNAME} />;
 }

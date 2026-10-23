@@ -17,7 +17,7 @@ Without Supabase variables the app runs in **demo mode**: in-memory data and fou
 
 Zero manual config: import the repo in Vercel, add **Storage → Supabase** (Marketplace) to the project and redeploy.
 Each build runs `scripts/db-setup.mjs` (migrations + `supabase-setup.sql`, idempotent); the first visit opens
-**/setup** to create the admin. Details in Persian: `docs/DEPLOY.md`. Health check: `/api/health`.
+**/setup** to create the admin, unless `ADMIN_USERNAME` / `ADMIN_PASSWORD` (optional `ADMIN_DISPLAY_NAME`) are set in Vercel, which creates it automatically. Details in Persian: `docs/DEPLOY.md`. Health check: `/api/health`.
 
 Variable names from the integration (`SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`/`ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`/`SECRET_KEY`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`) and our own (`.env.example`) both work.

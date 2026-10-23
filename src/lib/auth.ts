@@ -13,6 +13,7 @@ const sign = (v: string) => createHmac('sha256', demoSecret()).update(v).digest(
 // Demo passwords per user id (in memory); real mode uses Supabase Auth.
 const g = globalThis as unknown as { gcDemoPasswords?: Map<string, string> };
 const demoPasswords = () => (g.gcDemoPasswords ??= new Map());
+export const setDemoPassword = (userId: string, password: string) => { demoPasswords().set(userId, password); };
 
 async function setDemoSession(userId: string) {
   const jar = await cookies();
@@ -53,6 +54,8 @@ export async function requireAdmin(): Promise<Profile> {
 }
 
 export async function signIn(username: string, password: string): Promise<Profile | null> {
+  const { ensureEnvAdmin } = await import('@/lib/bootstrap');
+  await ensureEnvAdmin();
   const name = username.trim().toLowerCase();
   if (isDemo) {
     const profile = await store().getProfileByUsername(name);

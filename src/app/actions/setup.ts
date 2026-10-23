@@ -7,6 +7,8 @@ import { isDemo, USERNAME_PATTERN } from '@/lib/env';
 import { fail, type ActionResult } from './result';
 
 export async function needsSetup() {
+  const { ensureEnvAdmin } = await import('@/lib/bootstrap');
+  await ensureEnvAdmin();
   return !isDemo && (await store().listProfiles()).length === 0;
 }
 

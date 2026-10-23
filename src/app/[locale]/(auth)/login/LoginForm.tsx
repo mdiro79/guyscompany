@@ -3,7 +3,7 @@ import { useActionState } from 'react';
 import { useTranslations } from 'next-intl';
 import { loginAction } from '@/app/actions/auth';
 
-export function LoginForm({ demo }: { demo: boolean }) {
+export function LoginForm({ demo, customAdmin }: { demo: boolean; customAdmin: boolean }) {
   const t = useTranslations('auth');
   const [state, action, pending] = useActionState(loginAction, null);
   return (
@@ -21,7 +21,7 @@ export function LoginForm({ demo }: { demo: boolean }) {
       {state?.error && <p role="alert" className="text-sm text-danger">{t('invalid')}</p>}
       <button className="btn-primary w-full" disabled={pending}>{t('signIn')}</button>
       <p className="text-xs text-muted">{t('noSignup')}</p>
-      {demo && <p className="rounded-xl bg-accent-soft p-3 text-xs">{t('demoHint', { password: 'guys1234' })}</p>}
+      {demo && !customAdmin && <p className="rounded-xl bg-accent-soft p-3 text-xs">{t('demoHint', { password: 'guys1234' })}</p>}
     </form>
   );
 }
