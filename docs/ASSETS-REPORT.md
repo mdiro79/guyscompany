@@ -17,7 +17,7 @@ See `assets/characters.json`. Preview: `docs/reference/characters-sheet.png`.
 
 - humans: Casual2_Female, Doctor_Male_Old, Ninja_Sand, VikingHelmet
 - monsters-a: BlueDemon, Dino, MushroomKing, Tribal
-- monsters-b: Cactoro, Fish, Mushnub_Evolved, PinkBlob
+- monsters-b: Cat (owner request, replaces neighbouring Cactoro), Fish, Mushnub_Evolved, PinkBlob
 - monsters-c: Armabee, Ghost, Goleling, Squidle
 - kaykit: Barbarian, Mage, Ranger, Rogue_Hooded
 

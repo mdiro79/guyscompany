@@ -56,11 +56,11 @@
     "model": "/models/characters/Tribal.glb"
   },
   {
-    "id": "monsters-b-cactoro",
-    "name": "Cactoro",
+    "id": "monsters-b-cat",
+    "name": "Cat",
     "group": "monsters-b",
-    "source": "glTF-20261023T123901Z-1-001.zip:glTF/Cactoro.gltf",
-    "model": "/models/characters/Cactoro.glb"
+    "source": "glTF-20261023T123901Z-1-001.zip:glTF/Cat.gltf",
+    "model": "/models/characters/Cat.glb"
   },
   {
     "id": "monsters-b-fish",
