@@ -7,7 +7,7 @@ import type { Message, Profile } from '@/lib/data/types';
 import { CharacterModel, CHARACTER_HEIGHT, type Motion } from '@/components/three/CharacterModel';
 import { getCharacter, isFlying } from '@/lib/characters';
 import { useVoice } from '@/components/voice/VoiceContext';
-import { allSeats, RECEPTIONIST_POS } from './layout';
+import { allSeats } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 import { emoteEmoji } from './emotes';
 import { officeUi, useOfficeUi } from './store';
@@ -106,17 +106,5 @@ export function Avatars({ remotes, profiles, messages, voiceDistance }: {
         return <RemoteCharacter key={id} remotes={remotes} profile={profile} messages={messages.filter((m) => m.authorId === id)} />;
       })}
     </>
-  );
-}
-
-// Receptionist behind the desk (also hosts the tutorial).
-export function Receptionist({ label }: { label: string }) {
-  return (
-    <group position={[RECEPTIONIST_POS[0], 0, RECEPTIONIST_POS[1]]}>
-      <Suspense fallback={null}><CharacterModel characterId="kaykit-ranger" motion="idle" /></Suspense>
-      <Html position={[0, CHARACTER_HEIGHT + 0.3, 0]} center zIndexRange={[10, 0]} style={{ direction: "ltr" }}>
-        <div className="-translate-y-full rounded-full bg-[#2f5d45] px-2.5 py-0.5 text-[11px] whitespace-nowrap text-white">{label}</div>
-      </Html>
-    </group>
   );
 }

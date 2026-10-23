@@ -31,7 +31,7 @@ export function OfficePanel({ office, profiles, me, privateMessages, files }: {
     </button>
   );
   return (
-    <div className="pointer-events-auto w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl bg-black/70 p-3 text-white backdrop-blur">
+    <div className="pointer-events-auto max-h-[calc(100dvh-6rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl bg-black/70 p-3 text-white backdrop-blur short:max-h-[calc(100dvh-4.5rem)]">
       <div className="mb-2 flex items-center gap-1">
         <span className="me-auto text-sm font-semibold">{t('myOffice')}</span>
         {(['settings', 'visitors', 'chat'] as const).map((k) => (
@@ -68,7 +68,7 @@ export function OfficePanel({ office, profiles, me, privateMessages, files }: {
             </select>
             <button type="button" className="btn-primary min-h-10" disabled={!invitee} onClick={() => start(async () => { await inviteToChatAction(invitee); setInvitee(''); router.refresh(); })}>{tc('send')}</button>
           </div>
-          <div className="h-72 overflow-hidden rounded-xl bg-surface text-ink">
+          <div className="h-72 overflow-hidden rounded-xl bg-surface text-ink short:h-52">
             <ChatPanel channel={`office:${office.slot}`} messages={privateMessages} files={files} title={t('privateChat')} className="h-full" />
           </div>
         </div>

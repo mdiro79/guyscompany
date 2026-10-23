@@ -5,29 +5,47 @@
 export type Vec2 = [number, number];
 export interface Segment { a: Vec2; b: Vec2; kind: 'solid' | 'glass' | 'door' | 'obstacle'; slot?: number }
 export interface Seat { id: string; pos: Vec2; facing: number; slot?: number; monitor?: { pos: [number, number, number]; facing: number }; area: 'office' | 'conference' | 'lounge' }
-export interface Prop { model: string; pos: Vec2; rot: number; size: number; y?: number }
+export interface Prop { model: string; pos: Vec2; rot: number; size: number; y?: number; h?: number } // h = target height (else uniform scale)
 export interface OfficeRoom { slot: number; min: Vec2; max: Vec2; door: { a: Vec2; b: Vec2 }; wallColor: 'orange' | 'teal' }
+export type Circle = { pos: Vec2; r: number };
+// A hinged door leaf. Angles are directions in the floor plane (atan2 of z, x) from the hinge to the free end.
+export interface DoorDef { id: string; kind: 'office' | 'conference' | 'entrance'; slot?: number; hinge: Vec2; width: number; closed: number; open: number; defaultOpen: boolean }
 
 export const WALL_HEIGHT = 3;
 export const EYE_HEIGHT = 1.6;
 export const PLAYER_RADIUS = 0.3;
-export const H = 5; // corridor half width around the centre
-export const OUT = 12; // outer extent of offices
-export const SOUTH = 13; // entrance wall (vestibule protrudes 1 m)
-export const CONF_RADIUS = 3;
-export const CONF_DOOR_HALF_ANGLE = 0.32; // radians, door gap facing south
+export const AVATAR_RADIUS = 0.3;
+export const H = 7; // corridor half width around the centre
+export const OUT = 15; // outer extent of offices
+export const SOUTH = 16; // entrance wall (vestibule protrudes 1 m)
+export const PORCH = 2.2; // glass porch outside the entrance door
+export const CONF_RADIUS = 4.5;
+export const DOOR_WIDTH = 1.4;
+const ENTRANCE_HALF = 0.9;
+const CONF_DOOR_HALF_ANGLE = Math.asin(DOOR_WIDTH / 2 / CONF_RADIUS);
+export const RECEPTION_Z = SOUTH - 4.5; // reception desk centre
+
+const officeCx = (slot: number) => (slot % 2 === 1 ? -1 : 1) * (H + OUT) / 2;
 
 // Each office: slot, bounds, door in the wall facing the east/west corridor arm.
-export const OFFICES: OfficeRoom[] = [
-  { slot: 1, min: [-OUT, -OUT], max: [-H, -H], door: { a: [-9.6, -H], b: [-8.2, -H] }, wallColor: 'orange' },
-  { slot: 2, min: [H, -OUT], max: [OUT, -H], door: { a: [8.2, -H], b: [9.6, -H] }, wallColor: 'teal' },
-  { slot: 3, min: [-OUT, H], max: [-H, OUT], door: { a: [-9.6, H], b: [-8.2, H] }, wallColor: 'teal' },
-  { slot: 4, min: [H, H], max: [OUT, OUT], door: { a: [8.2, H], b: [9.6, H] }, wallColor: 'orange' },
-];
+export const OFFICES: OfficeRoom[] = [1, 2, 3, 4].map((slot) => {
+  const west = slot % 2 === 1, north = slot <= 2;
+  const cx = officeCx(slot), dz = north ? -H : H;
+  return {
+    slot,
+    min: [west ? -OUT : H, north ? -OUT : H] as Vec2,
+    max: [west ? -H : OUT, north ? -H : OUT] as Vec2,
+    door: { a: [cx - DOOR_WIDTH / 2, dz] as Vec2, b: [cx + DOOR_WIDTH / 2, dz] as Vec2 },
+    wallColor: slot === 1 || slot === 4 ? 'orange' as const : 'teal' as const,
+  };
+});
 
-export const SPAWN: { pos: Vec2; yaw: number } = { pos: [0, 11.6], yaw: 0 }; // by the entrance, facing reception (north)
-export const RECEPTION: { pos: Vec2; facing: number } = { pos: [0, 9.2], facing: 0 };
-export const RECEPTIONIST_POS: Vec2 = [0, 8.1];
+export const SPAWN: { pos: Vec2; yaw: number } = { pos: [0, SOUTH - 1.1], yaw: 0 }; // by the entrance, facing reception (north)
+export const RECEPTION: { pos: Vec2; facing: number } = { pos: [0, RECEPTION_Z], facing: 0 };
+// The receptionist sits behind the desk facing the entrance (yaw π looks to +Z).
+export const RECEPTIONIST_SEAT: { pos: Vec2; facing: number } = { pos: [0, RECEPTION_Z - 0.8], facing: Math.PI };
+export const RECEPTIONIST_POS: Vec2 = RECEPTIONIST_SEAT.pos;
+const DESK_HALF: Vec2 = [0.82, 0.42]; // reception desk footprint (half sizes)
 
 const seg = (a: Vec2, b: Vec2, kind: Segment['kind'] = 'solid', slot?: number): Segment => ({ a, b, kind, slot });
 
@@ -36,13 +54,20 @@ function wallWithDoor(a: Vec2, b: Vec2, d0: Vec2, d1: Vec2, kind: Segment['kind'
   return [seg(a, d0, kind, slot), seg(d0, d1, 'door', slot), seg(d1, b, kind, slot)];
 }
 
+const box = (cx: number, cz: number, hx: number, hz: number): Segment[] => {
+  const p: Vec2[] = [[cx - hx, cz - hz], [cx + hx, cz - hz], [cx + hx, cz + hz], [cx - hx, cz + hz]];
+  return p.map((a, i) => seg(a, p[(i + 1) % 4], 'obstacle'));
+};
+
 export function buildWalls(): Segment[] {
   const w: Segment[] = [];
   // Outer shell (clockwise from north-west office).
   w.push(seg([-OUT, -OUT], [-H, -OUT]), seg([-H, -OUT], [-H, -H]), seg([-H, -H], [H, -H]), seg([H, -H], [H, -OUT]), seg([H, -OUT], [OUT, -OUT]));
   w.push(seg([OUT, -OUT], [OUT, -H]), seg([OUT, -H], [OUT, H]), seg([OUT, H], [OUT, OUT]), seg([OUT, OUT], [H, OUT]), seg([H, OUT], [H, SOUTH]));
-  w.push(seg([H, SOUTH], [0.9, SOUTH]), seg([-0.9, SOUTH], [-H, SOUTH])); // entrance gap 1.8 m (open door)
+  w.push(seg([H, SOUTH], [ENTRANCE_HALF, SOUTH]), seg([-ENTRANCE_HALF, SOUTH], [-H, SOUTH])); // entrance gap (door leaf in doors())
   w.push(seg([-H, SOUTH], [-H, OUT]), seg([-H, OUT], [-OUT, OUT]), seg([-OUT, OUT], [-OUT, H]), seg([-OUT, H], [-OUT, -H]), seg([-OUT, -H], [-OUT, -OUT]));
+  // Glass porch outside the entrance (keeps people from walking off into the void).
+  w.push(seg([-ENTRANCE_HALF, SOUTH], [-ENTRANCE_HALF, SOUTH + PORCH], 'glass'), seg([-ENTRANCE_HALF, SOUTH + PORCH], [ENTRANCE_HALF, SOUTH + PORCH], 'glass'), seg([ENTRANCE_HALF, SOUTH + PORCH], [ENTRANCE_HALF, SOUTH], 'glass'));
   // Office walls towards corridors are glass with a door; north offices' inner walls are exterior (solid shell).
   for (const o of OFFICES) {
     const [x0, z0] = o.min, [x1, z1] = o.max;
@@ -54,21 +79,36 @@ export function buildWalls(): Segment[] {
     const doorZ = north ? z1 : z0;
     w.push(...wallWithDoor([x0, doorZ], [x1, doorZ], o.door.a, o.door.b, 'glass', o.slot));
   }
-  // Conference room: glass ring with a door gap facing south.
-  const n = 28;
+  // Conference room: glass ring with a door gap facing south (angle 0 = south, +Z).
+  const n = 40, g = CONF_DOOR_HALF_ANGLE;
   for (let i = 0; i < n; i++) {
-    const t0 = (i / n) * Math.PI * 2, t1 = ((i + 1) / n) * Math.PI * 2;
-    const mid = (t0 + t1) / 2;
-    // angle 0 = south (+Z)
-    const isDoor = Math.abs(Math.atan2(Math.sin(mid), Math.cos(mid))) < CONF_DOOR_HALF_ANGLE;
-    if (isDoor) continue;
+    const t0 = g + (i / n) * (Math.PI * 2 - 2 * g), t1 = g + ((i + 1) / n) * (Math.PI * 2 - 2 * g);
     w.push(seg([Math.sin(t0) * CONF_RADIUS, Math.cos(t0) * CONF_RADIUS], [Math.sin(t1) * CONF_RADIUS, Math.cos(t1) * CONF_RADIUS], 'glass'));
   }
   // Reception desk as a solid obstacle.
-  w.push(...([[[-1.2, 8.6], [1.2, 8.6]], [[1.2, 8.6], [1.2, 9.8]], [[1.2, 9.8], [-1.2, 9.8]], [[-1.2, 9.8], [-1.2, 8.6]]] as [Vec2, Vec2][]).map(([a, b]) => seg(a, b, 'obstacle')));
+  w.push(...box(RECEPTION.pos[0], RECEPTION.pos[1], DESK_HALF[0], DESK_HALF[1]));
   return w.filter((s) => s.kind !== 'door');
 }
 
+// All hinged doors: one per office, the conference room and the entrance.
+export function doors(): DoorDef[] {
+  const confZ = Math.cos(CONF_DOOR_HALF_ANGLE) * CONF_RADIUS;
+  return [
+    ...OFFICES.map((o) => ({
+      id: `o${o.slot}`, kind: 'office' as const, slot: o.slot, hinge: o.door.a, width: DOOR_WIDTH,
+      closed: 0, open: (o.slot <= 2 ? -1 : 1) * 1.35, defaultOpen: false, // swings into the office
+    })),
+    { id: 'conf', kind: 'conference', hinge: [-DOOR_WIDTH / 2, confZ], width: DOOR_WIDTH, closed: 0, open: -1.35, defaultOpen: true },
+    { id: 'entrance', kind: 'entrance', hinge: [-ENTRANCE_HALF, SOUTH], width: ENTRANCE_HALF * 2, closed: 0, open: 1.2, defaultOpen: false },
+  ];
+}
+
+export const doorLeaf = (d: DoorDef, angle: number): Segment => ({
+  a: d.hinge, b: [d.hinge[0] + Math.cos(angle) * d.width, d.hinge[1] + Math.sin(angle) * d.width], kind: 'door', slot: d.slot,
+});
+export const doorCenter = (d: DoorDef): Vec2 => [d.hinge[0] + Math.cos(d.closed) * d.width / 2, d.hinge[1] + Math.sin(d.closed) * d.width / 2];
+
+// Closed office door gaps (kept for the access rules: a door the viewer may not open always blocks).
 export function doorSegments(): Segment[] {
   return OFFICES.map((o) => ({ a: o.door.a, b: o.door.b, kind: 'door' as const, slot: o.slot }));
 }
@@ -89,11 +129,13 @@ export function officeSeats(): Seat[] {
   });
 }
 
+export const CONF_TABLE_RADIUS = 1.35;
+const CONF_CHAIR_RING = 2.2;
+
 export function conferenceSeats(): Seat[] {
   return Array.from({ length: 6 }, (_, i) => {
     const t = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    const r = 1.55;
-    const pos: Vec2 = [Math.sin(t) * r, Math.cos(t) * r];
+    const pos: Vec2 = [Math.sin(t) * CONF_CHAIR_RING, Math.cos(t) * CONF_CHAIR_RING];
     return { id: `conf-${i}`, pos, facing: Math.atan2(pos[0], pos[1]), area: 'conference' as const };
   });
 }
@@ -109,17 +151,20 @@ export const allSeats = () => [...officeSeats(), ...conferenceSeats(), ...lounge
 
 // Floor guide lines (orange and teal) from the entrance to the conference door and each office door.
 export function guideLines(): { color: 'orange' | 'teal'; points: Vec2[] }[] {
-  const confDoor: Vec2 = [0, CONF_RADIUS + 0.4];
+  const z = RECEPTION_Z;
   const lines: { color: 'orange' | 'teal'; points: Vec2[] }[] = [
-    { color: 'orange', points: [[0.25, 12.4], [0.25, 7.6], [1.6, 7.0], [1.6, 4.6], [0.25, confDoor[1]]] },
+    { color: 'orange', points: [[0.25, SOUTH - 0.5], [0.25, z + 1.2], [1.5, z + 0.7], [1.5, z - 1.5], [0.25, H - 0.2], [0.25, CONF_RADIUS + 0.4]] },
   ];
   for (const o of OFFICES) {
     const dx = (o.door.a[0] + o.door.b[0]) / 2;
     const north = o.slot <= 2;
     const side = Math.sign(dx);
-    const color = o.wallColor;
     const zDoor = north ? -H + 0.4 : H - 0.4;
-    lines.push({ color, points: [[side * 0.6, 7.4], [side * 3.6, 6.6], [side * (H + 0.9), north ? 3.2 : 4.2], [dx, north ? -1.2 : 3.0], [dx, zDoor]].map(([x, z]) => [x, z] as Vec2) });
+    const pts: Vec2[] = [[side * 0.6, z + 1.25], [side * 2.4, z + 0.9], [side * 2.4, z - 1.6], [side * (H - 1.2), H - 0.9]];
+    if (north) pts.push([side * (H - 1.2), 0], [side * (H + 1.2), -H + 2.2], [dx, -H + 2.2]);
+    else pts.push([side * (H + 1.2), H - 1.6], [dx, H - 1.6]);
+    pts.push([dx, zDoor]);
+    lines.push({ color: o.wallColor, points: pts });
   }
   return lines;
 }
@@ -129,6 +174,15 @@ export function officeAt(x: number, z: number): OfficeRoom | null {
 }
 
 export const inConference = (x: number, z: number) => Math.hypot(x, z) < CONF_RADIUS;
+
+export type Area = 'office' | 'conference' | 'reception' | 'lounge' | 'corridor';
+export function areaAt(x: number, z: number): Area {
+  if (officeAt(x, z)) return 'office';
+  if (inConference(x, z)) return 'conference';
+  if (z > H) return 'reception';
+  if (Math.abs(x) > H) return 'lounge';
+  return 'corridor';
+}
 
 // Furniture from the Kenney Furniture Kit (CC0). size = target footprint width in metres.
 export function props(): Prop[] {
@@ -147,41 +201,50 @@ export function props(): Prop[] {
     p.push({ model: 'computerKeyboard', pos: [cx, back + inward * 1.62], rot, size: 0.42, y: 0.84 });
     p.push({ model: 'chairDesk', pos: [cx, back + inward * 2.35], rot: rot + Math.PI, size: 0.62 });
     p.push({ model: 'lampRoundTable', pos: [cx + 0.6, back + inward * 1.3], rot, size: 0.22, y: 0.84 });
-    p.push({ model: 'bookcaseOpen', pos: [outerX + sideIn * 0.3, back + inward * 3.2], rot: sideIn > 0 ? Math.PI / 2 : -Math.PI / 2, size: 1.0 });
+    p.push({ model: 'bookcaseOpen', pos: [outerX + sideIn * 0.3, back + inward * 3.4], rot: sideIn > 0 ? Math.PI / 2 : -Math.PI / 2, size: 1.0 });
     p.push({ model: 'pottedPlant', pos: [outerX + sideIn * 0.55, back + inward * 0.55], rot: 0, size: 0.55 });
     p.push({ model: 'lampRoundFloor', pos: [outerX + sideIn * 0.5, back + inward * 1.6], rot: 0, size: 0.38 });
-    p.push({ model: 'rugRectangle', pos: [cx, back + inward * 2.6], rot, size: 3.2, y: 0.005 });
+    p.push({ model: 'rugRectangle', pos: [cx, back + inward * 2.7], rot, size: 3.6, y: 0.005 });
     p.push({ model: 'plantSmall2', pos: [cx - 0.62, back + inward * 1.3], rot: 0, size: 0.2, y: 0.84 });
   }
   // Conference room.
-  p.push({ model: 'tableRound', pos: [0, 0], rot: 0, size: 2.1 });
+  const R = CONF_RADIUS;
+  p.push({ model: 'tableRound', pos: [0, 0], rot: 0, size: CONF_TABLE_RADIUS * 2, h: 0.76 });
   for (const s of conferenceSeats()) p.push({ model: 'chairModernCushion', pos: s.pos, rot: s.facing + Math.PI, size: 0.6 });
-  p.push({ model: 'televisionModern', pos: [0, -CONF_RADIUS + 0.35], rot: 0, size: 1.7, y: 0.55 });
-  p.push({ model: 'cabinetTelevision', pos: [0, -CONF_RADIUS + 0.45], rot: 0, size: 1.5 });
-  p.push({ model: 'pottedPlant', pos: [-1.9, -2.0], rot: 0, size: 0.55 }, { model: 'pottedPlant', pos: [1.9, -2.0], rot: 0, size: 0.55 });
+  p.push({ model: 'televisionModern', pos: [0, -R + 0.35], rot: 0, size: 1.9, y: 0.55 });
+  p.push({ model: 'cabinetTelevision', pos: [0, -R + 0.45], rot: 0, size: 1.6 });
+  for (const s of [-1, 1]) p.push({ model: 'pottedPlant', pos: [s * Math.sin(2.35) * (R - 0.55), Math.cos(2.35) * (R - 0.55)], rot: 0, size: 0.55 });
   p.push({ model: 'plantSmall1', pos: [0.25, 0.1], rot: 0, size: 0.28, y: 0.78 });
-  p.push({ model: 'laptop', pos: [0.6, -0.3], rot: 0.4, size: 0.4, y: 0.78 });
-  p.push({ model: 'rugRound', pos: [0, 0], rot: 0, size: 5.2, y: 0.005 });
-  // Reception and entrance.
-  p.push({ model: 'desk', pos: [0, 9.2], rot: Math.PI, size: 2.4 });
-  p.push({ model: 'computerScreen', pos: [-0.55, 9.0], rot: Math.PI, size: 0.55, y: 1.26 });
-  p.push({ model: 'pottedPlant', pos: [0.85, 9.3], rot: 0, size: 0.3, y: 1.26 });
-  p.push({ model: 'rugDoormat', pos: [0, 12.5], rot: 0, size: 1.6, y: 0.005 });
+  p.push({ model: 'laptop', pos: [0.7, -0.3], rot: 0.4, size: 0.4, y: 0.78 });
+  p.push({ model: 'rugRound', pos: [0, 0], rot: 0, size: R * 2 - 1.4, y: 0.005 });
+  // Reception and entrance: a compact desk so the receptionist stays visible, her chair and computer.
+  const [rx, rz] = RECEPTION.pos;
+  p.push({ model: 'desk', pos: [rx, rz], rot: Math.PI, size: 1.6 });
+  p.push({ model: 'computerScreen', pos: [rx - 0.3, rz - 0.12], rot: Math.PI, size: 0.5, y: 0.84 });
+  p.push({ model: 'computerKeyboard', pos: [rx + 0.05, rz - 0.28], rot: Math.PI, size: 0.4, y: 0.84 });
+  p.push({ model: 'plantSmall3', pos: [rx + 0.6, rz + 0.1], rot: 0, size: 0.22, y: 0.84 });
+  p.push({ model: 'chairDesk', pos: RECEPTIONIST_SEAT.pos, rot: 0, size: 0.62 });
+  p.push({ model: 'rugDoormat', pos: [0, SOUTH - 0.5], rot: 0, size: 1.6, y: 0.005 });
   p.push({ model: 'pottedPlant', pos: [-H + 0.6, SOUTH - 0.6], rot: 0, size: 0.6 }, { model: 'pottedPlant', pos: [H - 0.6, SOUTH - 0.6], rot: 0, size: 0.6 });
-  p.push({ model: 'coatRackStanding', pos: [H - 0.5, 10.2], rot: 0, size: 0.5 });
+  p.push({ model: 'coatRackStanding', pos: [H - 0.5, SOUTH - 2.4], rot: 0, size: 0.5 });
+  p.push({ model: 'benchCushion', pos: [-H + 0.5, SOUTH - 3.2], rot: Math.PI / 2, size: 1.4 });
   // Lounges in the east and west arms (seating = function).
   p.push({ model: 'loungeSofa', pos: [-OUT + 0.6, 0], rot: Math.PI / 2, size: 2.2 }, { model: 'loungeSofa', pos: [OUT - 0.6, 0], rot: -Math.PI / 2, size: 2.2 });
   p.push({ model: 'tableCoffee', pos: [-OUT + 1.9, 0], rot: Math.PI / 2, size: 1.1 }, { model: 'tableCoffee', pos: [OUT - 1.9, 0], rot: Math.PI / 2, size: 1.1 });
   p.push({ model: 'kitchenCoffeeMachine', pos: [OUT - 0.4, -2.4], rot: -Math.PI / 2, size: 0.4, y: 0.8 }, { model: 'sideTable', pos: [OUT - 0.4, -2.4], rot: -Math.PI / 2, size: 0.7 });
-  p.push({ model: 'pottedPlant', pos: [-OUT + 0.5, -4.4], rot: 0, size: 0.6 }, { model: 'pottedPlant', pos: [OUT - 0.5, 4.4], rot: 0, size: 0.6 });
+  p.push({ model: 'pottedPlant', pos: [-OUT + 0.5, -H + 0.6], rot: 0, size: 0.6 }, { model: 'pottedPlant', pos: [OUT - 0.5, H - 0.6], rot: 0, size: 0.6 });
+  p.push({ model: 'pottedPlant', pos: [-OUT + 0.5, H - 0.6], rot: 0, size: 0.6 }, { model: 'pottedPlant', pos: [OUT - 0.5, -H + 0.6], rot: 0, size: 0.6 });
   p.push({ model: 'pottedPlant', pos: [-H + 0.5, -H + 0.5], rot: 0, size: 0.55 }, { model: 'pottedPlant', pos: [H - 0.5, -H + 0.5], rot: 0, size: 0.55 });
   p.push({ model: 'trashcan', pos: [-OUT + 0.4, 3.0], rot: 0, size: 0.35 });
   return p;
 }
 
-// Solid obstacles (approximate circles) for the larger furniture.
-export function propColliders(): { pos: Vec2; r: number }[] {
-  const c: { pos: Vec2; r: number }[] = [{ pos: [0, 0], r: 1.15 }];
+// Floor-standing furniture that blocks walking (approximate circles; radius as a share of the footprint).
+const SOLID: Record<string, number> = { pottedPlant: 0.42, lampRoundFloor: 0.4, coatRackStanding: 0.45, trashcan: 0.5, sideTable: 0.45, bookcaseOpen: 0.45, cabinetTelevision: 0.3, chairDesk: 0.45, chairModernCushion: 0.45 };
+
+// Solid obstacles (approximate circles) for the larger furniture, chairs included.
+export function propColliders(): Circle[] {
+  const c: Circle[] = [{ pos: [0, 0], r: CONF_TABLE_RADIUS - 0.05 }];
   for (const o of OFFICES) {
     const cx = (o.min[0] + o.max[0]) / 2;
     const north = o.slot <= 2;
@@ -190,5 +253,7 @@ export function propColliders(): { pos: Vec2; r: number }[] {
     c.push({ pos: [cx - 0.5, back + inward * 1.5], r: 0.45 }, { pos: [cx + 0.5, back + inward * 1.5], r: 0.45 });
   }
   c.push({ pos: [-OUT + 0.6, 0], r: 0.7 }, { pos: [OUT - 0.6, 0], r: 0.7 }, { pos: [-OUT + 1.9, 0], r: 0.45 }, { pos: [OUT - 1.9, 0], r: 0.45 });
+  c.push({ pos: [-H + 0.5, SOUTH - 3.5], r: 0.35 }, { pos: [-H + 0.5, SOUTH - 2.9], r: 0.35 }); // bench
+  for (const p of props()) if (p.y === undefined && SOLID[p.model]) c.push({ pos: p.pos, r: p.size * SOLID[p.model] });
   return c;
 }

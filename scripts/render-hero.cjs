@@ -12,9 +12,9 @@ const base = process.argv[2] || 'http://localhost:3100';
   await page.goto(`${base}/en/office`);
   await page.waitForTimeout(12000);
   await page.evaluate(() => {
-    window.__gcSetPose(-1.6, 7.6, -0.42);
-    window.__gcRemote('00000000-0000-4000-8000-000000000002', -0.6, 3.9, Math.PI - 0.6, 0);
-    window.__gcRemote('00000000-0000-4000-8000-000000000003', 1.1, 4.4, Math.PI + 0.9, 0);
+    window.__gcSetPose(-2.2, 9.6, -0.42);
+    window.__gcRemote('00000000-0000-4000-8000-000000000002', -0.7, 5.6, Math.PI - 0.6, 0);
+    window.__gcRemote('00000000-0000-4000-8000-000000000003', 1.2, 6.1, Math.PI + 0.9, 0);
     window.__gcRemote('00000000-0000-4000-8000-000000000004', 0.6, -1.3, 0, 0, 'conf-3');
   });
   await page.waitForTimeout(5000);

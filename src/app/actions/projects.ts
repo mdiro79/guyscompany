@@ -31,11 +31,18 @@ export async function deleteProjectAction(id: string) {
   return okResult();
 }
 
+// Roles are managed by the project manager (or an admin), as in the UI.
+async function canManageProject(user: { id: string; role: string }, projectId: string) {
+  const p = (await store().listProjects()).find((x) => x.id === projectId);
+  return !!p && (user.role === 'admin' || p.managerId === user.id);
+}
+
 export async function createRoleAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
   const projectId = String(form.get('projectId') ?? '');
   const name = String(form.get('name') ?? '').trim().slice(0, 80);
   if (!projectId || !name) return fail('error');
+  if (!(await canManageProject(user, projectId))) return fail('forbidden');
   await store().createRole({ projectId, name, description: String(form.get('description') ?? '').trim().slice(0, 500) });
   revalidatePath('/', 'layout');
   return okResult('saved');
@@ -59,7 +66,9 @@ export async function volunteerRoleAction(id: string, join: boolean) {
 }
 
 export async function deleteRoleAction(id: string) {
-  await requireUser();
+  const user = await requireUser();
+  const role = (await store().listRoles()).find((r) => r.id === id);
+  if (!role || !(await canManageProject(user, role.projectId))) return fail('forbidden');
   await store().deleteRole(id);
   revalidatePath('/', 'layout');
   return okResult();

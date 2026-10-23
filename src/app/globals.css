@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Phones in landscape (and other very short viewports). */
+@custom-variant short (@media (max-height: 500px));
 
 @theme {
   --font-sans: 'Inter Variable', 'Vazirmatn Variable', ui-sans-serif, system-ui, sans-serif;
@@ -73,3 +75,9 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 @utility chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; }
 
 .scrollbar-thin { scrollbar-width: thin; }
+
+/* Office cursor (Tab): brand-coloured pointer with a trailing ring. */
+@keyframes gc-cursor-pulse { 0% { transform: scale(1); opacity: .9; } 70% { transform: scale(1.9); opacity: 0; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes gc-cursor-in { from { transform: scale(.2) rotate(-25deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+.gc-cursor-pulse { animation: gc-cursor-pulse 1.4s ease-out infinite; }
+.gc-cursor-in { animation: gc-cursor-in .28s cubic-bezier(.3,1.6,.5,1) both; }

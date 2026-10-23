@@ -24,7 +24,7 @@ function useClickOutside(onOutside: () => void) {
   return ref;
 }
 
-export function TopBar({ notifications, search, onMenu }: { notifications: Notification[]; search: SearchItem[]; onMenu: () => void }) {
+export function TopBar({ notifications, search, onMenu }: { notifications: Notification[]; search: SearchItem[]; onMenu?: () => void }) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -63,8 +63,8 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur sm:gap-3 sm:px-4">
-      <button type="button" className="icon-btn lg:hidden" onClick={onMenu} aria-label={t('nav.menu')}><Menu className="size-5" /></button>
+    <header className="sticky top-0 z-30 flex h-16 short:h-12 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur sm:gap-3 sm:px-4">
+      {onMenu && <button type="button" className="icon-btn lg:hidden short:hidden" onClick={onMenu} aria-label={t('nav.menu')}><Menu className="size-5" /></button>}
       <Link href="/" className="flex items-center gap-2">
         <Logo className="size-9" />
         <span className="hidden text-xl font-bold sm:inline">Guyscompany</span>
@@ -92,7 +92,7 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
 
       <div className="ms-auto flex items-center gap-1 sm:gap-2 md:ms-0">
         <button type="button" onClick={() => start(() => { setStatusAction(focus ? 'online' : 'focus'); })}
-          className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm sm:flex" aria-pressed={focus}>
+          className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm whitespace-nowrap sm:flex" aria-pressed={focus}>
           <span className={clsx('relative h-5 w-9 rounded-full transition-colors', focus ? 'bg-focus' : 'bg-line')}>
             <span className={clsx('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', focus ? 'start-[18px]' : 'start-0.5')} />
           </span>

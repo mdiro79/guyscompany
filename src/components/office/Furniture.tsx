@@ -21,10 +21,11 @@ function Item({ prop }: { prop: Prop }) {
     prepare(object);
     const box = new THREE.Box3().setFromObject(object);
     const size = box.getSize(new THREE.Vector3());
-    const scale = prop.size / Math.max(size.x, size.z, 0.001);
+    const s = prop.size / Math.max(size.x, size.z, 0.001);
+    const scale: [number, number, number] = [s, prop.h ? prop.h / Math.max(size.y, 0.001) : s, s];
     const center = box.getCenter(new THREE.Vector3());
     return { object, scale, offset: new THREE.Vector3(-center.x, -box.min.y, -center.z) };
-  }, [gltf.scene, prop.size]);
+  }, [gltf.scene, prop.size, prop.h]);
   return (
     <group position={[prop.pos[0], prop.y ?? 0, prop.pos[1]]} rotation-y={prop.rot} scale={scale}>
       <primitive object={object} position={offset} />
