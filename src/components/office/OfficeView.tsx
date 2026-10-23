@@ -62,6 +62,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   }, []);
   // Never run a second office inside the dashboard iframe (it would join the mesh as this user).
   const avatarLabels = useMemo(() => ({ locale, older: t('olderMessage'), newer: t('newerMessage') }), [locale, t]);
+  const meetingLabels = useMemo(() => ({
+    title: t('meeting.title'), subtitle: t('meeting.subtitle'), raiseHand: t('meeting.raiseHand'), shareIdea: t('meeting.shareIdea'),
+    shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), rtl: locale === 'fa',
+  }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
   const net = useOfficeNet(mesh, user.id);
   const ui = useOfficeUi((s) => s);
@@ -205,7 +209,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files }: { me
   return (
     <div id="gc-office" className={clsx('fixed inset-0 bg-[#2a221c] text-white select-none', showCursor && 'cursor-none [&_*]:cursor-none')}>
       <OfficeScene user={user} profiles={profiles} offices={offices} messages={messages} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
-        receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} avatarLabels={avatarLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+        receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} avatarLabels={avatarLabels} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
       {isPhone && !touring && !working && <TouchControls lookOnly={!!ui.seatId} />}
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}

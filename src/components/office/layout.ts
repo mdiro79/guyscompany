@@ -23,6 +23,8 @@ export const CONF_RADIUS = 4.5;
 export const DOOR_WIDTH = 1.4;
 const ENTRANCE_HALF = 0.9;
 const CONF_DOOR_HALF_ANGLE = Math.asin(DOOR_WIDTH / 2 / CONF_RADIUS);
+// Half the arc (around north) where the conference ring is solid panelling behind the screen.
+export const CONF_PANEL_HALF_ANGLE = 1.05;
 export const RECEPTION_Z = SOUTH - 4.5; // reception desk centre
 
 const officeCx = (slot: number) => (slot % 2 === 1 ? -1 : 1) * (H + OUT) / 2;
@@ -79,12 +81,16 @@ export function buildWalls(): Segment[] {
     const doorZ = north ? z1 : z0;
     w.push(...wallWithDoor([x0, doorZ], [x1, doorZ], o.door.a, o.door.b, 'glass', o.slot));
   }
-  // Conference room: glass ring with a door gap facing south (angle 0 = south, +Z).
+  // Conference room: glass ring with a door gap facing south (angle 0 = south, +Z). Behind the screen
+  // (north) the ring is solid panelling instead of glass.
   const n = 40, g = CONF_DOOR_HALF_ANGLE;
   for (let i = 0; i < n; i++) {
     const t0 = g + (i / n) * (Math.PI * 2 - 2 * g), t1 = g + ((i + 1) / n) * (Math.PI * 2 - 2 * g);
-    w.push(seg([Math.sin(t0) * CONF_RADIUS, Math.cos(t0) * CONF_RADIUS], [Math.sin(t1) * CONF_RADIUS, Math.cos(t1) * CONF_RADIUS], 'glass'));
+    const panel = Math.abs((t0 + t1) / 2 - Math.PI) < CONF_PANEL_HALF_ANGLE;
+    w.push(seg([Math.sin(t0) * CONF_RADIUS, Math.cos(t0) * CONF_RADIUS], [Math.sin(t1) * CONF_RADIUS, Math.cos(t1) * CONF_RADIUS], panel ? 'solid' : 'glass'));
   }
+  // Media cabinet under the conference screen.
+  w.push(...box(0, CONF_CREDENZA.z, CONF_CREDENZA.halfWidth, CONF_CREDENZA.halfDepth));
   // Reception desk as a solid obstacle.
   w.push(...box(RECEPTION.pos[0], RECEPTION.pos[1], DESK_HALF[0], DESK_HALF[1]));
   return w.filter((s) => s.kind !== 'door');
@@ -129,12 +135,20 @@ export function officeSeats(): Seat[] {
   });
 }
 
-export const CONF_TABLE_RADIUS = 1.35;
-const CONF_CHAIR_RING = 2.2;
+// Round table with a planter in the middle, 8 chairs (none in front of the screen or the door),
+// a screen on the solid north panelling with a media cabinet below it and a tall plant on each side.
+export const CONF_TABLE_RADIUS = 1.75;
+export const CONF_TABLE_HOLE = 0.42;
+export const CONF_TABLE_HEIGHT = 0.76;
+export const CONF_CHAIR_RING = 2.5;
+export const CONF_SEATS = 8;
+export const CONF_SCREEN = { z: -CONF_RADIUS + 0.56, width: 3.0, height: 1.69, bottom: 0.98 };
+export const CONF_CREDENZA = { z: -CONF_RADIUS + 0.68, halfWidth: 1.45, halfDepth: 0.2, height: 0.58 };
+export const CONF_PLANTS: Vec2[] = [[-2.25, -3.2], [2.25, -3.2]];
 
 export function conferenceSeats(): Seat[] {
-  return Array.from({ length: 6 }, (_, i) => {
-    const t = (i / 6) * Math.PI * 2 + Math.PI / 6;
+  return Array.from({ length: CONF_SEATS }, (_, i) => {
+    const t = (i / CONF_SEATS) * Math.PI * 2 + Math.PI / CONF_SEATS;
     const pos: Vec2 = [Math.sin(t) * CONF_CHAIR_RING, Math.cos(t) * CONF_CHAIR_RING];
     return { id: `conf-${i}`, pos, facing: Math.atan2(pos[0], pos[1]), area: 'conference' as const };
   });
@@ -207,16 +221,7 @@ export function props(): Prop[] {
     p.push({ model: 'rugRectangle', pos: [cx, back + inward * 2.7], rot, size: 3.6, y: 0.005 });
     p.push({ model: 'plantSmall2', pos: [cx - 0.62, back + inward * 1.3], rot: 0, size: 0.2, y: 0.84 });
   }
-  // Conference room.
-  const R = CONF_RADIUS;
-  p.push({ model: 'tableRound', pos: [0, 0], rot: 0, size: CONF_TABLE_RADIUS * 2, h: 0.76 });
-  for (const s of conferenceSeats()) p.push({ model: 'chairModernCushion', pos: s.pos, rot: s.facing + Math.PI, size: 0.6 });
-  p.push({ model: 'televisionModern', pos: [0, -R + 0.35], rot: 0, size: 1.9, y: 0.55 });
-  p.push({ model: 'cabinetTelevision', pos: [0, -R + 0.45], rot: 0, size: 1.6 });
-  for (const s of [-1, 1]) p.push({ model: 'pottedPlant', pos: [s * Math.sin(2.35) * (R - 0.55), Math.cos(2.35) * (R - 0.55)], rot: 0, size: 0.55 });
-  p.push({ model: 'plantSmall1', pos: [0.25, 0.1], rot: 0, size: 0.28, y: 0.78 });
-  p.push({ model: 'laptop', pos: [0.7, -0.3], rot: 0.4, size: 0.4, y: 0.78 });
-  p.push({ model: 'rugRound', pos: [0, 0], rot: 0, size: R * 2 - 1.4, y: 0.005 });
+  // The conference room is built in code (ConferenceRoom.tsx).
   // Reception and entrance: a compact desk so the receptionist stays visible, her chair and computer.
   const [rx, rz] = RECEPTION.pos;
   p.push({ model: 'desk', pos: [rx, rz], rot: Math.PI, size: 1.6 });
@@ -245,6 +250,8 @@ const SOLID: Record<string, number> = { pottedPlant: 0.42, lampRoundFloor: 0.4, 
 // Solid obstacles (approximate circles) for the larger furniture, chairs included.
 export function propColliders(): Circle[] {
   const c: Circle[] = [{ pos: [0, 0], r: CONF_TABLE_RADIUS - 0.05 }];
+  for (const seat of conferenceSeats()) c.push({ pos: seat.pos, r: 0.28 });
+  for (const pos of CONF_PLANTS) c.push({ pos, r: 0.3 });
   for (const o of OFFICES) {
     const cx = (o.min[0] + o.max[0]) / 2;
     const north = o.slot <= 2;

@@ -209,6 +209,11 @@ M = {
   "embedded": ("دفتر سه‌بعدی داخل مانیتور باز نمی‌شود.", "The 3D office can't open inside the monitor."),
   "saveFailed": ("ذخیره نشد؛ دوباره امتحان کنید", "Not saved; try again"),
   "olderMessage": ("پیام قبلی", "Older message"), "newerMessage": ("پیام بعدی", "Newer message"),
+  "meeting": {
+   "title": ("جلسه‌ی تیم", "Team Meeting"), "subtitle": ("ایده بدهید، با هم بسازید.", "Share ideas. Build together."),
+   "raiseHand": ("دست بالا", "Raise Hand"), "shareIdea": ("ایده", "Share Idea"), "shareImage": ("تصویر", "Share Image"),
+   "shareScreen": ("اشتراک صفحه", "Share Screen"), "more": ("بیشتر", "More"),
+  },
  },
  "emotes": {
   "smile": ("لبخند", "Smile"), "laugh": ("خنده", "Laugh"), "surprise": ("تعجب", "Surprise"), "sad": ("ناراحتی", "Sad"),

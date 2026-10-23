@@ -6,19 +6,29 @@ import type { Office } from '@/lib/data/types';
 import { doorAllowed } from './Player';
 import { DOORS, doorAngles, isDoorOpen } from './doors';
 import { buildWalls, OFFICES, WALL_HEIGHT, H, OUT, SOUTH, PORCH, CONF_RADIUS, RECEPTION_Z, guideLines, type DoorDef, type Segment } from './layout';
+import { wallWash } from './textures';
 
+// Brighter than white, so lamps glow (bloom) in high quality; plain white otherwise.
+const LAMP = new THREE.Color(1.9, 1.75, 1.45);
 const COLORS = { orange: '#e8743b', teal: '#2f8f8a', cream: '#efe4d2', trim: '#3a3330', floor: '#d9cdbb', glass: '#c9e6e3', wood: '#a8774f' };
 
+// Warm stone tiles (1 m) with soft variation and fine grout lines.
 function floorTexture() {
+  const S = 512, T = S / 4;
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = S;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#d8ccb9'; g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${120 + Math.random() * 60},${100 + Math.random() * 50},80,0.06)`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
-  g.strokeStyle = 'rgba(120,100,80,0.18)'; g.lineWidth = 2;
-  for (let i = 0; i <= 256; i += 128) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 256); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); }
+  let seed = 9;
+  const r = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const l = 190 + r() * 8;
+    g.fillStyle = `rgb(${l},${l - 14},${l - 36})`; g.fillRect(x * T, y * T, T, T);
+  }
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${130 + r() * 60},${105 + r() * 50},80,0.05)`; g.fillRect(r() * S, r() * S, 2, 2); }
+  g.strokeStyle = 'rgba(120,98,76,0.22)'; g.lineWidth = 2;
+  for (let i = 0; i <= S; i += T) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, S); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(S, i); g.stroke(); }
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(16, 16); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 8); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
 }
 
@@ -29,6 +39,8 @@ const footprint = () => {
   s.closePath();
   return s;
 };
+
+const onConferenceRing = (w: Segment) => Math.abs(Math.hypot((w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2) - CONF_RADIUS) < 0.2;
 
 function wallColor(w: Segment) {
   const mx = (w.a[0] + w.b[0]) / 2, mz = (w.a[1] + w.b[1]) / 2;
@@ -44,7 +56,7 @@ function WallPiece({ w, color, glass, frosted }: { w: Segment; color: string; gl
     return (
       <mesh position={pos} rotation-y={-angle}>
         <boxGeometry args={[len + 0.02, WALL_HEIGHT, 0.16]} />
-        <meshStandardMaterial color={color} roughness={0.9} />
+        <meshStandardMaterial color={color} map={wallWash()} roughness={0.9} />
       </mesh>
     );
   }
@@ -119,7 +131,8 @@ function GuideLines() {
 }
 
 export function Building({ offices, viewerId, invitedSlots }: { offices: Office[]; viewerId: string; invitedSlots: number[] }) {
-  const walls = useMemo(() => buildWalls().filter((w) => w.kind !== 'obstacle'), []);
+  // Obstacles are invisible; the conference room draws its own panelling (ConferenceRoom).
+  const walls = useMemo(() => buildWalls().filter((w) => w.kind !== 'obstacle' && !(w.kind === 'solid' && onConferenceRing(w))), []);
   const tex = useMemo(() => floorTexture(), []);
   const shape = useMemo(() => footprint(), []);
   const officeState = (slot?: number) => offices.find((o) => o.slot === slot);
@@ -129,15 +142,13 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
         <shapeGeometry args={[shape]} />
         <meshStandardMaterial map={tex} roughness={0.85} />
       </mesh>
+      {/* Lit ceiling (it used to be unlit and flat) */}
       <mesh rotation-x={-Math.PI / 2} position-y={WALL_HEIGHT}>
         <shapeGeometry args={[shape]} />
-        <meshBasicMaterial color="#d8cab3" side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#efe5d6" emissive="#f3e7d4" emissiveIntensity={0.22} roughness={1} side={THREE.DoubleSide} />
       </mesh>
       {/* Porch floor outside the entrance */}
       <mesh rotation-x={-Math.PI / 2} position={[0, 0.004, SOUTH + PORCH / 2]}><planeGeometry args={[1.8, PORCH]} /><meshStandardMaterial color="#9c8f7d" roughness={0.9} /></mesh>
-      {/* Conference floor ring */}
-      <mesh rotation-x={-Math.PI / 2} position-y={0.008}><ringGeometry args={[CONF_RADIUS - 0.6, CONF_RADIUS - 0.35, 64]} /><meshStandardMaterial color="#3fa7a1" /></mesh>
-      <mesh rotation-x={-Math.PI / 2} position-y={0.006}><circleGeometry args={[CONF_RADIUS, 64]} /><meshStandardMaterial color="#cfe0d8" roughness={0.8} /></mesh>
       {walls.map((w, i) => {
         const o = officeState(w.slot);
         const frosted = w.kind === 'glass' && !!o && o.glass === 'frosted';
@@ -146,8 +157,8 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
       {DOORS.map((d) => <Door key={d.id} def={d} allowed={doorAllowed(d, offices, viewerId, invitedSlots)} />)}
       <GuideLines />
       {/* Ceiling lamps */}
-      {[[0, 0], [0, RECEPTION_Z - 1], [0, SOUTH - 1.5], [-(H + OUT) / 2, 0], [(H + OUT) / 2, 0], [-(H + OUT) / 2, -H + 2], [(H + OUT) / 2, H - 2], ...OFFICES.map((o) => [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2])].map(([x, z], i) => (
-        <mesh key={i} position={[x, WALL_HEIGHT - 0.03, z]} rotation-x={Math.PI / 2}><circleGeometry args={[0.35, 24]} /><meshBasicMaterial color="#fff1d6" toneMapped={false} /></mesh>
+      {[[0, RECEPTION_Z - 1], [0, SOUTH - 1.5], [-(H + OUT) / 2, 0], [(H + OUT) / 2, 0], [-(H + OUT) / 2, -H + 2], [(H + OUT) / 2, H - 2], ...OFFICES.map((o) => [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2])].map(([x, z], i) => (
+        <mesh key={i} position={[x, WALL_HEIGHT - 0.03, z]} rotation-x={Math.PI / 2}><circleGeometry args={[0.35, 24]} /><meshBasicMaterial color={LAMP} toneMapped={false} /></mesh>
       ))}
       {/* Wall art in offices */}
       {OFFICES.map((o) => {

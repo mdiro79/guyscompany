@@ -15,6 +15,7 @@ import type { RemoteAvatar } from './useOfficeNet';
 import { emoteEmoji } from './emotes';
 import { officeUi, useOfficeUi } from './store';
 import { Nameplate } from './Nameplate';
+import { GroundShadow } from './GroundShadow';
 import { SpeechBubble, BubbleButton, TAIL_HEIGHT } from './SpeechBubble';
 
 const SEATS = allSeats();
@@ -84,6 +85,7 @@ function Bubble({ profile, messages, emote, talk, labels, onSelect }: {
 
 function RemoteCharacter({ remotes, profile, messages, labels }: { remotes: React.RefObject<Map<string, RemoteAvatar>>; profile: Profile; messages: Message[]; labels: AvatarLabels }) {
   const group = useRef<THREE.Group>(null);
+  const shadow = useRef<THREE.Group>(null); // stays on the floor under flying characters too
   const voice = useVoice();
   const [motion, setMotion] = useState<Motion>('idle');
   const [talk, setTalk] = useState(0);
@@ -104,6 +106,7 @@ function RemoteCharacter({ remotes, profile, messages, labels }: { remotes: Reac
     let d = yaw - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * k;
+    shadow.current?.position.set(g.position.x, 0, g.position.z);
     const m: Motion = seat ? 'sit' : p.moving === 2 ? 'run' : p.moving ? 'walk' : 'idle';
     if (m !== motion) setMotion(m);
     const lvl = Math.round(voice.getLevel(profile.id) * 10) / 10;
@@ -116,6 +119,8 @@ function RemoteCharacter({ remotes, profile, messages, labels }: { remotes: Reac
     if (group.current && a) group.current.position.set(a.pose.x, 0, a.pose.z);
   }, [remotes, profile.id]);
   return (
+    <>
+    <group ref={shadow}><GroundShadow size={[0.75, 0.75]} opacity={0.35} /></group>
     <group ref={group}>
       <Suspense fallback={null}><CharacterModel characterId={profile.characterId} motion={motion} talkLevel={talk} /></Suspense>
       <Html position={[0, CHARACTER_HEIGHT + 0.12, 0]} center zIndexRange={[20, 0]} style={{ direction: "ltr" }}>
@@ -123,6 +128,7 @@ function RemoteCharacter({ remotes, profile, messages, labels }: { remotes: Reac
           onSelect={() => officeUi.set({ selectedUserId: officeUi.get().selectedUserId === profile.id ? null : profile.id })} />
       </Html>
     </group>
+    </>
   );
 }
 

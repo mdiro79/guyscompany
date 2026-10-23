@@ -359,7 +359,16 @@
     "embedded": "دفتر سه‌بعدی داخل مانیتور باز نمی‌شود.",
     "saveFailed": "ذخیره نشد؛ دوباره امتحان کنید",
     "olderMessage": "پیام قبلی",
-    "newerMessage": "پیام بعدی"
+    "newerMessage": "پیام بعدی",
+    "meeting": {
+      "title": "جلسه‌ی تیم",
+      "subtitle": "ایده بدهید، با هم بسازید.",
+      "raiseHand": "دست بالا",
+      "shareIdea": "ایده",
+      "shareImage": "تصویر",
+      "shareScreen": "اشتراک صفحه",
+      "more": "بیشتر"
+    }
   },
   "emotes": {
     "smile": "لبخند",

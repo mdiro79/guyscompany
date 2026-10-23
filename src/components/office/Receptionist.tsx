@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { CharacterModel, CHARACTER_HEIGHT, type Motion } from '@/components/three/CharacterModel';
 import { RECEPTIONIST_SEAT } from './layout';
 import { Nameplate } from './Nameplate';
+import { GroundShadow } from './GroundShadow';
 import { tour, guide, me, pointAt, GUIDE_SPEED } from './tour';
 
 export const RECEPTIONIST_CHARACTER = 'kaykit-ranger';
@@ -47,6 +48,7 @@ export function Receptionist({ label }: { label: string }) {
   });
   return (
     <group ref={group} position={[RECEPTIONIST_SEAT.pos[0], 0, RECEPTIONIST_SEAT.pos[1]]}>
+      <GroundShadow size={[0.75, 0.75]} opacity={0.35} y={0.01 - SIT_Y} />
       <Suspense fallback={null}><CharacterModel characterId={RECEPTIONIST_CHARACTER} motion={motion} typing={motion === 'sit'} /></Suspense>
       {motion === 'sit' && (
         <Html position={[0, CHARACTER_HEIGHT + 0.25, 0]} center zIndexRange={[10, 0]} style={{ direction: 'ltr' }}>

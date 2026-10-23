@@ -359,7 +359,16 @@
     "embedded": "The 3D office can't open inside the monitor.",
     "saveFailed": "Not saved; try again",
     "olderMessage": "Older message",
-    "newerMessage": "Newer message"
+    "newerMessage": "Newer message",
+    "meeting": {
+      "title": "Team Meeting",
+      "subtitle": "Share ideas. Build together.",
+      "raiseHand": "Raise Hand",
+      "shareIdea": "Share Idea",
+      "shareImage": "Share Image",
+      "shareScreen": "Share Screen",
+      "more": "More"
+    }
   },
   "emotes": {
     "smile": "Smile",

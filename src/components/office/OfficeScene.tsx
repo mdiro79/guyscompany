@@ -1,7 +1,7 @@
 'use client';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { PerformanceMonitor, useProgress } from '@react-three/drei';
+import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import type { Message, Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
@@ -13,24 +13,44 @@ import { FirstPersonArms } from './FirstPersonArms';
 import { preloadCharacter } from '@/components/three/CharacterModel';
 import { MonitorFrame } from './MonitorFrame';
 import { TourBubbleAnchor } from './TourBubbleAnchor';
+import { ConferenceRoom } from './ConferenceRoom';
+import type { MeetingLabels } from './textures';
 import { OFFICES, RECEPTION_Z, SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; messages: Message[]; invitedSlots: number[];
-  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string; avatarLabels: AvatarLabels;
+  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string; avatarLabels: AvatarLabels; meetingLabels: MeetingLabels;
   remotes: React.RefObject<Map<string, RemoteAvatar>>; external: React.RefObject<Pose | null>;
   onPose: (p: Pose) => void; voiceDistance: (pos: [number, number], userId: string) => void;
+}
+
+// Ambient occlusion, glow and vignette for high quality; a separate chunk loaded only when used.
+const Effects = lazy(() => import('./Effects'));
+
+// Soft image-based light built from a few glowing panels (no download): a warm ceiling, light walls and a
+// darker floor, so surfaces get gentle shading and reflections instead of flat colour.
+function SoftEnvironment() {
+  return (
+    <Environment resolution={64} frames={1} environmentIntensity={0.4}>
+      <color attach="background" args={['#b9a58c']} />
+      <Lightformer form="rect" intensity={2.4} color="#fff1dc" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[40, 40, 1]} />
+      <Lightformer form="rect" intensity={0.9} color="#f6dcc0" position={[0, 2, -20]} scale={[40, 4, 1]} />
+      <Lightformer form="rect" intensity={0.9} color="#f6dcc0" position={[0, 2, 20]} rotation-y={Math.PI} scale={[40, 4, 1]} />
+      <Lightformer form="rect" intensity={0.7} color="#e9d2b8" position={[-20, 2, 0]} rotation-y={Math.PI / 2} scale={[40, 4, 1]} />
+      <Lightformer form="rect" intensity={0.7} color="#e9d2b8" position={[20, 2, 0]} rotation-y={-Math.PI / 2} scale={[40, 4, 1]} />
+    </Environment>
+  );
 }
 
 function Lights({ low }: { low: boolean }) {
   return (
     <>
-      <hemisphereLight args={['#fff3df', '#8a6a4a', low ? 2.4 : 1.7]} />
-      <ambientLight intensity={0.25} color="#ffd9a8" />
+      <hemisphereLight args={['#fff3df', '#9a7a5a', low ? 1.5 : 0.7]} />
+      <ambientLight intensity={0.12} color="#ffd9a8" />
       {!low && (
         <>
-          <pointLight position={[0, 2.6, 0]} intensity={18} distance={12} color="#ffd8a0" />
+          <pointLight position={[0, 1.9, 0]} intensity={7} distance={8} color="#ffd8a0" />
           <pointLight position={[0, 2.6, RECEPTION_Z]} intensity={10} distance={9} color="#ffd8a0" />
           <pointLight position={[-11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
           <pointLight position={[11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
@@ -98,9 +118,11 @@ export default function OfficeScene(p: SceneProps) {
       style={{ touchAction: 'none' }}
     >
       <PerformanceMonitor bounds={FPS_BOUNDS} onDecline={scale.decline} onIncline={scale.incline} flipflops={4} />
-      <color attach="background" args={['#2a221c']} />
-      <fog attach="fog" args={['#2a221c', 24, 55]} />
+      <color attach="background" args={['#d8c8b0']} />
+      <fog attach="fog" args={['#d8c8b0', 28, 60]} />
       <Lights low={p.lowQuality} />
+      <SoftEnvironment />
+      <ConferenceRoom labels={p.meetingLabels} lowQuality={p.lowQuality} />
       <Suspense fallback={null}>
         <Building offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} />
         <Furniture />
@@ -112,6 +134,7 @@ export default function OfficeScene(p: SceneProps) {
       <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />
       <MonitorFrame />
       <TourBubbleAnchor />
+      {!p.lowQuality && ready && <Suspense fallback={null}><Effects /></Suspense>}
     </Canvas>
     </>
   );

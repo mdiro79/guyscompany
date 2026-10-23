@@ -1,0 +1,259 @@
+'use client';
+import { useEffect, useMemo } from 'react';
+import { RoundedBox } from '@react-three/drei';
+import * as THREE from 'three';
+import {
+  buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS,
+  WALL_HEIGHT, type Segment,
+} from './layout';
+import { GroundShadow } from './GroundShadow';
+import { tableWood, oak, slats, carpet, panelWash, floorGlow, frond, tabletScreen, paintScreen, type MeetingLabels } from './textures';
+
+// The round conference room after the owner's reference image: a large light-oak table with a planter
+// in the middle and a glowing ring under its pedestal, light-blue armchairs with white frames, a tablet
+// at every seat, a big meeting screen on cream panelling above an oak media cabinet, palms on both
+// sides, a rose carpet and a ring of light in the ceiling. Everything is built here in code.
+
+const FRAME = '#f6f4f0';
+const CUSHION = '#86a7df';
+const SCREEN_PX: [number, number] = [2048, 1152];
+const LIGHT = new THREE.Color(2, 1.8, 1.45); // above white: glows in high quality
+
+const mat = {
+  frame: new THREE.MeshStandardMaterial({ color: FRAME, roughness: 0.45 }),
+  cushion: new THREE.MeshStandardMaterial({ color: CUSHION, roughness: 0.95 }),
+  dark: new THREE.MeshStandardMaterial({ color: '#16181d', roughness: 0.35, metalness: 0.3 }),
+  trim: new THREE.MeshStandardMaterial({ color: '#2f2925', roughness: 0.6 }),
+  pot: new THREE.MeshStandardMaterial({ color: '#f1eee8', roughness: 0.5 }),
+  soil: new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 1 }),
+  leaf: new THREE.MeshStandardMaterial({ color: '#5f9446', roughness: 0.8 }),
+};
+
+// Built once per page (canvas textures exist only in the browser).
+const textured = (() => {
+  let made: Record<string, THREE.Material> | null = null;
+  return () => (made ??= {
+    table: new THREE.MeshStandardMaterial({ map: tableWood(), roughness: 0.42 }),
+    oak: new THREE.MeshStandardMaterial({ map: oak(), roughness: 0.6 }),
+    slats: new THREE.MeshStandardMaterial({ map: slats(), roughness: 0.7 }),
+    carpet: new THREE.MeshStandardMaterial({ map: carpet(), roughness: 1 }),
+    panel: new THREE.MeshStandardMaterial({ map: panelWash(), roughness: 0.95 }),
+    glow: new THREE.MeshBasicMaterial({ map: floorGlow(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+    frond: new THREE.MeshStandardMaterial({ map: frond(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 }),
+    tablet: new THREE.MeshBasicMaterial({ map: tabletScreen(), toneMapped: false }),
+  });
+})();
+
+// Armchair facing local -Z (the table), so rotation-y = seat.facing turns it towards the table.
+function Chair() {
+  return (
+    <group>
+      {/* seat and back cushions */}
+      <RoundedBox args={[0.54, 0.11, 0.5]} radius={0.04} smoothness={3} position={[0, 0.43, -0.02]} material={mat.cushion} />
+      <group position={[0, 0.79, 0.25]} rotation-x={0.14}>
+        <RoundedBox args={[0.52, 0.5, 0.1]} radius={0.04} smoothness={3} material={mat.cushion} />
+        <RoundedBox args={[0.6, 0.6, 0.05]} radius={0.02} smoothness={2} position={[0, 0.02, 0.07]} material={mat.frame} />
+      </group>
+      {/* white frame: seat base, two side frames with armrests and runners */}
+      <RoundedBox args={[0.6, 0.06, 0.54]} radius={0.02} smoothness={2} position={[0, 0.35, -0.02]} material={mat.frame} />
+      {[-1, 1].map((s) => (
+        <group key={s} position-x={s * 0.32}>
+          <RoundedBox args={[0.07, 0.05, 0.56]} radius={0.02} smoothness={2} position={[0, 0.65, -0.02]} material={mat.frame} />
+          <mesh position={[0, 0.33, -0.26]} material={mat.frame}><boxGeometry args={[0.05, 0.66, 0.05]} /></mesh>
+          <mesh position={[0, 0.48, 0.24]} material={mat.frame}><boxGeometry args={[0.05, 0.96, 0.05]} /></mesh>
+          <mesh position={[0, 0.02, -0.01]} material={mat.frame}><boxGeometry args={[0.05, 0.04, 0.62]} /></mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Seat tablet on a small stand, its screen turned up towards the person (local +Z).
+function Tablet({ material }: { material: THREE.Material }) {
+  return (
+    <group rotation-x={-0.62} position-y={0.075}>
+      <RoundedBox args={[0.3, 0.19, 0.018]} radius={0.008} smoothness={2} material={mat.dark} />
+      <mesh position-z={0.0095} material={material}><planeGeometry args={[0.272, 0.166]} /></mesh>
+      <mesh position={[0, -0.02, -0.04]} rotation-x={0.9} material={mat.dark}><boxGeometry args={[0.16, 0.12, 0.01]} /></mesh>
+    </group>
+  );
+}
+
+// Fan of palm fronds from a point (planters and the table centre). Each frond arches outwards.
+function Fronds({ count, length, width, tilt, y, seed = 1, bend = 0.35 }: { count: number; length: number; width: number; tilt: [number, number]; y: number; seed?: number; bend?: number }) {
+  const geom = useMemo(() => {
+    const g = new THREE.PlaneGeometry(width, length, 1, 10).translate(0, length / 2, 0);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const t = p.getY(i) / length; p.setZ(i, bend * length * t * t); }
+    g.computeVertexNormals();
+    return g;
+  }, [width, length, bend]);
+  const m = textured().frond;
+  return (
+    <group position-y={y}>
+      {Array.from({ length: count }, (_, i) => {
+        const a = (i / count) * Math.PI * 2 + seed;
+        const t = tilt[0] + ((i * 7 + seed * 3) % 5) / 4 * (tilt[1] - tilt[0]);
+        return <group key={i} rotation-y={a}><mesh geometry={geom} material={m} rotation-x={t} /></group>;
+      })}
+    </group>
+  );
+}
+
+function Palm({ pos }: { pos: [number, number] }) {
+  return (
+    <group position={[pos[0], 0, pos[1]]}>
+      <GroundShadow size={[0.9, 0.9]} opacity={0.35} />
+      <mesh position-y={0.28} material={mat.pot}><cylinderGeometry args={[0.24, 0.19, 0.56, 28]} /></mesh>
+      <mesh position-y={0.55} material={mat.soil}><cylinderGeometry args={[0.22, 0.22, 0.02, 24]} /></mesh>
+      <mesh position-y={0.85} material={mat.leaf}><cylinderGeometry args={[0.03, 0.045, 0.6, 8]} /></mesh>
+      <Fronds count={16} length={1.3} width={0.56} tilt={[0.6, 1.05]} y={1.0} seed={pos[0] > 0 ? 2 : 1} bend={0.5} />
+      <Fronds count={12} length={1.2} width={0.52} tilt={[0.3, 0.6]} y={1.05} seed={3} bend={0.42} />
+      <Fronds count={7} length={1.0} width={0.46} tilt={[0.05, 0.25]} y={1.08} seed={5} bend={0.3} />
+    </group>
+  );
+}
+
+function Table() {
+  const m = textured();
+  const H = CONF_TABLE_HEIGHT, R = CONF_TABLE_RADIUS, hole = CONF_TABLE_HOLE;
+  return (
+    <group>
+      <mesh position-y={H} rotation-x={-Math.PI / 2} material={m.table}><ringGeometry args={[hole, R, 128, 1]} /></mesh>
+      <mesh position-y={H - 0.035} material={m.oak}><cylinderGeometry args={[R, R - 0.02, 0.07, 128, 1, true]} /></mesh>
+      <mesh position-y={H} rotation-x={-Math.PI / 2}><torusGeometry args={[R - 0.012, 0.014, 8, 128]} /><meshStandardMaterial color="#efd9b6" roughness={0.4} /></mesh>
+      <mesh position-y={H - 0.07} rotation-x={Math.PI / 2} material={m.oak}><ringGeometry args={[hole, R - 0.02, 96, 1]} /></mesh>
+      {/* planter in the middle */}
+      <mesh position-y={H - 0.05}><cylinderGeometry args={[hole, hole, 0.1, 64, 1, true]} /><meshStandardMaterial color="#c9a273" side={THREE.DoubleSide} /></mesh>
+      <mesh position-y={H - 0.03} material={mat.soil}><cylinderGeometry args={[hole - 0.01, hole - 0.01, 0.02, 48]} /></mesh>
+      {/* low leafy bush under the fronds */}
+      {Array.from({ length: 7 }, (_, i) => {
+        const a = (i / 7) * Math.PI * 2, d = i ? 0.2 : 0;
+        return <mesh key={i} position={[Math.sin(a) * d, H + 0.04, Math.cos(a) * d]} scale={[1, 0.7, 1]} material={mat.leaf}><icosahedronGeometry args={[0.13, 1]} /></mesh>;
+      })}
+      <Fronds count={18} length={0.46} width={0.28} tilt={[0.8, 1.2]} y={H - 0.03} seed={4} bend={0.5} />
+      <Fronds count={12} length={0.4} width={0.2} tilt={[0.4, 0.75]} y={H - 0.03} seed={5} bend={0.45} />
+      <Fronds count={7} length={0.32} width={0.18} tilt={[0.1, 0.35]} y={H - 0.03} seed={6} bend={0.3} />
+      {/* pedestal, its plinth and the glowing ring on the carpet */}
+      <mesh position-y={(H - 0.07) / 2} material={m.oak}><cylinderGeometry args={[0.58, 0.88, H - 0.07, 64, 1, true]} /></mesh>
+      <mesh position-y={0.025}><cylinderGeometry args={[0.9, 0.92, 0.05, 64]} /><meshStandardMaterial color="#fff2dc" emissive="#ffd9a0" emissiveIntensity={0.9} /></mesh>
+      <mesh position-y={0.012} rotation-x={-Math.PI / 2} material={m.glow}><planeGeometry args={[2.7, 2.7]} /></mesh>
+      <GroundShadow size={[R * 2.25, R * 2.25]} opacity={0.3} y={0.008} />
+    </group>
+  );
+}
+
+function Screen({ labels }: { labels: MeetingLabels }) {
+  const { tex, cv } = useMemo(() => {
+    const cv = document.createElement('canvas');
+    [cv.width, cv.height] = SCREEN_PX;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return { tex, cv };
+  }, []);
+  // Painted now, and again once the web fonts are ready (canvas text cannot wait for them).
+  useEffect(() => {
+    let live = true;
+    const paint = () => { if (!live) return; paintScreen(cv, labels); tex.needsUpdate = true; };
+    paint();
+    const fam = labels.rtl ? '"Vazirmatn Variable"' : '"Inter Variable"';
+    Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(paint, () => {});
+    return () => { live = false; };
+  }, [cv, tex, labels]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  const { width: w, height: h, bottom, z } = CONF_SCREEN;
+  return (
+    <group position={[0, bottom + h / 2, z]}>
+      <mesh material={mat.dark}><boxGeometry args={[w + 0.1, h + 0.1, 0.06]} /></mesh>
+      <mesh position-z={0.031}><planeGeometry args={[w, h]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
+    </group>
+  );
+}
+
+function Credenza() {
+  const m = textured();
+  const { z, halfWidth: hw, halfDepth: hd, height: h } = CONF_CREDENZA;
+  return (
+    <group position={[0, 0, z]}>
+      <GroundShadow size={[hw * 2 + 0.4, hd * 2 + 0.4]} opacity={0.3} />
+      <mesh position-y={h / 2 + 0.04} material={m.oak}><boxGeometry args={[hw * 2, h - 0.04, hd * 2]} /></mesh>
+      <mesh position={[0, h / 2 + 0.04, hd + 0.002]} material={m.slats}><planeGeometry args={[hw * 2 - 0.12, h - 0.16]} /></mesh>
+      <mesh position-y={h + 0.012} material={m.oak}><boxGeometry args={[hw * 2 + 0.06, 0.025, hd * 2 + 0.04]} /></mesh>
+      <mesh position-y={0.02} material={mat.trim}><boxGeometry args={[hw * 2 - 0.1, 0.04, hd * 2 - 0.06]} /></mesh>
+      {/* conference camera */}
+      <group position={[0, h + 0.06, hd - 0.1]}>
+        <RoundedBox args={[0.2, 0.07, 0.08]} radius={0.02} smoothness={2} material={mat.dark} />
+        <mesh position-z={0.041}><circleGeometry args={[0.022, 20]} /><meshStandardMaterial color="#0b0c10" metalness={0.6} roughness={0.15} /></mesh>
+      </group>
+    </group>
+  );
+}
+
+// Solid conference panels (the arc behind the screen): cream, washed with light from the top, dark posts.
+function Panels() {
+  const m = textured();
+  const segs = useMemo(() => buildWalls().filter((w) => w.kind === 'solid' && Math.abs(Math.hypot((w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2) - CONF_RADIUS) < 0.2), []);
+  return (
+    <group>
+      {segs.map((w: Segment, i) => {
+        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+        const angle = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
+        return (
+          <group key={i} position={[(w.a[0] + w.b[0]) / 2, 0, (w.a[1] + w.b[1]) / 2]} rotation-y={-angle}>
+            <mesh position-y={WALL_HEIGHT / 2} material={m.panel}><boxGeometry args={[len + 0.01, WALL_HEIGHT, 0.12]} /></mesh>
+            <mesh position={[len / 2, WALL_HEIGHT / 2, 0]} material={mat.trim}><boxGeometry args={[0.07, WALL_HEIGHT, 0.16]} /></mesh>
+            <mesh position-y={0.05} material={mat.trim}><boxGeometry args={[len, 0.1, 0.14]} /></mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+function Ceiling() {
+  return (
+    <group position-y={WALL_HEIGHT}>
+      <mesh position-y={-0.012} rotation-x={Math.PI / 2}><circleGeometry args={[CONF_RADIUS - 0.08, 96]} /><meshStandardMaterial color="#f5ede1" roughness={1} /></mesh>
+      <mesh position-y={-0.02} rotation-x={Math.PI / 2}><torusGeometry args={[2.45, 0.045, 10, 128]} /><meshBasicMaterial color={LIGHT} toneMapped={false} /></mesh>
+      <mesh position-y={-0.016} rotation-x={Math.PI / 2}><circleGeometry args={[2.4, 96]} /><meshStandardMaterial color="#f7eee0" emissive="#ffe9c8" emissiveIntensity={0.06} /></mesh>
+      {Array.from({ length: 10 }, (_, i) => {
+        const a = (i / 10) * Math.PI * 2;
+        return <mesh key={i} position={[Math.sin(a) * 3.6, -0.018, Math.cos(a) * 3.6]} rotation-x={Math.PI / 2}><circleGeometry args={[0.06, 16]} /><meshBasicMaterial color={LIGHT} toneMapped={false} /></mesh>;
+      })}
+    </group>
+  );
+}
+
+export function ConferenceRoom({ labels, lowQuality }: { labels: MeetingLabels; lowQuality: boolean }) {
+  const m = textured();
+  const seats = useMemo(() => conferenceSeats(), []);
+  return (
+    <group>
+      <mesh position-y={0.006} rotation-x={-Math.PI / 2} material={m.carpet}><circleGeometry args={[CONF_RADIUS - 0.02, 96]} /></mesh>
+      <Table />
+      {seats.map((s) => (
+        <group key={s.id}>
+          <group position={[s.pos[0], 0, s.pos[1]]} rotation-y={s.facing}>
+            <GroundShadow size={[0.85, 0.85]} opacity={0.3} />
+            <Chair />
+          </group>
+          <group position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.33), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.33)]} rotation-y={s.facing}>
+            <Tablet material={m.tablet} />
+          </group>
+        </group>
+      ))}
+      <Panels />
+      <Screen labels={labels} />
+      <Credenza />
+      {CONF_PLANTS.map((p) => <Palm key={p[0]} pos={p} />)}
+      <Ceiling />
+      {!lowQuality && (
+        <>
+          <pointLight position={[0, CONF_SCREEN.bottom + CONF_SCREEN.height / 2, CONF_SCREEN.z + 1]} intensity={2.5} distance={4.5} color="#b9c4ff" />
+          <pointLight position={[0, 0.2, 0]} intensity={1.6} distance={2.2} color="#ffd39a" />
+        </>
+      )}
+    </group>
+  );
+}
