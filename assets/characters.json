@@ -1,0 +1,142 @@
+[
+  {
+    "id": "humans-casual2-female",
+    "name": "Casual2_Female",
+    "group": "humans",
+    "source": "glTF-20261023T123741Z-1-001.zip:glTF/Casual2_Female.gltf",
+    "model": "/models/characters/Casual2_Female.glb"
+  },
+  {
+    "id": "humans-doctor-male-old",
+    "name": "Doctor_Male_Old",
+    "group": "humans",
+    "source": "glTF-20261023T123741Z-1-001.zip:glTF/Doctor_Male_Old.gltf",
+    "model": "/models/characters/Doctor_Male_Old.glb"
+  },
+  {
+    "id": "humans-ninja-sand",
+    "name": "Ninja_Sand",
+    "group": "humans",
+    "source": "glTF-20261023T123741Z-1-001.zip:glTF/Ninja_Sand.gltf",
+    "model": "/models/characters/Ninja_Sand.glb"
+  },
+  {
+    "id": "humans-vikinghelmet",
+    "name": "VikingHelmet",
+    "group": "humans",
+    "source": "glTF-20261023T123741Z-1-001.zip:glTF/VikingHelmet.gltf",
+    "model": "/models/characters/VikingHelmet.glb"
+  },
+  {
+    "id": "monsters-a-bluedemon",
+    "name": "BlueDemon",
+    "group": "monsters-a",
+    "source": "glTF-20261023T123847Z-1-001.zip:glTF/BlueDemon.gltf",
+    "model": "/models/characters/BlueDemon.glb"
+  },
+  {
+    "id": "monsters-a-dino",
+    "name": "Dino",
+    "group": "monsters-a",
+    "source": "glTF-20261023T123847Z-1-001.zip:glTF/Dino.gltf",
+    "model": "/models/characters/Dino.glb"
+  },
+  {
+    "id": "monsters-a-mushroomking",
+    "name": "MushroomKing",
+    "group": "monsters-a",
+    "source": "glTF-20261023T123847Z-1-001.zip:glTF/MushroomKing.gltf",
+    "model": "/models/characters/MushroomKing.glb"
+  },
+  {
+    "id": "monsters-a-tribal",
+    "name": "Tribal",
+    "group": "monsters-a",
+    "source": "glTF-20261023T123847Z-1-001.zip:glTF/Tribal.gltf",
+    "model": "/models/characters/Tribal.glb"
+  },
+  {
+    "id": "monsters-b-cactoro",
+    "name": "Cactoro",
+    "group": "monsters-b",
+    "source": "glTF-20261023T123901Z-1-001.zip:glTF/Cactoro.gltf",
+    "model": "/models/characters/Cactoro.glb"
+  },
+  {
+    "id": "monsters-b-fish",
+    "name": "Fish",
+    "group": "monsters-b",
+    "source": "glTF-20261023T123901Z-1-001.zip:glTF/Fish.gltf",
+    "model": "/models/characters/Fish.glb"
+  },
+  {
+    "id": "monsters-b-mushnub-evolved",
+    "name": "Mushnub_Evolved",
+    "group": "monsters-b",
+    "source": "glTF-20261023T123901Z-1-001.zip:glTF/Mushnub_Evolved.gltf",
+    "model": "/models/characters/Mushnub_Evolved.glb"
+  },
+  {
+    "id": "monsters-b-pinkblob",
+    "name": "PinkBlob",
+    "group": "monsters-b",
+    "source": "glTF-20261023T123901Z-1-001.zip:glTF/PinkBlob.gltf",
+    "model": "/models/characters/PinkBlob.glb"
+  },
+  {
+    "id": "monsters-c-armabee",
+    "name": "Armabee",
+    "group": "monsters-c",
+    "source": "glTF-20261023T123909Z-1-001.zip:glTF/Armabee.gltf",
+    "model": "/models/characters/Armabee.glb"
+  },
+  {
+    "id": "monsters-c-ghost",
+    "name": "Ghost",
+    "group": "monsters-c",
+    "source": "glTF-20261023T123909Z-1-001.zip:glTF/Ghost.gltf",
+    "model": "/models/characters/Ghost.glb"
+  },
+  {
+    "id": "monsters-c-goleling",
+    "name": "Goleling",
+    "group": "monsters-c",
+    "source": "glTF-20261023T123909Z-1-001.zip:glTF/Goleling.gltf",
+    "model": "/models/characters/Goleling.glb"
+  },
+  {
+    "id": "monsters-c-squidle",
+    "name": "Squidle",
+    "group": "monsters-c",
+    "source": "glTF-20261023T123909Z-1-001.zip:glTF/Squidle.gltf",
+    "model": "/models/characters/Squidle.glb"
+  },
+  {
+    "id": "kaykit-barbarian",
+    "name": "Barbarian",
+    "group": "kaykit",
+    "source": "KayKit_Adventurers_2.0_FREE.zip:KayKit_Adventurers_2.0_FREE/Characters/gltf/Barbarian.glb",
+    "model": "/models/characters/Barbarian.glb"
+  },
+  {
+    "id": "kaykit-mage",
+    "name": "Mage",
+    "group": "kaykit",
+    "source": "KayKit_Adventurers_2.0_FREE.zip:KayKit_Adventurers_2.0_FREE/Characters/gltf/Mage.glb",
+    "model": "/models/characters/Mage.glb"
+  },
+  {
+    "id": "kaykit-ranger",
+    "name": "Ranger",
+    "group": "kaykit",
+    "source": "KayKit_Adventurers_2.0_FREE.zip:KayKit_Adventurers_2.0_FREE/Characters/gltf/Ranger.glb",
+    "model": "/models/characters/Ranger.glb"
+  },
+  {
+    "id": "kaykit-rogue-hooded",
+    "name": "Rogue_Hooded",
+    "group": "kaykit",
+    "source": "KayKit_Adventurers_2.0_FREE.zip:KayKit_Adventurers_2.0_FREE/Characters/gltf/Rogue_Hooded.glb",
+    "model": "/models/characters/Rogue_Hooded.glb"
+  }
+]
