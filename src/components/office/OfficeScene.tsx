@@ -1,5 +1,6 @@
 'use client';
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -16,8 +17,9 @@ import { TourBubbleAnchor } from './TourBubbleAnchor';
 import { ConferenceRoom } from './ConferenceRoom';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
 import type { MeetingLabels } from './textures';
-import { OFFICES, RECEPTION_Z, SPAWN } from './layout';
+import { OFFICES, RECEPTION_Z, SPAWN, WALL_HEIGHT } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
+import { officeUi } from './store';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; messages: Message[]; invitedSlots: number[];
@@ -44,21 +46,34 @@ function SoftEnvironment() {
   );
 }
 
+// A ceiling downlight: a wide soft cone pointing at the floor. Unlike the point lights it replaces,
+// it does not burn a bright spot into the ceiling right above it.
+function Downlight({ pos, intensity, color }: { pos: [number, number]; intensity: number; color: string }) {
+  const ref = useRef<THREE.SpotLight>(null);
+  useLayoutEffect(() => {
+    const l = ref.current;
+    if (!l) return;
+    l.target.position.set(pos[0], 0, pos[1]);
+    l.target.updateMatrixWorld();
+  }, [pos]);
+  return <spotLight ref={ref} position={[pos[0], WALL_HEIGHT - 0.05, pos[1]]} angle={1.2} penumbra={1} intensity={intensity} distance={11} decay={2} color={color} />;
+}
+
+const DOWNLIGHTS: { pos: [number, number]; intensity: number; color: string }[] = [
+  { pos: [0, RECEPTION_Z], intensity: 22, color: '#ffe2bd' },
+  { pos: [-11, 0], intensity: 18, color: '#ffe2bd' },
+  { pos: [11, 0], intensity: 18, color: '#ffe2bd' },
+  ...OFFICES.map((o) => ({ pos: [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2] as [number, number], intensity: 24, color: o.wallColor === 'orange' ? '#ffd2a3' : '#ffe8cc' })),
+];
+
 function Lights({ low }: { low: boolean }) {
   return (
     <>
-      <hemisphereLight name={HEMI_NAME} args={['#fff3df', '#9a7a5a', hemiIntensity(low)]} />
-      <ambientLight intensity={0.12} color="#ffd9a8" />
-      {!low && (
-        <>
-          <pointLight position={[0, 2.6, RECEPTION_Z]} intensity={10} distance={9} color="#ffd8a0" />
-          <pointLight position={[-11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
-          <pointLight position={[11, 2.6, 0]} intensity={8} distance={9} color="#ffd8a0" />
-          {OFFICES.map((o) => (
-            <pointLight key={o.slot} position={[(o.min[0] + o.max[0]) / 2, 2.6, (o.min[1] + o.max[1]) / 2]} intensity={12} distance={9} color={o.wallColor === 'orange' ? '#ffc58a' : '#ffe0b8'} />
-          ))}
-        </>
-      )}
+      <hemisphereLight name={HEMI_NAME} args={['#fff6ea', '#8f7760', hemiIntensity(low)]} />
+      <ambientLight intensity={0.1} color="#ffe6c4" />
+      {!low && DOWNLIGHTS.map((d) => <Downlight key={d.pos.join()} {...d} />)}
+      {/* Low quality: one soft key light from above instead of the downlights, so shapes still read. */}
+      {low && <directionalLight position={[4, 9, 6]} intensity={1.1} color="#fff0dc" />}
     </>
   );
 }
@@ -96,7 +111,8 @@ function useRenderScale(low: boolean) {
   const [share, setShare] = useState(1);
   return {
     dpr: 1 + (max - 1) * share,
-    decline: () => setShare((x) => Math.max(0, x - 0.34)),
+    // Still too slow at the lowest scale: drop the effects and extra lights (the gauge button brings them back).
+    decline: () => setShare((x) => { if (x === 0 && !low) officeUi.set({ lowQuality: true }); return Math.max(0, x - 0.34); }),
     incline: () => setShare((x) => Math.min(1, x + 0.34)),
   };
 }
@@ -118,8 +134,8 @@ export default function OfficeScene(p: SceneProps) {
       style={{ touchAction: 'none' }}
     >
       <PerformanceMonitor bounds={FPS_BOUNDS} onDecline={scale.decline} onIncline={scale.incline} flipflops={4} />
-      <color attach="background" args={['#d8c8b0']} />
-      <fog attach="fog" args={['#d8c8b0', 28, 60]} />
+      <color attach="background" args={['#e4dbcf']} />
+      <fog attach="fog" args={['#e4dbcf', 30, 64]} />
       <Lights low={p.lowQuality} />
       <SoftEnvironment />
       <ConferenceRoom labels={p.meetingLabels} lowQuality={p.lowQuality} />
@@ -134,7 +150,7 @@ export default function OfficeScene(p: SceneProps) {
       <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />
       <MonitorFrame />
       <TourBubbleAnchor />
-      {!p.lowQuality && ready && <Suspense fallback={null}><Effects /></Suspense>}
+      {!p.lowQuality && ready && <Suspense fallback={null}><Effects phone={p.isPhone} /></Suspense>}
     </Canvas>
     </>
   );

@@ -17,7 +17,7 @@ const CLIPS: Record<Character['group'], Record<Exclude<Motion, 'sit'>, string[]>
 };
 
 export const CHARACTER_HEIGHT = 1.55;
-const TYPE_ARM = -0.9, TYPE_FORE = -0.5;
+const TYPE_ARM = -1.3, TYPE_FORE = -0.25;
 
 const findBone = (root: THREE.Object3D, re: RegExp, not?: RegExp) => {
   let found: THREE.Object3D | null = null;

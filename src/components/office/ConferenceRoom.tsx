@@ -8,7 +8,7 @@ import {
   WALL_HEIGHT, type Segment,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
-import { tableWood, oak, slats, carpet, panelWash, floorGlow, frond, tabletScreen, paintScreen, paintRoomPanel, type MeetingLabels } from './textures';
+import { tableWood, oak, slats, carpet, panelWash, floorGlow, tabletScreen, paintScreen, paintRoomPanel, type MeetingLabels } from './textures';
 import { roomControls, useRoomSettings } from './roomControls';
 import { useConferenceGlass } from './conferenceGlass';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
@@ -16,7 +16,7 @@ import { officeUi, useOfficeUi } from './store';
 
 // The round conference room after the owner's reference image: a large light-oak table with a planter
 // in the middle and a glowing ring under its pedestal, light-blue armchairs with white frames, a tablet
-// at every seat, a big meeting screen on cream panelling above an oak media cabinet, palms on both
+// at every seat, a big meeting screen on cream panelling above an oak media cabinet, slim plants on both
 // sides, a rose carpet and a ring of light in the ceiling. Everything is built here in code.
 
 const FRAME = '#f6f4f0';
@@ -31,7 +31,6 @@ const mat = {
   trim: new THREE.MeshStandardMaterial({ color: '#2f2925', roughness: 0.6 }),
   pot: new THREE.MeshStandardMaterial({ color: '#f1eee8', roughness: 0.5 }),
   soil: new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 1 }),
-  leaf: new THREE.MeshStandardMaterial({ color: '#5f9446', roughness: 0.8 }),
 };
 
 // Lit parts that follow the wall panel (brightness and colour), updated every frame by RoomLights.
@@ -52,7 +51,6 @@ const textured = (() => {
     carpet: new THREE.MeshStandardMaterial({ map: carpet(), roughness: 1 }),
     panel: new THREE.MeshStandardMaterial({ map: panelWash(), roughness: 0.95 }),
     glow: new THREE.MeshBasicMaterial({ map: floorGlow(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
-    frond: new THREE.MeshStandardMaterial({ map: frond(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 }),
     tablet: new THREE.MeshBasicMaterial({ map: tabletScreen(), toneMapped: false }),
   });
 })();
@@ -92,37 +90,39 @@ function Tablet({ material }: { material: THREE.Material }) {
   );
 }
 
-// Fan of palm fronds from a point (planters and the table centre). Each frond arches outwards.
-function Fronds({ count, length, width, tilt, y, seed = 1, bend = 0.35 }: { count: number; length: number; width: number; tilt: [number, number]; y: number; seed?: number; bend?: number }) {
+// Minimal greenery (owner request: plants should not draw the eye): a few slim upright blades in
+// a muted sage, tapering to a point, in a small matte pot. Shared by the corner pots and the table.
+const BLADE = new THREE.MeshStandardMaterial({ color: '#8fa889', roughness: 0.85, side: THREE.DoubleSide });
+function Blades({ count, height, width, lean, seed = 1 }: { count: number; height: number; width: number; lean: number; seed?: number }) {
   const geom = useMemo(() => {
-    const g = new THREE.PlaneGeometry(width, length, 1, 10).translate(0, length / 2, 0);
+    const g = new THREE.PlaneGeometry(width, height, 1, 6).translate(0, height / 2, 0);
     const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const t = p.getY(i) / length; p.setZ(i, bend * length * t * t); }
+    for (let i = 0; i < p.count; i++) {
+      const t = p.getY(i) / height;
+      p.setX(i, p.getX(i) * (1 - t * 0.85));
+      p.setZ(i, 0.12 * height * t * t);
+    }
     g.computeVertexNormals();
     return g;
-  }, [width, length, bend]);
-  const m = textured().frond;
+  }, [width, height]);
   return (
-    <group position-y={y}>
+    <group>
       {Array.from({ length: count }, (_, i) => {
         const a = (i / count) * Math.PI * 2 + seed;
-        const t = tilt[0] + ((i * 7 + seed * 3) % 5) / 4 * (tilt[1] - tilt[0]);
-        return <group key={i} rotation-y={a}><mesh geometry={geom} material={m} rotation-x={t} /></group>;
+        const k = 0.8 + ((i * 5 + seed) % 4) * 0.08;
+        return <group key={i} rotation-y={a}><mesh geometry={geom} material={BLADE} rotation-x={lean * (0.6 + (i % 3) * 0.25)} scale={[1, k, 1]} /></group>;
       })}
     </group>
   );
 }
 
-function Palm({ pos }: { pos: [number, number] }) {
+function Plant({ pos }: { pos: [number, number] }) {
   return (
     <group position={[pos[0], 0, pos[1]]}>
-      <GroundShadow size={[0.9, 0.9]} opacity={0.35} />
-      <mesh position-y={0.28} material={mat.pot}><cylinderGeometry args={[0.24, 0.19, 0.56, 28]} /></mesh>
-      <mesh position-y={0.55} material={mat.soil}><cylinderGeometry args={[0.22, 0.22, 0.02, 24]} /></mesh>
-      <mesh position-y={0.85} material={mat.leaf}><cylinderGeometry args={[0.03, 0.045, 0.6, 8]} /></mesh>
-      <Fronds count={16} length={1.3} width={0.56} tilt={[0.6, 1.05]} y={1.0} seed={pos[0] > 0 ? 2 : 1} bend={0.5} />
-      <Fronds count={12} length={1.2} width={0.52} tilt={[0.3, 0.6]} y={1.05} seed={3} bend={0.42} />
-      <Fronds count={7} length={1.0} width={0.46} tilt={[0.05, 0.25]} y={1.08} seed={5} bend={0.3} />
+      <GroundShadow size={[0.55, 0.55]} opacity={0.25} />
+      <mesh position-y={0.2} material={mat.pot}><cylinderGeometry args={[0.15, 0.13, 0.4, 32]} /></mesh>
+      <mesh position-y={0.395} material={mat.soil}><cylinderGeometry args={[0.135, 0.135, 0.01, 24]} /></mesh>
+      <group position-y={0.39}><Blades count={7} height={0.62} width={0.07} lean={0.16} seed={pos[0] > 0 ? 2 : 1} /></group>
     </group>
   );
 }
@@ -139,14 +139,12 @@ function Table() {
       {/* planter in the middle */}
       <mesh position-y={H - 0.05}><cylinderGeometry args={[hole, hole, 0.1, 64, 1, true]} /><meshStandardMaterial color="#c9a273" side={THREE.DoubleSide} /></mesh>
       <mesh position-y={H - 0.03} material={mat.soil}><cylinderGeometry args={[hole - 0.01, hole - 0.01, 0.02, 48]} /></mesh>
-      {/* low leafy bush under the fronds */}
-      {Array.from({ length: 7 }, (_, i) => {
-        const a = (i / 7) * Math.PI * 2, d = i ? 0.2 : 0;
-        return <mesh key={i} position={[Math.sin(a) * d, H + 0.04, Math.cos(a) * d]} scale={[1, 0.7, 1]} material={mat.leaf}><icosahedronGeometry args={[0.13, 1]} /></mesh>;
+      {/* a low bed of moss with a few short blades, kept under eye level across the table */}
+      {Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2, d = i ? 0.17 : 0;
+        return <mesh key={i} position={[Math.sin(a) * d, H - 0.01, Math.cos(a) * d]} scale={[1, 0.35, 1]} material={BLADE}><icosahedronGeometry args={[0.11, 1]} /></mesh>;
       })}
-      <Fronds count={18} length={0.46} width={0.28} tilt={[0.8, 1.2]} y={H - 0.03} seed={4} bend={0.5} />
-      <Fronds count={12} length={0.4} width={0.2} tilt={[0.4, 0.75]} y={H - 0.03} seed={5} bend={0.45} />
-      <Fronds count={7} length={0.32} width={0.18} tilt={[0.1, 0.35]} y={H - 0.03} seed={6} bend={0.3} />
+      <group position-y={H - 0.02}><Blades count={6} height={0.2} width={0.05} lean={0.35} seed={4} /></group>
       {/* pedestal, its plinth and the glowing ring on the carpet */}
       <mesh position-y={(H - 0.07) / 2} material={m.oak}><cylinderGeometry args={[0.58, 0.88, H - 0.07, 64, 1, true]} /></mesh>
       <mesh position-y={0.025} material={lit.plinth}><cylinderGeometry args={[0.9, 0.92, 0.05, 64]} /></mesh>
@@ -259,7 +257,7 @@ export function ConferenceRoom({ labels, lowQuality }: { labels: MeetingLabels; 
       <Panels />
       <Screen labels={labels} />
       <Credenza />
-      {CONF_PLANTS.map((p) => <Palm key={p[0]} pos={p} />)}
+      {CONF_PLANTS.map((p) => <Plant key={p[0]} pos={p} />)}
       <Ceiling />
       <WallPanel />
       <RoomLights low={lowQuality} />

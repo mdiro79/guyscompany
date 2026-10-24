@@ -10,7 +10,7 @@ import { wallWash } from './textures';
 import { confGlass } from './conferenceGlass';
 
 // Brighter than white, so lamps glow (bloom) in high quality; plain white otherwise.
-const LAMP = new THREE.Color(1.9, 1.75, 1.45);
+const LAMP = new THREE.Color(1.5, 1.42, 1.25);
 const COLORS = { orange: '#e8743b', teal: '#2f8f8a', cream: '#efe4d2', trim: '#3a3330', floor: '#d9cdbb', glass: '#c9e6e3', wood: '#a8774f' };
 
 // Warm stone tiles (1 m) with soft variation and fine grout lines.
@@ -74,7 +74,7 @@ function WallPiece({ w, color, glass, frosted, shared }: { w: Segment; color: st
         <>
           <mesh position-y={WALL_HEIGHT / 2}>
             <boxGeometry args={[len, WALL_HEIGHT - 0.1, 0.04]} />
-            <meshStandardMaterial color={frosted ? '#f4f1ec' : COLORS.glass} transparent opacity={frosted ? 0.9 : 0.4} roughness={frosted ? 0.9 : 0.2} metalness={0} depthWrite={frosted} />
+            <meshStandardMaterial color={frosted ? '#f4f1ec' : COLORS.glass} transparent opacity={frosted ? 0.9 : 0.3} roughness={frosted ? 0.9 : 0.04} metalness={frosted ? 0 : 0.15} envMapIntensity={frosted ? 1 : 2} depthWrite={frosted} />
           </mesh>
           {!frosted && (
             <mesh position-y={1.25}>
@@ -124,6 +124,30 @@ function Door({ def, allowed }: { def: DoorDef; allowed: boolean }) {
   );
 }
 
+// The wall above a door (it used to be open up to the ceiling): a glass transom over the glass
+// doors (frosted with its office) and a plain wall piece over the entrance, with a dark head rail.
+function DoorHeader({ def, frosted }: { def: DoorDef; frosted: boolean }) {
+  const height = def.kind === 'entrance' ? 2.2 : 2.1;
+  const h = WALL_HEIGHT - height;
+  const x = def.width / 2, y = height + h / 2;
+  return (
+    <group position={[def.hinge[0], 0, def.hinge[1]]} rotation-y={-def.closed}>
+      {def.kind === 'entrance' ? (
+        <mesh position={[x, y, 0]}><boxGeometry args={[def.width, h, 0.16]} /><meshStandardMaterial color={COLORS.cream} map={wallWash()} roughness={0.9} /></mesh>
+      ) : def.kind === 'conference' ? (
+        <mesh position={[x, y, 0]} material={confGlass.pane}><boxGeometry args={[def.width, h, 0.04]} /></mesh>
+      ) : (
+        <mesh position={[x, y, 0]}>
+          <boxGeometry args={[def.width, h, 0.04]} />
+          <meshStandardMaterial color={frosted ? '#f4f1ec' : COLORS.glass} transparent opacity={frosted ? 0.9 : 0.3} roughness={frosted ? 0.9 : 0.04} metalness={frosted ? 0 : 0.15} envMapIntensity={frosted ? 1 : 2} depthWrite={frosted} />
+        </mesh>
+      )}
+      <mesh position={[x, height + 0.04, 0]}><boxGeometry args={[def.width + 0.06, 0.08, 0.1]} /><meshStandardMaterial color={COLORS.trim} /></mesh>
+      <mesh position={[x, WALL_HEIGHT - 0.04, 0]}><boxGeometry args={[def.width, 0.08, 0.08]} /><meshStandardMaterial color={COLORS.trim} /></mesh>
+    </group>
+  );
+}
+
 function GuideLines() {
   const lines = useMemo(() => guideLines(), []);
   return (
@@ -153,7 +177,8 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
     <group>
       <mesh rotation-x={-Math.PI / 2}>
         <shapeGeometry args={[shape]} />
-        <meshStandardMaterial map={tex} roughness={0.85} />
+        {/* Polished stone: a clear coat picks up soft reflections of the lights (clean, glassy look). */}
+        <meshPhysicalMaterial map={tex} roughness={0.55} clearcoat={0.7} clearcoatRoughness={0.18} envMapIntensity={1.2} />
       </mesh>
       {/* Lit ceiling (it used to be unlit and flat) */}
       <mesh rotation-x={-Math.PI / 2} position-y={WALL_HEIGHT}>
@@ -168,10 +193,14 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
         return <WallPiece key={i} w={w} color={wallColor(w)} glass={w.kind === 'glass'} frosted={frosted} shared={w.kind === 'glass' && onConferenceRing(w) ? confGlass : undefined} />;
       })}
       {DOORS.map((d) => <Door key={d.id} def={d} allowed={doorAllowed(d, offices, viewerId, invitedSlots)} />)}
+      {DOORS.map((d) => <DoorHeader key={d.id} def={d} frosted={officeState(d.slot)?.glass === 'frosted'} />)}
       <GuideLines />
       {/* Ceiling lamps */}
       {[[0, RECEPTION_Z - 1], [0, SOUTH - 1.5], [-(H + OUT) / 2, 0], [(H + OUT) / 2, 0], [-(H + OUT) / 2, -H + 2], [(H + OUT) / 2, H - 2], ...OFFICES.map((o) => [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2])].map(([x, z], i) => (
-        <mesh key={i} position={[x, WALL_HEIGHT - 0.03, z]} rotation-x={Math.PI / 2}><circleGeometry args={[0.35, 24]} /><meshBasicMaterial color={LAMP} toneMapped={false} /></mesh>
+        <group key={i} position={[x, WALL_HEIGHT - 0.02, z]} rotation-x={Math.PI / 2}>
+          <mesh><ringGeometry args={[0.24, 0.29, 32]} /><meshStandardMaterial color="#d9d2c6" roughness={0.4} metalness={0.3} side={THREE.DoubleSide} /></mesh>
+          <mesh position-z={0.005}><circleGeometry args={[0.24, 32]} /><meshBasicMaterial color={LAMP} toneMapped={false} /></mesh>
+        </group>
       ))}
       {/* Wall art in offices */}
       {OFFICES.map((o) => {

@@ -10,7 +10,7 @@ import { useLive, setLivePaused } from '@/lib/live';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { PresenceProvider } from '@/components/presence/PresenceProvider';
 import { VoiceProvider } from '@/components/voice/VoiceProvider';
-import type { FileMeta, Message, Notification } from '@/lib/data/types';
+import type { FileMeta, Message, Notification, Profile } from '@/lib/data/types';
 import { ShellProvider, type ShellData } from './ShellContext';
 import { Sidebar } from './Sidebar';
 import { TopBar, type SearchItem } from './TopBar';
@@ -19,9 +19,19 @@ import { NAV, ADMIN_NAV, isActive } from './nav';
 
 const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
 
-export function AppShell({ data, notifications, messages, files, search, children }: {
+export function AppShell({ data: server, notifications, messages, files, search, children }: {
   data: ShellData; notifications: Notification[]; messages: Message[]; files: FileMeta[]; search: SearchItem[]; children: ReactNode;
 }) {
+  // Optimistic changes to one's own profile (character, status, name) until the server data catches up.
+  const [patch, setPatch] = useState<Partial<Profile> | null>(null);
+  useEffect(() => {
+    if (patch && Object.entries(patch).every(([k, v]) => server.user[k as keyof Profile] === v)) setPatch(null);
+  }, [server.user, patch]);
+  const data = useMemo<ShellData>(() => {
+    if (!patch) return { ...server, patchUser: setPatch };
+    const user = { ...server.user, ...patch };
+    return { ...server, user, profiles: server.profiles.map((p) => (p.id === user.id ? user : p)), patchUser: setPatch };
+  }, [server, patch]);
   const t = useTranslations();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);

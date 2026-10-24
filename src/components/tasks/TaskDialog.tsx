@@ -5,6 +5,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { saveTaskAction } from '@/app/actions/tasks';
 import { TASK_COLUMNS, type Project, type Task, type TaskColumn } from '@/lib/data/types';
 import { useShell } from '@/components/shell/ShellContext';
+import { SaveButton, useResultStatus } from '@/components/ui/SaveButton';
 
 export function TaskDialog({ open, onClose, task, projects, defaultColumn = 'idea' }: {
   open: boolean; onClose: () => void; task: Task | null; projects: Project[]; defaultColumn?: TaskColumn;
@@ -13,6 +14,7 @@ export function TaskDialog({ open, onClose, task, projects, defaultColumn = 'ide
   const tc = useTranslations('common');
   const { profiles } = useShell();
   const [state, action, pending] = useActionState(saveTaskAction, null);
+  const status = useResultStatus(state);
   useEffect(() => { if (state?.ok) onClose(); }, [state, onClose]);
   return (
     <Dialog open={open} onClose={onClose} title={task ? t('editTask') : t('newTask')}>
@@ -43,10 +45,9 @@ export function TaskDialog({ open, onClose, task, projects, defaultColumn = 'ide
           <div><label className="label">{t('dueDate')}</label><input type="date" name="dueDate" defaultValue={task?.dueDate ?? ''} className="input" /></div>
         </div>
         <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="needsVolunteer" defaultChecked={task?.needsVolunteer} className="size-5 accent-[var(--accent)]" />{t('needsVolunteer')}</label>
-        {state?.error && <p className="text-sm text-danger">{tc('error')}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>{tc('cancel')}</button>
-          <button className="btn-primary" disabled={pending}>{tc('save')}</button>
+          <SaveButton pending={pending} status={status}>{tc('save')}</SaveButton>
         </div>
       </form>
     </Dialog>

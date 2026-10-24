@@ -45,7 +45,7 @@ export const OFFICES: OfficeRoom[] = [1, 2, 3, 4].map((slot) => {
 export const SPAWN: { pos: Vec2; yaw: number } = { pos: [0, SOUTH - 1.1], yaw: 0 }; // by the entrance, facing reception (north)
 export const RECEPTION: { pos: Vec2; facing: number } = { pos: [0, RECEPTION_Z], facing: 0 };
 // The receptionist sits behind the desk facing the entrance (yaw π looks to +Z).
-export const RECEPTIONIST_SEAT: { pos: Vec2; facing: number } = { pos: [0, RECEPTION_Z - 0.8], facing: Math.PI };
+export const RECEPTIONIST_SEAT: { pos: Vec2; facing: number } = { pos: [0, RECEPTION_Z - 0.68], facing: Math.PI };
 export const RECEPTIONIST_POS: Vec2 = RECEPTIONIST_SEAT.pos;
 const DESK_HALF: Vec2 = [0.82, 0.42]; // reception desk footprint (half sizes)
 
@@ -230,8 +230,9 @@ export function props(): Prop[] {
   // Reception and entrance: a compact desk so the receptionist stays visible, her chair and computer.
   const [rx, rz] = RECEPTION.pos;
   p.push({ model: 'desk', pos: [rx, rz], rot: Math.PI, size: 1.6 });
-  p.push({ model: 'computerScreen', pos: [rx - 0.3, rz - 0.12], rot: Math.PI, size: 0.5, y: 0.84 });
-  p.push({ model: 'computerKeyboard', pos: [rx + 0.05, rz - 0.28], rot: Math.PI, size: 0.4, y: 0.84 });
+  // Screen straight in front of her face and the keyboard right under her hands (owner request).
+  p.push({ model: 'computerScreen', pos: [rx, rz - 0.02], rot: Math.PI, size: 0.5, y: 0.84 });
+  p.push({ model: 'computerKeyboard', pos: [rx, rz - 0.3], rot: Math.PI, size: 0.4, y: 0.84 });
   p.push({ model: 'plantSmall3', pos: [rx + 0.6, rz + 0.1], rot: 0, size: 0.22, y: 0.84 });
   p.push({ model: 'chairDesk', pos: RECEPTIONIST_SEAT.pos, rot: 0, size: 0.62 });
   p.push({ model: 'rugDoormat', pos: [0, SOUTH - 0.5], rot: 0, size: 1.6, y: 0.005 });

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Check, Keyboard, GraduationCap } from 'lucide-react';
 import { useShell } from '@/components/shell/ShellContext';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
+import { SaveButton, useResultStatus, useSave } from '@/components/ui/SaveButton';
 import { updateProfileAction, setCharacterAction, requestSwapAction, respondSwapAction, setTutorialDoneAction } from '@/app/actions/profile';
 import { setStatusAction } from '@/app/actions/misc';
 import { respondInviteAction } from '@/app/actions/offices';
@@ -22,13 +23,27 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
   const tAll = useTranslations();
   const locale = useLocale();
   const router = useRouter();
-  const { user, profiles, offices } = useShell();
+  const { user, profiles, offices, patchUser } = useShell();
   const [selected, setSelected] = useState(user.characterId);
   const [swapTo, setSwapTo] = useState('');
   const [note, setNote] = useState('');
   const [, start] = useTransition();
   const [state, action, pending] = useActionState(updateProfileAction, null);
+  const profileStatus = useResultStatus(state);
+  const character = useSave();
+  const swap = useSave();
   const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
+  // Character and status show at once everywhere (avatar, office) and roll back if the save fails.
+  const saveCharacter = () => {
+    const before = user.characterId;
+    patchUser?.({ characterId: selected });
+    character.run(() => setCharacterAction(selected), () => patchUser?.({ characterId: before }));
+  };
+  const setStatus = (s: UserStatus) => {
+    const before = user.status;
+    patchUser?.({ status: s });
+    start(async () => { const r = await setStatusAction(s).catch(() => null); if (!r?.ok) patchUser?.({ status: before }); });
+  };
   const myOffice = offices.find((o) => o.ownerId === user.id);
   const nameOf = (id: string) => profiles.find((p) => p.id === id)?.displayName ?? '—';
   const incoming = swaps.filter((s) => s.toUserId === user.id && s.status === 'pending');
@@ -55,9 +70,10 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
             </div>
             <div className="mt-3 flex items-center gap-2">
               <span className="text-sm font-medium" dir="ltr">{prettyName(CHARACTERS.find((c) => c.id === selected)!)}</span>
-              <button type="button" className="btn-primary ms-auto min-h-10" disabled={selected === user.characterId} onClick={() => run(() => setCharacterAction(selected))}>
-                {selected === user.characterId ? t('selected') : tc('save')}
-              </button>
+              <SaveButton type="button" className="btn-primary ms-auto min-h-10" pending={character.pending} status={character.status}
+                disabled={selected === user.characterId && character.status === 'idle'} onClick={saveCharacter}>
+                {selected === user.characterId ? <><Check className="size-4" />{t('selected')}</> : tc('save')}
+              </SaveButton>
             </div>
           </div>
         </div>
@@ -68,14 +84,14 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
         <form action={action} className="space-y-3">
           <div><label className="label">{t('displayName')}</label><input name="displayName" defaultValue={user.displayName} required maxLength={40} className="input" dir="auto" /></div>
           <div><label className="label">{t('jobTitle')}</label><input name="jobTitle" defaultValue={user.jobTitle} maxLength={40} className="input" dir="auto" /></div>
-          <div className="flex items-center gap-2">{state?.ok && <span className="text-sm text-brand">{tc('saved')}</span>}<button className="btn-primary ms-auto" disabled={pending}>{tc('save')}</button></div>
+          <div className="flex justify-end"><SaveButton pending={pending} status={profileStatus}>{tc('save')}</SaveButton></div>
         </form>
         <div>
           <div className="label">{t('status')}</div>
           <div className="flex gap-2">
             {(['online', 'busy', 'focus'] as UserStatus[]).map((s) => (
-              <button key={s} type="button" onClick={() => run(() => setStatusAction(s))}
-                className={clsx('btn min-h-10 flex-1 border', user.status === s ? 'border-brand bg-brand-soft' : 'border-line')}>{tAll(`status.${s}`)}</button>
+              <button key={s} type="button" aria-pressed={user.status === s} onClick={() => setStatus(s)}
+                className={clsx('btn min-h-10 flex-1 border transition-all active:scale-95', user.status === s ? 'border-brand bg-brand-soft font-semibold text-brand' : 'border-line')}>{tAll(`status.${s}`)}</button>
             ))}
           </div>
         </div>
@@ -96,7 +112,8 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
               return <option key={p.id} value={p.id}>{p.displayName}{o ? ` (${formatNumber(locale, o.slot)})` : ''}</option>;
             })}
           </select>
-          <button type="button" className="btn-primary" disabled={!swapTo} onClick={() => start(async () => { const r = await requestSwapAction(swapTo); setNote(r.ok ? t('requestSent') : tc('error')); })}>{tc('send')}</button>
+          <SaveButton type="button" className="btn-primary shrink-0" pending={swap.pending} status={swap.status === 'error' ? 'error' : 'idle'} disabled={!swapTo}
+            onClick={() => swap.run(async () => { const r = await requestSwapAction(swapTo); if (r.ok) setNote(t('requestSent')); return r; })}>{tc('send')}</SaveButton>
         </div>
         {note && <p className="text-sm text-brand">{note}</p>}
         {incoming.length > 0 && <div>

@@ -12,6 +12,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { saveProjectAction, deleteProjectAction, createRoleAction, volunteerRoleAction, deleteRoleAction } from '@/app/actions/projects';
 import { formatDate, formatNumber } from '@/lib/format';
 import { PROJECT_STATUSES, type Issue, type Milestone, type Project, type ProjectIdea, type ProjectRole, type Task } from '@/lib/data/types';
+import { SaveButton, useResultStatus } from '@/components/ui/SaveButton';
 
 export function ProjectsView({ projects, tasks, roles, issues, ideas, milestones, today }: {
   projects: Project[]; tasks: Task[]; roles: ProjectRole[]; issues: Issue[]; ideas: ProjectIdea[]; milestones: Milestone[]; today: string;
@@ -27,6 +28,8 @@ export function ProjectsView({ projects, tasks, roles, issues, ideas, milestones
   const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const [state, action, pending] = useActionState(saveProjectAction, null);
   const [roleState, roleAction, rolePending] = useActionState(createRoleAction, null);
+  const status = useResultStatus(state);
+  const roleStatus = useResultStatus(roleState);
   useEffect(() => { if (state?.ok) setEditing(null); }, [state]);
   useEffect(() => { if (roleState?.ok) setRoleFor(null); }, [roleState]);
   const project = editing && editing !== 'new' ? editing : null;
@@ -112,7 +115,7 @@ export function ProjectsView({ projects, tasks, roles, issues, ideas, milestones
               <select name="status" defaultValue={project?.status ?? 'active'} className="input">{PROJECT_STATUSES.map((s) => <option key={s} value={s}>{tm(`status.${s}`)}</option>)}</select></div>
             <div><label className="label">{tm('due')}</label><input type="date" name="dueDate" defaultValue={project?.dueDate ?? ''} className="input" /></div>
           </div>
-          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setEditing(null)}>{tc('cancel')}</button><button className="btn-primary" disabled={pending}>{tc('save')}</button></div>
+          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setEditing(null)}>{tc('cancel')}</button><SaveButton pending={pending} status={status}>{tc('save')}</SaveButton></div>
         </form>
       </Dialog>
       <Dialog open={!!roleFor} onClose={() => setRoleFor(null)} title={t('newRole')}>
@@ -120,7 +123,7 @@ export function ProjectsView({ projects, tasks, roles, issues, ideas, milestones
           <input type="hidden" name="projectId" value={roleFor ?? ''} />
           <div><label className="label">{t('roleName')}</label><input name="name" required className="input" dir="auto" /></div>
           <div><label className="label">{t('description')}</label><input name="description" className="input" dir="auto" /></div>
-          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setRoleFor(null)}>{tc('cancel')}</button><button className="btn-primary" disabled={rolePending}>{tc('save')}</button></div>
+          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setRoleFor(null)}>{tc('cancel')}</button><SaveButton pending={rolePending} status={roleStatus}>{tc('save')}</SaveButton></div>
         </form>
       </Dialog>
     </div>

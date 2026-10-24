@@ -81,7 +81,6 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const seat = ui.seatId ? SEATS.find((s) => s.id === ui.seatId) ?? null : null;
   const working = !!seat?.monitor; // at a desk with the dashboard on the monitor
 
-  useEffect(() => { officeUi.set({ lowQuality: isPhone }); }, [isPhone]);
   // The desk dashboard loads in the background once the office had time to load, so sitting down is instant.
   const [preloadMonitor, setPreloadMonitor] = useState(false);
   useEffect(() => { const id = setTimeout(() => setPreloadMonitor(true), MONITOR_PRELOAD_MS); return () => clearTimeout(id); }, []);

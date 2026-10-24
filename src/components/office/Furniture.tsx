@@ -11,7 +11,7 @@ const litMaterials = new Map<string, THREE.MeshStandardMaterial>();
 function litMaterial(color: THREE.Color) {
   const key = color.getHexString();
   let m = litMaterials.get(key);
-  if (!m) { m = new THREE.MeshStandardMaterial({ color: color.clone(), roughness: 0.65, metalness: 0.02 }); litMaterials.set(key, m); }
+  if (!m) { m = new THREE.MeshStandardMaterial({ color: color.clone(), roughness: 0.5, metalness: 0.02 }); litMaterials.set(key, m); }
   return m;
 }
 

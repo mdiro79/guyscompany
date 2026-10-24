@@ -7,6 +7,8 @@ export interface ShellData {
   profiles: Profile[];
   offices: Office[];
   demo: boolean;
+  /** Shows a change to the signed-in user at once, before the server confirms it (null drops it). */
+  patchUser?: (patch: Partial<Profile> | null) => void;
 }
 
 const Ctx = createContext<ShellData | null>(null);

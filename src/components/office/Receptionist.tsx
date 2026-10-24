@@ -10,7 +10,7 @@ import { GroundShadow } from './GroundShadow';
 import { tour, guide, me, pointAt, GUIDE_SPEED } from './tour';
 
 export const RECEPTIONIST_CHARACTER = 'kaykit-ranger';
-const SIT_Y = 0.02;
+const SIT_Y = 0.08;
 
 // The receptionist works at her computer behind the desk; for the tour she gets up, walks to each
 // part of the office (paths from tour.ts) and comes back to sit down again.

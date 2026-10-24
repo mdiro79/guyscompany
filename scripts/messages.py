@@ -12,6 +12,7 @@ M = {
   "none": ("هیچ", "None"), "unassigned": ("بدون مسئول", "Unassigned"), "you": ("شما", "You"),
   "yes": ("بله", "Yes"), "no": ("خیر", "No"), "accept": ("قبول", "Accept"), "decline": ("رد", "Decline"),
   "error": ("خطایی رخ داد", "Something went wrong"), "saved": ("ذخیره شد", "Saved"),
+  "saving": ("در حال ذخیره…", "Saving…"), "saveError": ("ذخیره نشد؛ دوباره بزنید", "Not saved; tap again"),
   "language": ("زبان", "Language"), "today": ("امروز", "Today"), "tomorrow": ("فردا", "Tomorrow"),
   "daysAgo": ("{n} روز پیش", "{n}d ago"), "inDays": ("{n} روز دیگر", "in {n}d"),
   "help": ("راهنما", "Help"), "more": ("بیشتر", "More"), "open": ("باز کردن", "Open"),

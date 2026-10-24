@@ -2,7 +2,7 @@
 import { getLocale } from 'next-intl/server';
 import { redirect } from '@/i18n/navigation';
 import { signIn, signOut, changeOwnPassword, requireUser } from '@/lib/auth';
-import { fail, guard, type ActionResult } from './result';
+import { fail, okResult, guard, type ActionResult } from './result';
 
 export const loginAction = guard(async function loginAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const username = String(form.get('username') ?? '');
@@ -31,6 +31,7 @@ export const changePasswordAction = guard(async function changePasswordAction(_:
   if (password.length < 8) return fail('tooShort');
   if (password !== String(form.get('confirm') ?? '')) return fail('mismatch');
   await changeOwnPassword(user, password);
-  redirect({ href: '/', locale: await getLocale() });
-  return { ok: true };
+  // The forced first-login change continues to the app; from settings the member stays where they are.
+  if (form.get('forced') === '1') redirect({ href: '/', locale: await getLocale() });
+  return okResult('changed');
 });

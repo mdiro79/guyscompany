@@ -21,6 +21,8 @@
     "decline": "Decline",
     "error": "Something went wrong",
     "saved": "Saved",
+    "saving": "Saving…",
+    "saveError": "Not saved; tap again",
     "language": "Language",
     "today": "Today",
     "tomorrow": "Tomorrow",

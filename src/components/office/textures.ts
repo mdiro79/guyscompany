@@ -124,29 +124,6 @@ export const floorGlow = once(() => {
   return texture(c);
 });
 
-// Palm frond: a stem with leaflets on both sides, on a transparent canvas (used with alphaTest).
-export const frond = once(() => {
-  const [c, g] = canvas(256, 512), r = rng(13);
-  g.lineCap = 'round';
-  for (let y = 490; y > 16; y -= 8) {
-    const t = 1 - y / 512;
-    const len = 20 + 100 * Math.sin(t * Math.PI) ** 0.6;
-    for (const side of [-1, 1]) {
-      const shade = 110 + r() * 60;
-      g.fillStyle = `rgb(${35 + r() * 25},${shade},${45 + r() * 20})`;
-      const tip = 128 + side * len, droop = 30 + t * 10;
-      g.beginPath();
-      g.moveTo(128, y);
-      g.quadraticCurveTo(128 + side * len * 0.55, y - 22, tip, y - droop);
-      g.quadraticCurveTo(128 + side * len * 0.45, y - droop * 0.3, 128, y + 6);
-      g.fill();
-    }
-  }
-  g.strokeStyle = '#41662b'; g.lineWidth = 6;
-  g.beginPath(); g.moveTo(128, 512); g.quadraticCurveTo(124, 250, 128, 6); g.stroke();
-  return texture(c);
-});
-
 export interface MeetingLabels { title: string; subtitle: string; raiseHand: string; shareIdea: string; shareImage: string; shareScreen: string; more: string; rtl: boolean }
 const BUTTONS: (keyof MeetingLabels & IconName)[] = ['raiseHand', 'shareIdea', 'shareImage', 'shareScreen', 'more'];
 const font = (rtl: boolean, weight: number, px: number) => `${weight} ${px}px ${rtl ? '"Vazirmatn Variable", Tahoma' : '"Inter Variable", system-ui'}, sans-serif`;

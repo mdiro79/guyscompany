@@ -8,6 +8,7 @@ import { createEventAction, deleteEventAction } from '@/app/actions/calendar';
 import { formatDate, formatNumber, formatTime, todayIso as today, zonedDate } from '@/lib/format';
 import { toGregorian, toJalali, jalaliMonthLength } from '@/lib/jalali';
 import type { CalendarEvent, Task } from '@/lib/data/types';
+import { SaveButton, useResultStatus } from '@/components/ui/SaveButton';
 
 interface Cell { iso: string; day: number; inMonth: boolean }
 
@@ -43,6 +44,7 @@ export function CalendarView({ events, tasks }: { events: CalendarEvent[]; tasks
   const [adding, setAdding] = useState(false);
   const [, startT] = useTransition();
   const [state, action, pending] = useActionState(createEventAction, null);
+  const status = useResultStatus(state);
   useEffect(() => { if (state?.ok) setAdding(false); }, [state]);
 
   const cells = useMemo(() => monthCells(locale, ym.y, ym.m), [locale, ym]);
@@ -105,7 +107,7 @@ export function CalendarView({ events, tasks }: { events: CalendarEvent[]; tasks
             <div><label className="label">{t('starts')}</label><input type="datetime-local" name="startsAt" required defaultValue={`${selected}T10:00`} className="input" /></div>
             <div><label className="label">{t('ends')}</label><input type="datetime-local" name="endsAt" defaultValue={`${selected}T11:00`} className="input" /></div>
           </div>
-          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setAdding(false)}>{tc('cancel')}</button><button className="btn-primary" disabled={pending}>{tc('save')}</button></div>
+          <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setAdding(false)}>{tc('cancel')}</button><SaveButton pending={pending} status={status}>{tc('save')}</SaveButton></div>
         </form>
       </Dialog>
     </div>

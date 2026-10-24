@@ -7,6 +7,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { createAccountAction, deleteAccountAction, resetPasswordAction, setRoleAction, assignOfficeAction, runCleanupAction } from '@/app/actions/admin';
 import { formatNumber } from '@/lib/format';
 import { MAX_MEMBERS } from '@/lib/limits';
+import { SaveButton, useResultStatus } from '@/components/ui/SaveButton';
 
 export function AdminView() {
   const t = useTranslations('admin');
@@ -16,6 +17,7 @@ export function AdminView() {
   const [note, setNote] = useState('');
   const [, start] = useTransition();
   const [state, action, pending] = useActionState(createAccountAction, null);
+  const status = useResultStatus(state);
   useEffect(() => {
     if (state?.ok) setNote(t('created', { password: state.data?.password ?? '' }));
     else if (state?.error) setNote(t.has(state.error as 'usernameTaken') ? t(state.error as 'usernameTaken') : tc('error'));
@@ -61,7 +63,7 @@ export function AdminView() {
             <div><label className="label">{t('displayName')}</label><input name="displayName" className="input" dir="auto" /></div>
             <div><label className="label">{t('jobTitle')}</label><input name="jobTitle" className="input" dir="auto" /></div>
             <div><label className="label">{t('role')}</label><select name="role" className="input"><option value="member">{t('role_member')}</option><option value="admin">{t('role_admin')}</option></select></div>
-            <button className="btn-primary w-full" disabled={pending || profiles.length >= MAX_MEMBERS}>{tc('create')}</button>
+            <SaveButton className="btn-primary w-full" pending={pending} status={status === 'saved' ? 'saved' : 'idle'} disabled={profiles.length >= MAX_MEMBERS}>{tc('create')}</SaveButton>
             {profiles.length >= MAX_MEMBERS && <p className="text-xs text-muted">{t('maxUsers')}</p>}
           </form>
         </section>
