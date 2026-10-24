@@ -69,6 +69,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     const el = gl.domElement;
     const down = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
+      if (officeUi.get().board !== 'none') return;
       keys.current.add(e.code);
       if (e.code === 'KeyE' && !e.repeat) input.action = true;
       if (e.code === 'KeyF' && !e.repeat) {
@@ -296,7 +297,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
 // Mouse look is available while walking and on chairs without a monitor (not at a desk or during the tour).
 export function canLook() {
   const ui = officeUi.get();
-  if (tour.get().step !== null) return false;
+  if (tour.get().step !== null || ui.board !== 'none') return false;
   if (!ui.seatId) return true;
   return !allSeats().find((s) => s.id === ui.seatId)?.monitor;
 }

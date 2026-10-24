@@ -8,6 +8,9 @@ import {
   WALL_HEIGHT, type Segment,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
+import { drawBoard } from '@/lib/board/draw';
+import { BOARD_W } from '@/lib/board/model';
+import { boardItems, presenterId, subscribeBoards } from '@/lib/board/sync';
 import { tableWood, oak, slats, carpet, panelWash, floorGlow, tabletScreen, paintScreen, paintRoomPanel, type MeetingLabels } from './textures';
 import { roomControls, useRoomSettings } from './roomControls';
 import { useConferenceGlass } from './conferenceGlass';
@@ -163,14 +166,28 @@ function Screen({ labels }: { labels: MeetingLabels }) {
     tex.anisotropy = 8;
     return { tex, cv };
   }, []);
-  // Painted now, and again once the web fonts are ready (canvas text cannot wait for them).
+  // The meeting page, or the presenter's drawing board live while someone presents. Painted at most
+  // once a frame, only when what it shows changed, and again once the web fonts are ready.
   useEffect(() => {
-    let live = true;
-    const paint = () => { if (!live) return; paintScreen(cv, labels); tex.needsUpdate = true; };
-    paint();
+    let live = true, raf = 0;
+    let shown: { who: string | null; items: unknown } = { who: '', items: null };
+    const paint = (force = false) => {
+      raf = 0;
+      if (!live) return;
+      const who = presenterId();
+      const items = who ? boardItems(who) : null;
+      if (!force && shown.who === who && shown.items === items) return;
+      shown = { who, items };
+      if (who) drawBoard(cv.getContext('2d')!, boardItems(who), cv.width / BOARD_W, () => schedule(true));
+      else paintScreen(cv, labels);
+      tex.needsUpdate = true;
+    };
+    const schedule = (force = false) => { if (force) shown = { who: '', items: null }; if (!raf) raf = requestAnimationFrame(() => paint()); };
+    const off = subscribeBoards(() => schedule());
+    paint(true);
     const fam = labels.rtl ? '"Vazirmatn Variable"' : '"Inter Variable"';
-    Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(paint, () => {});
-    return () => { live = false; };
+    Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(() => schedule(true), () => {});
+    return () => { live = false; off(); cancelAnimationFrame(raf); };
   }, [cv, tex, labels]);
   useEffect(() => () => tex.dispose(), [tex]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;

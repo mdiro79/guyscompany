@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState } from
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast } from 'lucide-react';
+import { usePresenter } from '@/lib/board/sync';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
@@ -29,6 +30,9 @@ import { TabCursor } from './TabCursor';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 
+// The drawing board is a separate chunk, loaded the first time it is opened.
+const BoardApp = dynamic(() => import('@/components/board/BoardApp').then((m) => m.BoardApp), { ssr: false });
+
 // Shown while the 3D code downloads; the scene then reports real model progress from where this leaves off.
 function SceneLoading() {
   const t = useTranslations('office');
@@ -49,6 +53,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const t = useTranslations('office');
   const te = useTranslations('emotes');
   const tErr = useTranslations('errors');
+  const tb = useTranslations('board');
+  const presenterId = usePresenter();
   const locale = useLocale();
   const { user, profiles, offices: savedOffices } = useShell();
   // The owner's office settings apply at once (glass, door, panel) while they save; failures roll back.
@@ -112,7 +118,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     const id = setTimeout(() => officeUi.set({ myEmote: null }), Math.max(0, ui.myEmote.until - Date.now()));
     return () => clearTimeout(id);
   }, [ui.myEmote]);
-  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false }), []);
+  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false, board: 'none' }), []);
   // Leaving the office restores full volume for everyone (proximity only applies in 3D).
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -133,6 +139,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input,textarea,select')) return;
+      if (officeUi.get().board !== 'none') return;
       // Tab switches between mouse look and the on-screen cursor (computers).
       if (e.code === 'Tab' && !isPhone) {
         e.preventDefault();
@@ -197,6 +204,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const inMyOffice = !!current && current.ownerId === user.id;
   const Back = locale === 'fa' ? ArrowRight : ArrowLeft;
   const touring = tourStep !== null;
+  // Drawing board: one's own at a conference seat; the presenter's ("view screen") anywhere in the room.
+  const atTable = seat?.area === 'conference';
+  const someoneElsePresents = !!presenterId && presenterId !== user.id;
+  const presenterName = profiles.find((p) => p.id === presenterId)?.displayName ?? '';
+  const openBoard = (mode: 'mine' | 'screen') => {
+    if (document.pointerLockElement) document.exitPointerLock();
+    officeUi.set({ board: mode, emoteWheel: false, roomPanel: false });
+  };
   const officeControls = inMyOffice && !!myOffice && !ui.seatId && !touring;
   const showCursor = !isPhone && !ui.locked && !(working && ui.panel !== 'none');
   const it = ui.interact;
@@ -348,6 +363,25 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
           )}
         </div>
       )}
+
+      {/* Drawing board at the conference table, and the presenter's board on demand */}
+      {!touring && ui.board === 'none' && (atTable || (someoneElsePresents && ui.inConference)) && (
+        <div className="absolute top-[4.25rem] left-1/2 z-30 flex -translate-x-1/2 gap-2 short:top-14">
+          {atTable && (
+            <button type="button" onClick={() => openBoard('mine')}
+              className="flex min-h-11 items-center gap-2 rounded-xl bg-[#2f5d45] px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95">
+              <PenLine className="size-4" />{tb('open')}
+            </button>
+          )}
+          {someoneElsePresents && (
+            <button type="button" onClick={() => openBoard('screen')} title={tb('presenting', { name: presenterName })}
+              className="flex min-h-11 items-center gap-2 rounded-xl bg-black/60 px-4 text-sm font-semibold backdrop-blur transition-transform active:scale-95">
+              <Cast className="size-4" />{tb('view')}<span className="size-2 animate-pulse rounded-full bg-[#ff6b5b]" />
+            </button>
+          )}
+        </div>
+      )}
+      {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} onClose={() => officeUi.set({ board: 'none' })} />}
 
       <Tutorial markDone={!user.tutorialDone} />
       {showCursor && <TabCursor />}

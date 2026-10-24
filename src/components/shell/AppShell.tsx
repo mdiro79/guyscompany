@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import { X, MessageCircle } from 'lucide-react';
-import { isEmbedded } from '@/lib/device';
+import { isEmbedded, useDevice } from '@/lib/device';
+import { getMesh } from '@/lib/realtime/mesh';
+import { connectBoard } from '@/lib/board/sync';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useLive, setLivePaused } from '@/lib/live';
@@ -16,6 +18,14 @@ import { Sidebar } from './Sidebar';
 import { TopBar, type SearchItem } from './TopBar';
 import { MobileNav } from './MobileNav';
 import { NAV, ADMIN_NAV, isActive } from './nav';
+
+// Keeps the drawing boards and the conference presentation in sync on every page (the board can be
+// drawn on from a phone on /board while the computer is in the office).
+function BoardSync({ userId }: { userId: string }) {
+  const device = useDevice();
+  useEffect(() => connectBoard(getMesh(userId, device), userId), [userId, device]);
+  return null;
+}
 
 const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
 
@@ -46,7 +56,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
     const from = seenId ? messages.findIndex((m) => m.id === seenId) + 1 : 0;
     return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
   }, [messages, seenId, data.user.id]);
-  const fullBleed = pathname.startsWith('/office');
+  const fullBleed = pathname.startsWith('/office') || pathname.startsWith('/board');
   // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those).
   // The ?embed=1 flag only exists on the first page; later navigation inside the iframe stays embedded too.
   const embedParam = useSearchParams().get('embed') === '1';
@@ -64,7 +74,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
     return () => window.removeEventListener('message', h);
   }, [embed]);
   if (embed) {
-    const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office');
+    const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office' && n.href !== '/board');
     return (
       <ShellProvider value={data}>
         <div className="flex min-h-dvh flex-col">
@@ -91,6 +101,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
     <ShellProvider value={data}>
       <PresenceProvider>
         <VoiceProvider>
+          <BoardSync userId={data.user.id} />
           {fullBleed ? children : (
             <div className="flex min-h-dvh flex-col">
               {data.demo && <div className="bg-accent px-4 py-1 text-center text-xs text-white">{t('common.demoBanner')}</div>}

@@ -109,10 +109,15 @@ const FPS_BOUNDS = (): [number, number] => [30, 55];
 function useRenderScale(low: boolean) {
   const max = Math.max(1, Math.min(window.devicePixelRatio || 1, low ? MAX_DPR.low : MAX_DPR.high));
   const [share, setShare] = useState(1);
+  const shareRef = useRef(share);
+  shareRef.current = share;
   return {
     dpr: 1 + (max - 1) * share,
-    // Still too slow at the lowest scale: drop the effects and extra lights (the gauge button brings them back).
-    decline: () => setShare((x) => { if (x === 0 && !low) officeUi.set({ lowQuality: true }); return Math.max(0, x - 0.34); }),
+    decline: () => {
+      // Still too slow at the lowest scale: drop the effects and extra lights (the gauge button brings them back).
+      if (shareRef.current === 0 && !low) officeUi.set({ lowQuality: true });
+      setShare((x) => Math.max(0, x - 0.34));
+    },
     incline: () => setShare((x) => Math.min(1, x + 0.34)),
   };
 }
