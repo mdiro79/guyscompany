@@ -28,6 +28,7 @@ alter table polls enable row level security;
 alter table poll_votes enable row level security;
 alter table focus_items enable row level security;
 alter table todos enable row level security;
+alter table todo_stats enable row level security;
 alter table rooms enable row level security;
 alter table issues enable row level security;
 alter table issue_comments enable row level security;
@@ -58,6 +59,7 @@ create policy "read own" on poll_votes for select to authenticated using (user_i
 create policy "read own" on focus_items for select to authenticated using (user_id = auth.uid());
 -- Personal to-dos are private to their owner.
 create policy "read own" on todos for select to authenticated using (user_id = auth.uid());
+create policy "read own" on todo_stats for select to authenticated using (user_id = auth.uid());
 create policy "read" on rooms for select to authenticated using (public.is_member());
 -- Project command center: open to the whole team.
 create policy "read" on issues for select to authenticated using (public.is_member());
@@ -80,7 +82,7 @@ declare t text;
 begin
   if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
   foreach t in array array['tasks','messages','reactions','notifications','polls','poll_votes','profiles','offices','files',
-    'focus_items','todos','rooms','issues','issue_comments','project_ideas','idea_votes','milestones','calendar_events','projects','project_roles','office_swap_requests','private_chat_invites'] loop
+    'focus_items','todos','todo_stats','rooms','issues','issue_comments','project_ideas','idea_votes','milestones','calendar_events','projects','project_roles','office_swap_requests','private_chat_invites'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
     end if;

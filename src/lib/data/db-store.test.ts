@@ -1,3 +1,4 @@
+import { emptyCounters } from '@/lib/todo-game';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
@@ -139,5 +140,19 @@ describe('db store', () => {
     expect((await store.listTodos(A, new Date(Date.now() + 60000).toISOString())).map((x) => x.title)).toEqual(['call']);
     const far = new Date(Date.now() + 60000).toISOString();
     expect(await store.purge(new Date(0).toISOString(), new Date(0).toISOString(), far)).toEqual({ visits: 0, notifications: 0, todos: 1 });
+  });
+
+  it('to-do game: categories, XP per to-do and the score per member', async () => {
+    const t = await store.createTodo({ userId: A, title: 'read', due: null, priority: 0, starred: false, category: 'learning' });
+    expect(t).toMatchObject({ category: 'learning', xp: 0 });
+    await store.updateTodo(t.id, A, { done: true, doneAt: new Date().toISOString(), xp: 15 });
+    expect(await store.getTodo(t.id, A)).toMatchObject({ done: true, xp: 15 });
+    expect(await store.getTodo(t.id, B)).toBeNull();
+    await expect(store.updateTodo(t.id, A, { category: 'nope' as never })).rejects.toThrow();
+    expect(await store.getTodoStats(A)).toEqual({ xp: 0, counters: emptyCounters() });
+    const stats = { xp: 135, counters: { ...emptyCounters(), done: 3, cat: { personal: 1, work: 0, learning: 2, health: 0 } } };
+    await store.setTodoStats(A, stats);
+    await store.setTodoStats(A, { ...stats, xp: 150 });
+    expect(await store.getTodoStats(A)).toEqual({ ...stats, xp: 150 });
   });
 });

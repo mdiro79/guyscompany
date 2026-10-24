@@ -5,9 +5,9 @@ const today = '2026-10-24'; // a Saturday
 
 describe('quick add', () => {
   it('reads Persian date words, priority and star', () => {
-    expect(parseQuickAdd('خرید نان فردا !! *', today)).toEqual({ title: 'خرید نان', due: '2026-10-25', priority: 2, starred: true });
-    expect(parseQuickAdd('تماس با دکتر امروز !', today)).toEqual({ title: 'تماس با دکتر', due: today, priority: 1, starred: false });
-    expect(parseQuickAdd('ورزش پس فردا مهم', today)).toMatchObject({ title: 'ورزش', due: '2026-10-26', starred: true });
+    expect(parseQuickAdd('خرید نان فردا !! *', today)).toEqual({ title: 'خرید نان', due: '2026-10-25', priority: 2, starred: true, category: null });
+    expect(parseQuickAdd('تماس با دکتر امروز !', today)).toEqual({ title: 'تماس با دکتر', due: today, priority: 1, starred: false, category: null });
+    expect(parseQuickAdd('ورزش پس فردا مهم', today)).toMatchObject({ title: 'ورزش', due: '2026-10-26', starred: true, category: null });
     expect(parseQuickAdd('ورزش پس‌فردا', today).due).toBe('2026-10-26');
   });
   it('reads weekdays (today included) without confusing شنبه inside other days', () => {
@@ -19,8 +19,12 @@ describe('quick add', () => {
     expect(parseQuickAdd('plan next week', today).due).toBe('2026-10-31');
   });
   it('keeps plain text and never returns an empty title', () => {
-    expect(parseQuickAdd('  read a book  ', today)).toEqual({ title: 'read a book', due: null, priority: 0, starred: false });
-    expect(parseQuickAdd('فردا', today)).toEqual({ title: 'فردا', due: null, priority: 0, starred: false });
+    expect(parseQuickAdd('گزارش ماهانه #کار فردا', today)).toMatchObject({ title: 'گزارش ماهانه', category: 'work', due: '2026-10-25' });
+    expect(parseQuickAdd('run 5k #health', today)).toMatchObject({ title: 'run 5k', category: 'health' });
+    expect(parseQuickAdd('#یادگیری', today)).toMatchObject({ title: '#یادگیری', category: null });
+    expect(parseQuickAdd('tag #random stays', today)).toMatchObject({ title: 'tag #random stays', category: null });
+    expect(parseQuickAdd('  read a book  ', today)).toEqual({ title: 'read a book', due: null, priority: 0, starred: false, category: null });
+    expect(parseQuickAdd('فردا', today)).toEqual({ title: 'فردا', due: null, priority: 0, starred: false, category: null });
   });
 });
 

@@ -3,7 +3,9 @@
 
 export type Priority = 0 | 1 | 2; // normal, medium, urgent
 
-export interface ParsedTodo { title: string; due: string | null; priority: Priority; starred: boolean }
+import type { TodoCategory } from './todo-game';
+
+export interface ParsedTodo { title: string; due: string | null; priority: Priority; starred: boolean; category: TodoCategory | null }
 
 export const TODO_TITLE_MAX = 200;
 export const TODO_OPEN_MAX = 300;
@@ -35,12 +37,19 @@ const DAY_WORDS: [RegExp, (today: string) => string][] = [
 const STAR = /^(\*|⭐|★|مهم|important)$/i;
 const URGENT = /^(!!+|فوری|urgent)$/i;
 const MEDIUM = /^!$/;
+// A category is typed as a hashtag: #کار, #work, #یادگیری, #learn, …
+const CATEGORY_WORDS: [RegExp, TodoCategory][] = [
+  [/^#(شخصی|personal|home|خانه)$/i, 'personal'],
+  [/^#(کار|work|job)$/i, 'work'],
+  [/^#(یادگیری|درس|مطالعه|learn|learning|study)$/i, 'learning'],
+  [/^#(سلامت|سلامتی|ورزش|health|fitness|sport)$/i, 'health'],
+];
 
 // "خرید نان فردا !! *" → title "خرید نان", due tomorrow, urgent, starred.
 // Recognised words are taken out of the title; two-word forms ("سه شنبه", "پس فردا", "next week") are tried first.
 export function parseQuickAdd(input: string, today: string): ParsedTodo {
   const words = input.trim().split(/\s+/).filter(Boolean);
-  const out: ParsedTodo = { title: '', due: null, priority: 0, starred: false };
+  const out: ParsedTodo = { title: '', due: null, priority: 0, starred: false, category: null };
   const keep: string[] = [];
   for (let i = 0; i < words.length; i++) {
     const pair = i + 1 < words.length ? `${words[i]} ${words[i + 1]}` : null;
@@ -52,11 +61,13 @@ export function parseQuickAdd(input: string, today: string): ParsedTodo {
     if (STAR.test(w)) { out.starred = true; continue; }
     if (URGENT.test(w)) { out.priority = 2; continue; }
     if (MEDIUM.test(w)) { out.priority = Math.max(out.priority, 1) as Priority; continue; }
+    const cat = CATEGORY_WORDS.find(([re]) => re.test(w));
+    if (cat) { out.category = cat[1]; continue; }
     keep.push(w);
   }
   // Nothing but keywords: keep the text as typed rather than adding an empty to-do.
   out.title = (keep.length ? keep.join(' ') : input.trim()).slice(0, TODO_TITLE_MAX);
-  if (!keep.length) { out.due = null; out.priority = 0; out.starred = false; }
+  if (!keep.length) { out.due = null; out.priority = 0; out.starred = false; out.category = null; }
   return out;
 }
 

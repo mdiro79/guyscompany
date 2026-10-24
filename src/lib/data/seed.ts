@@ -1,4 +1,4 @@
-import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
+import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
 import { todayIso } from '@/lib/format';
 import { addDays } from '@/lib/todos';
 
@@ -124,17 +124,18 @@ export function createSeed() {
   const today = todayIso();
   const todo = (n: number, title: string, o: Partial<Todo> = {}): Todo => ({
     id: `90000000-0000-4000-8000-${String(n).padStart(12, '0')}`, userId: ids.mehdi, title, done: false, doneAt: null, due: null,
-    priority: 0, starred: false, clearedAt: null, createdAt: ago(600 + n), ...o,
+    priority: 0, starred: false, clearedAt: null, category: 'personal', xp: 0, createdAt: ago(600 + n), ...o,
   });
   const nextDay = (weekday: number) => addDays(today, (weekday - new Date(`${today}T12:00:00Z`).getUTCDay() + 7) % 7 || 7);
   const todos: Todo[] = [
-    todo(1, 'خرید هدیه برای دوستم', { done: true, doneAt: ago(50), due: today, starred: true }),
-    todo(2, 'تماس با دکتر', { done: true, doneAt: ago(20) }),
+    todo(1, 'خرید هدیه برای دوستم', { done: true, doneAt: ago(50), due: today, starred: true, xp: 20 }),
+    todo(2, 'تماس با دکتر', { done: true, doneAt: ago(20), category: 'health', xp: 10 }),
     todo(3, 'مرتب کردن اتاق', { due: nextDay(4), priority: 1 }),
-    todo(4, 'ورزش کردن', { due: nextDay(5) }),
-    todo(5, 'مطالعه کتاب', { due: nextDay(6), starred: true }),
-    todo(6, 'پیاده‌روی عصر', { done: true, doneAt: ago(60 * 24), clearedAt: ago(60 * 20) }),
-    todo(7, 'نوشتن برنامه‌ی هفته', { done: true, doneAt: ago(60 * 48), clearedAt: ago(60 * 44) }),
+    todo(4, 'ورزش کردن', { due: nextDay(5), category: 'health' }),
+    todo(5, 'مطالعه کتاب', { due: nextDay(6), starred: true, category: 'learning' }),
+    todo(6, 'پیاده‌روی عصر', { done: true, doneAt: ago(60 * 24), clearedAt: ago(60 * 20), category: 'health', xp: 10 }),
+    todo(7, 'نوشتن برنامه‌ی هفته', { done: true, doneAt: ago(60 * 48), clearedAt: ago(60 * 44), category: 'work', xp: 15 }),
+    todo(8, 'ارسال گزارش هفتگی', { due: today, priority: 2, category: 'work' }),
   ];
 
   const at = (d: number, h: number) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, 0, 0, 0); return x.toISOString(); };
@@ -148,5 +149,10 @@ export function createSeed() {
     { id: '80000000-0000-4000-8000-000000000002', userId: ids.mehdi, kind: 'poll_created', payload: { title: 'امروز چقدر انرژی داری؟' }, readAt: null, createdAt: ago(120) },
   ];
 
-  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, events, notifications, issues, comments, ideas, milestones };
+  // Mehdi has been playing the to-do game for a while (level 3, a few badges).
+  const todoStats: [string, TodoStats][] = [[ids.mehdi, {
+    xp: 420, counters: { done: 23, urgent: 5, early: 2, bestStreak: 5, questDays: 2, lastQuestDay: null, cat: { personal: 12, work: 6, learning: 4, health: 1 } },
+  }]];
+
+  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, todoStats, events, notifications, issues, comments, ideas, milestones };
 }

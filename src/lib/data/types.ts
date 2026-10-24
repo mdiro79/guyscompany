@@ -153,6 +153,9 @@ export interface FocusItem {
   done: boolean;
 }
 
+export type { TodoCategory, TodoStats } from '@/lib/todo-game';
+import type { TodoCategory, TodoStats } from '@/lib/todo-game';
+
 export interface Todo {
   id: string;
   userId: string;
@@ -163,9 +166,11 @@ export interface Todo {
   priority: 0 | 1 | 2;
   starred: boolean;
   clearedAt: string | null; // done and cleared from the list (kept for the streak)
+  category: TodoCategory;
+  xp: number; // XP given when it was finished
   createdAt: string;
 }
-export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred'>>;
+export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred' | 'category' | 'xp'>>;
 
 // Conference room light (brightness, warmth) and glass frosting, each 0–100.
 export interface RoomSettings { light: number; warmth: number; frost: number }
@@ -269,7 +274,10 @@ export interface DataStore {
 
   // Open and done to-dos, plus cleared ones finished since `doneSinceIso` (for the streak).
   listTodos(userId: string, doneSinceIso: string): Promise<Todo[]>;
-  createTodo(t: Pick<Todo, 'userId' | 'title' | 'due' | 'priority' | 'starred'>): Promise<Todo>;
+  createTodo(t: Pick<Todo, 'userId' | 'title' | 'due' | 'priority' | 'starred'> & Partial<Pick<Todo, 'category'>>): Promise<Todo>;
+  getTodo(id: string, userId: string): Promise<Todo | null>;
+  getTodoStats(userId: string): Promise<TodoStats>;
+  setTodoStats(userId: string, stats: TodoStats): Promise<void>;
   updateTodo(id: string, userId: string, patch: TodoPatch): Promise<void>;
   deleteTodo(id: string, userId: string): Promise<void>;
   clearDoneTodos(userId: string): Promise<void>;

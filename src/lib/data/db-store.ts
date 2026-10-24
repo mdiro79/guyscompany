@@ -3,6 +3,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
+import { cleanCounters, emptyCounters } from '@/lib/todo-game';
 import type { DataStore, Issue, IssueComment, Message, Milestone, Notification, ProjectIdea, Room, Todo } from './types';
 
 type Row = Record<string, unknown>;
@@ -93,6 +94,18 @@ export function createDbStore(injected?: Db): DataStore {
         or(isNull(s.todos.clearedAt), gte(s.todos.doneAt, new Date(doneSince))))).orderBy(asc(s.todos.createdAt)));
     },
     async createTodo(t) { const [r] = await db().insert(s.todos).values(t).returning(); return iso<Todo>(r); },
+    async getTodo(id, userId) {
+      const [r] = await db().select().from(s.todos).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId)));
+      return r ? iso<Todo>(r) : null;
+    },
+    async getTodoStats(userId) {
+      const [r] = await db().select().from(s.todoStats).where(eq(s.todoStats.userId, userId));
+      return r ? { xp: r.xp, counters: cleanCounters(r.counters) } : { xp: 0, counters: emptyCounters() };
+    },
+    async setTodoStats(userId, stats) {
+      const row = { xp: stats.xp, counters: stats.counters, updatedAt: new Date() };
+      await db().insert(s.todoStats).values({ userId, ...row }).onConflictDoUpdate({ target: s.todoStats.userId, set: row });
+    },
     async updateTodo(id, userId, patch) { await db().update(s.todos).set(dates(patch)).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
     async deleteTodo(id, userId) { await db().delete(s.todos).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
     async clearDoneTodos(userId) {

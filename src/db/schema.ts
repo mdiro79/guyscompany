@@ -128,8 +128,20 @@ export const todos = pgTable('todos', {
   priority: smallint('priority').notNull().default(0),
   starred: boolean('starred').notNull().default(false),
   clearedAt: timestamp('cleared_at', { withTimezone: true }),
+  category: text('category').notNull().default('personal'), // personal | work | learning | health
+  xp: smallint('xp').notNull().default(0), // XP given when it was finished (taken back if un-ticked)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('todos_user_idx').on(t.userId), check('priority_range', sql`${t.priority} between 0 and 2`)]);
+}, (t) => [index('todos_user_idx').on(t.userId), check('priority_range', sql`${t.priority} between 0 and 2`),
+  check('todo_category', sql`${t.category} in ('personal', 'work', 'learning', 'health')`)]);
+
+// The to-do game per member: total XP and the counters behind the achievements (kept when old
+// to-dos are cleaned up).
+export const todoStats = pgTable('todo_stats', {
+  userId: uuid('user_id').primaryKey().references(() => profiles.id, { onDelete: 'cascade' }),
+  xp: integer('xp').notNull().default(0),
+  counters: jsonb('counters').notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Project command center: bugs and defects (with screenshots), their discussion, ideas and upgrades
 // with member upvotes, and milestones.

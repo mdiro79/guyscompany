@@ -363,7 +363,7 @@
     "nothingToday": "Nothing left for today 🌤️",
     "nothingStarred": "No starred to-dos ⭐",
     "placeholder": "New to-do… e.g. gym tomorrow",
-    "hint": "Type the day (today, tomorrow, Monday…, next week); * to star; !! or “urgent” for high priority, ! for medium.",
+    "hint": "Type the day (today, tomorrow, Monday…, next week); * to star; !! or “urgent” for high priority, ! for medium; #work, #learning, #health or #personal for the category.",
     "add": "Add",
     "all": "All",
     "today": "Today",
@@ -392,7 +392,56 @@
     "cheer2": "You're on fire 🔥",
     "cheer3": "Well done! 👏",
     "cheer4": "Step by step 🚶",
-    "cheer5": "Keep it up 🌟"
+    "cheer5": "Keep it up 🌟",
+    "lv": "Lv. {n}",
+    "level": "Level",
+    "xpOf": "{into} / {need} XP to the next level",
+    "xpGain": "+{n} XP",
+    "levelUp": "Level up! You reached level {n} 🎉",
+    "tabList": "To-dos",
+    "tabQuests": "Quests",
+    "tabBadges": "Achievements",
+    "week": "This week",
+    "dayDone": "{day}: done",
+    "quest": {
+      "three": "Finish 3 to-dos today",
+      "important": "Finish an urgent or starred to-do",
+      "plan": "Plan a to-do for a later day"
+    },
+    "questBonus": "Do all three for +{n} XP",
+    "questsDone": "Today's quests complete! +{n} XP 🏆",
+    "questsNew": "New quests every day",
+    "category": "Category",
+    "cat": {
+      "personal": "Personal",
+      "work": "Work",
+      "learning": "Learning",
+      "health": "Health"
+    },
+    "badge": {
+      "finisher": "Finisher",
+      "onFire": "On fire",
+      "firefighter": "Firefighter",
+      "earlyBird": "Early bird",
+      "questHero": "Quest hero",
+      "climber": "Climber",
+      "balanced": "Balanced"
+    },
+    "badgeGoal": {
+      "finisher": "Finish {n} to-dos",
+      "onFire": "{n} days in a row",
+      "firefighter": "Finish {n} urgent to-dos",
+      "earlyBird": "{n} to-dos before 9 am",
+      "questHero": "All quests on {n} days",
+      "climber": "Reach level {n}",
+      "balanced": "{n} done in every category"
+    },
+    "tier1": "Bronze",
+    "tier2": "Silver",
+    "tier3": "Gold",
+    "locked": "Locked",
+    "maxed": "Maxed!",
+    "newBadge": "New badge: {name} ({tier}) 🏅"
   },
   "widgets": {
     "teamVote": "Team Vote",

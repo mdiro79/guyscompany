@@ -1,9 +1,10 @@
 import type {
-  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, Room,
+  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
   Issue, IssueComment, ProjectIdea, Milestone,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
 import { createSeed } from './seed';
+import { emptyCounters } from '@/lib/todo-game';
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
@@ -22,6 +23,7 @@ export function createMemoryStore(): DataStore {
     votes: [] as PollVote[],
     focus: seed.focus as FocusItem[],
     todos: seed.todos as Todo[],
+    todoStats: new Map<string, TodoStats>(seed.todoStats),
     issues: seed.issues as Issue[],
     comments: seed.comments as IssueComment[],
     ideas: seed.ideas as ProjectIdea[],
@@ -114,7 +116,10 @@ export function createMemoryStore(): DataStore {
     async deleteFocus(id, userId) { db.focus = db.focus.filter((f) => !(f.id === id && f.userId === userId)); },
 
     async listTodos(userId, doneSince) { return clone(db.todos.filter((t) => t.userId === userId && (!t.clearedAt || (t.doneAt ?? '') >= doneSince))); },
-    async createTodo(t) { const x: Todo = { ...t, id: uuid(), done: false, doneAt: null, clearedAt: null, createdAt: now() }; db.todos.push(x); return clone(x); },
+    async createTodo(t) { const x: Todo = { category: 'personal', ...t, id: uuid(), done: false, doneAt: null, clearedAt: null, xp: 0, createdAt: now() }; db.todos.push(x); return clone(x); },
+    async getTodo(id, userId) { const t = db.todos.find((x) => x.id === id && x.userId === userId); return t ? clone(t) : null; },
+    async getTodoStats(userId) { const s = db.todoStats.get(userId); return s ? clone(s) : { xp: 0, counters: emptyCounters() }; },
+    async setTodoStats(userId, stats) { db.todoStats.set(userId, clone(stats)); },
     async updateTodo(id, userId, patch) { patchIn(db.todos, (t) => t.id === id && t.userId === userId, patch); },
     async deleteTodo(id, userId) { db.todos = db.todos.filter((t) => !(t.id === id && t.userId === userId)); },
     async clearDoneTodos(userId) { for (const t of db.todos) if (t.userId === userId && t.done && !t.clearedAt) t.clearedAt = now(); },
