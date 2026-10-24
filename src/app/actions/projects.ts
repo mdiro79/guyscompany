@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { store } from '@/lib/data';
+import { PROJECT_STATUSES, type ProjectStatus } from '@/lib/data/types';
 import { fail, okResult, guard, type ActionResult } from './result';
 
 export const saveProjectAction = guard(async function saveProjectAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
@@ -9,14 +10,18 @@ export const saveProjectAction = guard(async function saveProjectAction(_: Actio
   const name = String(form.get('name') ?? '').trim().slice(0, 120);
   const description = String(form.get('description') ?? '').trim().slice(0, 2000);
   const managerId = String(form.get('managerId') ?? '') || null;
+  const statusIn = String(form.get('status') ?? 'active');
+  const status: ProjectStatus = (PROJECT_STATUSES as string[]).includes(statusIn) ? (statusIn as ProjectStatus) : 'active';
+  const due = String(form.get('dueDate') ?? '');
+  const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : null;
   if (!name) return fail('error');
   const id = String(form.get('id') ?? '');
   if (id) {
     const p = (await store().listProjects()).find((x) => x.id === id);
     if (!p || (user.role !== 'admin' && p.managerId !== user.id)) return fail('forbidden');
-    await store().updateProject(id, { name, description, managerId });
+    await store().updateProject(id, { name, description, managerId, status, dueDate });
   } else {
-    await store().createProject({ name, description, managerId: managerId ?? user.id });
+    await store().createProject({ name, description, managerId: managerId ?? user.id, status, dueDate });
   }
   revalidatePath('/', 'layout');
   return okResult('saved');

@@ -18,13 +18,64 @@ export interface Profile {
   createdAt: string;
 }
 
+export type ProjectStatus = 'planning' | 'active' | 'paused' | 'done';
+export const PROJECT_STATUSES: ProjectStatus[] = ['planning', 'active', 'paused', 'done'];
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   managerId: string | null;
+  status: ProjectStatus;
+  dueDate: string | null;
   createdAt: string;
 }
+
+// Project command center.
+export type IssueKind = 'bug' | 'defect';
+export type IssueStatus = 'open' | 'in_progress' | 'fixed' | 'closed';
+export type Severity = 0 | 1 | 2 | 3; // low, medium, high, critical
+export const ISSUE_STATUSES: IssueStatus[] = ['open', 'in_progress', 'fixed', 'closed'];
+
+export interface Issue {
+  id: string;
+  projectId: string;
+  kind: IssueKind;
+  title: string;
+  description: string;
+  steps: string;
+  severity: Severity;
+  status: IssueStatus;
+  reporterId: string | null;
+  assigneeId: string | null;
+  screenshotIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+export type NewIssue = Pick<Issue, 'projectId' | 'kind' | 'title' | 'description' | 'steps' | 'severity' | 'reporterId' | 'assigneeId' | 'screenshotIds'>;
+export type IssuePatch = Partial<Pick<Issue, 'title' | 'description' | 'steps' | 'severity' | 'status' | 'assigneeId' | 'kind' | 'screenshotIds' | 'resolvedAt'>>;
+
+export interface IssueComment { id: string; issueId: string; authorId: string | null; body: string; createdAt: string }
+
+export type IdeaKind = 'idea' | 'upgrade';
+export type IdeaStatus = 'new' | 'review' | 'planned' | 'done' | 'rejected';
+export const IDEA_STATUSES: IdeaStatus[] = ['new', 'review', 'planned', 'done', 'rejected'];
+
+export interface ProjectIdea {
+  id: string;
+  projectId: string;
+  kind: IdeaKind;
+  title: string;
+  description: string;
+  status: IdeaStatus;
+  authorId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  voterIds: string[];
+}
+
+export interface Milestone { id: string; projectId: string; title: string; dueDate: string | null; done: boolean; createdAt: string }
 
 export interface Task {
   id: string;
@@ -182,7 +233,7 @@ export interface DataStore {
   deleteProfile(id: string): Promise<void>;
 
   listProjects(): Promise<Project[]>;
-  createProject(p: Omit<Project, 'id' | 'createdAt'>): Promise<Project>;
+  createProject(p: Pick<Project, 'name' | 'description' | 'managerId'> & Partial<Pick<Project, 'status' | 'dueDate'>>): Promise<Project>;
   updateProject(id: string, patch: Partial<Omit<Project, 'id' | 'createdAt'>>): Promise<void>;
   deleteProject(id: string): Promise<void>;
 
@@ -223,6 +274,23 @@ export interface DataStore {
   deleteTodo(id: string, userId: string): Promise<void>;
   clearDoneTodos(userId: string): Promise<void>;
   countOpenTodos(userId: string): Promise<number>;
+
+  // Project command center (projectId omitted: every project).
+  listIssues(projectId?: string): Promise<Issue[]>;
+  createIssue(i: NewIssue): Promise<Issue>;
+  updateIssue(id: string, patch: IssuePatch): Promise<void>;
+  deleteIssue(id: string): Promise<void>;
+  listIssueComments(issueIds: string[]): Promise<IssueComment[]>;
+  createIssueComment(c: Pick<IssueComment, 'issueId' | 'authorId' | 'body'>): Promise<IssueComment>;
+  listIdeas(projectId?: string): Promise<ProjectIdea[]>;
+  createIdea(i: Pick<ProjectIdea, 'projectId' | 'kind' | 'title' | 'description' | 'authorId'>): Promise<ProjectIdea>;
+  updateIdea(id: string, patch: Partial<Pick<ProjectIdea, 'title' | 'description' | 'status' | 'kind' | 'taskId'>>): Promise<void>;
+  deleteIdea(id: string): Promise<void>;
+  toggleIdeaVote(ideaId: string, userId: string): Promise<void>;
+  listMilestones(projectId?: string): Promise<Milestone[]>;
+  createMilestone(m: Pick<Milestone, 'projectId' | 'title' | 'dueDate'>): Promise<Milestone>;
+  updateMilestone(id: string, patch: Partial<Pick<Milestone, 'title' | 'dueDate' | 'done'>>): Promise<void>;
+  deleteMilestone(id: string): Promise<void>;
 
   getRoom(id: string): Promise<Room | null>;
   updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;

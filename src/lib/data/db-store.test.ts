@@ -85,6 +85,33 @@ describe('db store', () => {
     const file = await store.createFile({ name: 'a.txt', storagePath: 'x/a.txt', size: 3, mime: 'text/plain', uploadedBy: A });
     expect((await store.getFile(file.id))?.name).toBe('a.txt');
   });
+  it('project command center: issues with screenshots and comments, ideas with votes, milestones', async () => {
+    const p = await store.createProject({ name: 'P', description: '', managerId: A });
+    expect(p).toMatchObject({ status: 'active', dueDate: null });
+    await store.updateProject(p.id, { status: 'paused', dueDate: '2026-12-01' });
+    expect((await store.listProjects()).find((x) => x.id === p.id)).toMatchObject({ status: 'paused', dueDate: '2026-12-01' });
+    const shot = await store.createFile({ name: 's.png', storagePath: 'x/s.png', size: 9, mime: 'image/png', uploadedBy: B });
+    const i = await store.createIssue({ projectId: p.id, kind: 'bug', title: 'Crash', description: 'd', steps: '1', severity: 3, reporterId: B, assigneeId: A, screenshotIds: [shot.id] });
+    expect(i).toMatchObject({ status: 'open', severity: 3, screenshotIds: [shot.id], resolvedAt: null });
+    const resolvedAt = new Date().toISOString();
+    await store.updateIssue(i.id, { status: 'fixed', resolvedAt });
+    expect((await store.listIssues(p.id))[0]).toMatchObject({ status: 'fixed', resolvedAt });
+    await expect(store.updateIssue(i.id, { severity: 7 as never })).rejects.toThrow();
+    await store.createIssueComment({ issueId: i.id, authorId: A, body: 'on it' });
+    expect((await store.listIssueComments([i.id])).map((c) => c.body)).toEqual(['on it']);
+    const idea = await store.createIdea({ projectId: p.id, kind: 'upgrade', title: 'Dark mode', description: '', authorId: B });
+    await store.toggleIdeaVote(idea.id, A);
+    await store.toggleIdeaVote(idea.id, B);
+    await store.toggleIdeaVote(idea.id, B); // second vote removes it
+    await store.updateIdea(idea.id, { status: 'planned' });
+    expect((await store.listIdeas(p.id))[0]).toMatchObject({ status: 'planned', voterIds: [A] });
+    const m = await store.createMilestone({ projectId: p.id, title: 'Beta', dueDate: '2026-11-01' });
+    await store.updateMilestone(m.id, { done: true });
+    expect((await store.listMilestones(p.id))[0]).toMatchObject({ title: 'Beta', done: true });
+    await store.deleteProject(p.id); // cascades
+    expect(await store.listIssues(p.id)).toEqual([]);
+    expect(await store.listIdeas(p.id)).toEqual([]);
+  });
   it('room settings: upsert, partial update and range check', async () => {
     expect(await store.getRoom('conference')).toBeNull();
     expect(await store.updateRoom('conference', { light: 30 })).toMatchObject({ id: 'conference', light: 30, warmth: 40, frost: 0 });

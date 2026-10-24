@@ -30,7 +30,9 @@ export function TaskViews({ tasks, projects, compact }: { tasks: Task[]; project
   const [creating, setCreating] = useState<TaskColumn | null>(null);
   const [mine, setMine] = useState(false);
   const [mobileCol, setMobileCol] = useState<TaskColumn>('idea');
-  const shown = useMemo(() => (mine ? tasks.filter((x) => x.assigneeId === user.id) : tasks), [tasks, mine, user.id]);
+  // ?project=<id> (from a project's command center) narrows the board to that project.
+  const projectId = params.get('project');
+  const shown = useMemo(() => tasks.filter((x) => (!mine || x.assigneeId === user.id) && (!projectId || x.projectId === projectId)), [tasks, mine, user.id, projectId]);
 
   useEffect(() => {
     const id = params.get('task');

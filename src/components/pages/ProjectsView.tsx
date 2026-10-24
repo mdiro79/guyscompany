@@ -1,16 +1,23 @@
 'use client';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Plus, Pencil, Trash2, UserPlus, UserMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, UserPlus, UserMinus, Bug, Lightbulb, CalendarClock, Gauge } from 'lucide-react';
+import clsx from 'clsx';
+import { Link } from '@/i18n/navigation';
+import { HealthBadge } from '@/components/command/badges';
+import { isOpenIssue, projectHealth } from '@/lib/project-health';
 import { Dialog } from '@/components/ui/Dialog';
 import { Avatar } from '@/components/ui/Avatar';
 import { useShell } from '@/components/shell/ShellContext';
 import { saveProjectAction, deleteProjectAction, createRoleAction, volunteerRoleAction, deleteRoleAction } from '@/app/actions/projects';
-import { formatNumber } from '@/lib/format';
-import type { Project, ProjectRole, Task } from '@/lib/data/types';
+import { formatDate, formatNumber } from '@/lib/format';
+import { PROJECT_STATUSES, type Issue, type Milestone, type Project, type ProjectIdea, type ProjectRole, type Task } from '@/lib/data/types';
 
-export function ProjectsView({ projects, tasks, roles }: { projects: Project[]; tasks: Task[]; roles: ProjectRole[] }) {
+export function ProjectsView({ projects, tasks, roles, issues, ideas, milestones, today }: {
+  projects: Project[]; tasks: Task[]; roles: ProjectRole[]; issues: Issue[]; ideas: ProjectIdea[]; milestones: Milestone[]; today: string;
+}) {
   const t = useTranslations('projects');
+  const tm = useTranslations('command');
   const tc = useTranslations('common');
   const locale = useLocale();
   const { user, profiles } = useShell();
@@ -38,11 +45,19 @@ export function ProjectsView({ projects, tasks, roles }: { projects: Project[]; 
           const manager = profiles.find((x) => x.id === p.managerId) ?? null;
           const canEdit = user.role === 'admin' || p.managerId === user.id;
           const pr = roles.filter((r) => r.projectId === p.id);
+          const pi = issues.filter((x) => x.projectId === p.id);
+          const { health } = projectHealth(p, pt, pi, milestones.filter((m) => m.projectId === p.id), today);
+          const openBugs = pi.filter(isOpenIssue).length;
+          const newIdeas = ideas.filter((x) => x.projectId === p.id && (x.status === 'new' || x.status === 'review')).length;
           return (
             <section key={p.id} id={p.id} className="card p-4">
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-semibold" dir="auto">{p.name}</h2>
+                  <Link href={`/projects/${p.id}`} className="font-semibold hover:text-brand" dir="auto">{p.name}</Link>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <span className={clsx('chip', p.status === 'active' ? 'bg-brand-soft text-brand' : 'bg-surface-2 text-muted')}>{tm(`status.${p.status}`)}</span>
+                    <HealthBadge health={health} />
+                  </div>
                   {p.description && <p className="mt-1 text-sm text-muted" dir="auto">{p.description}</p>}
                 </div>
                 {canEdit && <>
@@ -50,8 +65,14 @@ export function ProjectsView({ projects, tasks, roles }: { projects: Project[]; 
                   <button type="button" className="icon-btn text-muted hover:text-danger" aria-label={tc('delete')} onClick={() => { if (confirm(t('confirmDelete'))) run(() => deleteProjectAction(p.id)); }}><Trash2 className="size-4" /></button>
                 </>}
               </div>
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <Avatar profile={manager} size="sm" /><span className="text-muted">{t('manager')}:</span><span>{manager?.displayName ?? '—'}</span>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+                <span className="flex items-center gap-2"><Avatar profile={manager} size="sm" /><span className="text-muted">{t('manager')}:</span><span>{manager?.displayName ?? '—'}</span></span>
+                <span className="flex items-center gap-1.5 text-muted"><CalendarClock className="size-4" />{p.dueDate ? formatDate(locale, `${p.dueDate}T12:00:00Z`) : tm('noDue')}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/projects/${p.id}?tab=issues`} className={clsx('chip min-h-8 gap-1', openBugs ? 'bg-accent-soft text-[#b9531a] dark:text-accent' : 'bg-surface-2 text-muted')}><Bug className="size-3.5" />{tm('kpi.openBugs')}: {formatNumber(locale, openBugs)}</Link>
+                <Link href={`/projects/${p.id}?tab=ideas`} className="chip min-h-8 gap-1 bg-surface-2 text-muted"><Lightbulb className="size-3.5" />{tm('kpi.newIdeas')}: {formatNumber(locale, newIdeas)}</Link>
+                <Link href={`/projects/${p.id}`} className="btn-primary ms-auto min-h-8 px-3 text-sm"><Gauge className="size-4" />{tm('open')}</Link>
               </div>
               <div className="mt-3">
                 <div className="mb-1 text-xs text-muted">{t('progress', { done: formatNumber(locale, done), total: formatNumber(locale, pt.length) })}</div>
@@ -86,6 +107,11 @@ export function ProjectsView({ projects, tasks, roles }: { projects: Project[]; 
           <div><label className="label">{t('description')}</label><textarea name="description" rows={3} defaultValue={project?.description} className="input py-2" dir="auto" /></div>
           <div><label className="label">{t('manager')}</label>
             <select name="managerId" defaultValue={project?.managerId ?? user.id} className="input">{profiles.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="label">{tm('changeStatus')}</label>
+              <select name="status" defaultValue={project?.status ?? 'active'} className="input">{PROJECT_STATUSES.map((s) => <option key={s} value={s}>{tm(`status.${s}`)}</option>)}</select></div>
+            <div><label className="label">{tm('due')}</label><input type="date" name="dueDate" defaultValue={project?.dueDate ?? ''} className="input" /></div>
+          </div>
           <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={() => setEditing(null)}>{tc('cancel')}</button><button className="btn-primary" disabled={pending}>{tc('save')}</button></div>
         </form>
       </Dialog>

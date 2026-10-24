@@ -1,4 +1,4 @@
-import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, CalendarEvent, Notification, ProjectRole } from './types';
+import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
 import { todayIso } from '@/lib/format';
 import { addDays } from '@/lib/todos';
 
@@ -27,8 +27,8 @@ export function createSeed() {
   ];
 
   const projects: Project[] = [
-    { id: '10000000-0000-4000-8000-000000000001', name: 'Guyscompany', description: 'Virtual office and dashboard', managerId: ids.mehdi, createdAt: ago(60 * 24 * 20) },
-    { id: '10000000-0000-4000-8000-000000000002', name: 'Marketing', description: 'Launch campaign', managerId: ids.sara, createdAt: ago(60 * 24 * 10) },
+    { id: '10000000-0000-4000-8000-000000000001', name: 'Guyscompany', description: 'Virtual office and dashboard', managerId: ids.mehdi, status: 'active', dueDate: day(30), createdAt: ago(60 * 24 * 20) },
+    { id: '10000000-0000-4000-8000-000000000002', name: 'Marketing', description: 'Launch campaign', managerId: ids.sara, status: 'planning', dueDate: day(45), createdAt: ago(60 * 24 * 10) },
   ];
   const [p1, p2] = projects.map((p) => p.id);
 
@@ -89,6 +89,37 @@ export function createSeed() {
     { id: '50000000-0000-4000-8000-000000000004', userId: ids.mehdi, day: day(0), text: 'آپلود فایل‌های طراحی UI', done: false },
   ];
 
+  // Project command center of the main project.
+  const issue = (n: number, o: Pick<Issue, 'title' | 'severity' | 'status'> & Partial<Issue>): Issue => ({
+    id: `a0000000-0000-4000-8000-${String(n).padStart(12, '0')}`, projectId: p1, kind: 'bug', description: '', steps: '', reporterId: ids.sara, assigneeId: null,
+    screenshotIds: [], createdAt: ago(60 * (40 - n * 6)), updatedAt: ago(60 * (20 - n)), resolvedAt: null, ...o,
+  });
+  const issues: Issue[] = [
+    issue(1, { title: 'خطای ورود کاربران', severity: 3, status: 'open', assigneeId: ids.nima, description: 'بعد از یک ساعت بعضی کاربران از حساب خارج می‌شوند.', steps: '۱. وارد شوید\n۲. یک ساعت صبر کنید\n۳. صفحه را تازه کنید' }),
+    issue(2, { title: 'دکمه‌ی شیشه گاهی روی گوشی کار نمی‌کند', severity: 2, status: 'in_progress', assigneeId: ids.mehdi, reporterId: ids.reza }),
+    issue(3, { title: 'داشبورد روی مانیتور دیر بارگذاری می‌شود', severity: 1, status: 'fixed', assigneeId: ids.mehdi, resolvedAt: ago(90) }),
+    issue(4, { title: 'متن راهنما روی گوشی بریده می‌شود', severity: 0, status: 'open', kind: 'defect', reporterId: ids.nima }),
+    issue(5, { title: 'قطعی ناگهانی سرور', severity: 2, status: 'open', assigneeId: ids.reza, reporterId: ids.mehdi }),
+  ];
+  const comments: IssueComment[] = [
+    { id: 'a1000000-0000-4000-8000-000000000001', issueId: issues[0].id, authorId: ids.nima, body: 'احتمالاً مشکل از تمدید نشست است، بررسی می‌کنم.', createdAt: ago(100) },
+    { id: 'a1000000-0000-4000-8000-000000000002', issueId: issues[0].id, authorId: ids.sara, body: 'روی آیفون هم تکرار شد.', createdAt: ago(70) },
+  ];
+  const idea = (n: number, o: Pick<ProjectIdea, 'title' | 'kind' | 'status'> & Partial<ProjectIdea>): ProjectIdea => ({
+    id: `a2000000-0000-4000-8000-${String(n).padStart(12, '0')}`, projectId: p1, description: '', authorId: ids.mehdi, taskId: null, createdAt: ago(60 * 24 * n), voterIds: [], ...o,
+  });
+  const ideas: ProjectIdea[] = [
+    idea(1, { title: 'حالت شب برای دفتر سه‌بعدی', kind: 'idea', status: 'new', authorId: ids.sara, voterIds: [ids.mehdi, ids.reza] }),
+    idea(2, { title: 'اتصال به تقویم گوگل', kind: 'upgrade', status: 'review', authorId: ids.reza, voterIds: [ids.sara, ids.nima, ids.mehdi] }),
+    idea(3, { title: 'گزارش هفتگی خودکار برای تیم', kind: 'upgrade', status: 'planned', voterIds: [ids.nima] }),
+    idea(4, { title: 'استیکرهای اختصاصی در چت', kind: 'idea', status: 'new', authorId: ids.nima }),
+  ];
+  const milestones: Milestone[] = [
+    { id: 'a3000000-0000-4000-8000-000000000001', projectId: p1, title: 'نسخه‌ی آزمایشی', dueDate: day(-10), done: true, createdAt: ago(60 * 24 * 15) },
+    { id: 'a3000000-0000-4000-8000-000000000002', projectId: p1, title: 'دفتر سه‌بعدی کامل', dueDate: day(5), done: false, createdAt: ago(60 * 24 * 12) },
+    { id: 'a3000000-0000-4000-8000-000000000003', projectId: p1, title: 'راه‌اندازی برای تیم', dueDate: day(25), done: false, createdAt: ago(60 * 24 * 12) },
+  ];
+
   // Personal to-dos of the demo admin; two cleared ones from earlier days make a 3-day streak.
   const today = todayIso();
   const todo = (n: number, title: string, o: Partial<Todo> = {}): Todo => ({
@@ -117,5 +148,5 @@ export function createSeed() {
     { id: '80000000-0000-4000-8000-000000000002', userId: ids.mehdi, kind: 'poll_created', payload: { title: 'امروز چقدر انرژی داری؟' }, readAt: null, createdAt: ago(120) },
   ];
 
-  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, events, notifications };
+  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, events, notifications, issues, comments, ideas, milestones };
 }

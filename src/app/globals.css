@@ -40,6 +40,14 @@
   --teal: #1f8a8a;
   --teal-soft: #dcefee;
   --danger: #d9443c;
+  /* Charts (validated palette): tasks blue, bugs orange; task status as one blue ramp, idea → done. */
+  --viz-tasks: #2a78d6;
+  --viz-bugs: #eb6834;
+  --viz-s0: #9ec5f4;
+  --viz-s1: #5598e7;
+  --viz-s2: #2a78d6;
+  --viz-s3: #184f95;
+  --viz-grid: #ece6dc;
   color-scheme: light;
 }
 
@@ -59,6 +67,13 @@
   --teal-soft: #19312f;
   --danger: #f06b63;
   color-scheme: dark;
+  --viz-tasks: #3987e5;
+  --viz-bugs: #d95926;
+  --viz-s0: #1c5cab;
+  --viz-s1: #2a78d6;
+  --viz-s2: #5598e7;
+  --viz-s3: #9ec5f4;
+  --viz-grid: #332e26;
 }
 
 html, body { background: var(--bg); color: var(--ink); }

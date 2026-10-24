@@ -3,7 +3,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
-import type { DataStore, Message, Notification, Room, Todo } from './types';
+import type { DataStore, Issue, IssueComment, Message, Milestone, Notification, ProjectIdea, Room, Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -102,6 +102,40 @@ export function createDbStore(injected?: Db): DataStore {
       const [{ n }] = await db().select({ n: sql<number>`count(*)` }).from(s.todos).where(and(eq(s.todos.userId, userId), eq(s.todos.done, false)));
       return Number(n);
     },
+
+    async listIssues(projectId) {
+      const q = db().select().from(s.issues);
+      return isoAll<Issue>(await (projectId ? q.where(eq(s.issues.projectId, projectId)) : q).orderBy(desc(s.issues.createdAt)));
+    },
+    async createIssue(i) { const [r] = await db().insert(s.issues).values(i).returning(); return iso<Issue>(r); },
+    async updateIssue(id, patch) { await db().update(s.issues).set({ ...dates(patch), updatedAt: new Date() }).where(eq(s.issues.id, id)); },
+    async deleteIssue(id) { await db().delete(s.issues).where(eq(s.issues.id, id)); },
+    async listIssueComments(ids) {
+      return ids.length ? isoAll<IssueComment>(await db().select().from(s.issueComments).where(inArray(s.issueComments.issueId, ids)).orderBy(asc(s.issueComments.createdAt))) : [];
+    },
+    async createIssueComment(c) { const [r] = await db().insert(s.issueComments).values(c).returning(); return iso<IssueComment>(r); },
+    async listIdeas(projectId) {
+      const q = db().select().from(s.projectIdeas);
+      const rows = await (projectId ? q.where(eq(s.projectIdeas.projectId, projectId)) : q).orderBy(desc(s.projectIdeas.createdAt));
+      const ids = rows.map((r) => r.id);
+      const votes = ids.length ? await db().select().from(s.ideaVotes).where(inArray(s.ideaVotes.ideaId, ids)) : [];
+      return rows.map((r) => ({ ...iso<Omit<ProjectIdea, 'voterIds'>>(r), voterIds: votes.filter((v) => v.ideaId === r.id).map((v) => v.userId) }));
+    },
+    async createIdea(i) { const [r] = await db().insert(s.projectIdeas).values(i).returning(); return { ...iso<Omit<ProjectIdea, 'voterIds'>>(r), voterIds: [] }; },
+    async updateIdea(id, patch) { await db().update(s.projectIdeas).set(patch).where(eq(s.projectIdeas.id, id)); },
+    async deleteIdea(id) { await db().delete(s.projectIdeas).where(eq(s.projectIdeas.id, id)); },
+    async toggleIdeaVote(ideaId, userId) {
+      const where = and(eq(s.ideaVotes.ideaId, ideaId), eq(s.ideaVotes.userId, userId));
+      const deleted = await db().delete(s.ideaVotes).where(where).returning();
+      if (!deleted.length) await db().insert(s.ideaVotes).values({ ideaId, userId });
+    },
+    async listMilestones(projectId) {
+      const q = db().select().from(s.milestones);
+      return isoAll<Milestone>(await (projectId ? q.where(eq(s.milestones.projectId, projectId)) : q).orderBy(asc(s.milestones.dueDate), asc(s.milestones.createdAt)));
+    },
+    async createMilestone(m) { const [r] = await db().insert(s.milestones).values(m).returning(); return iso<Milestone>(r); },
+    async updateMilestone(id, patch) { await db().update(s.milestones).set(patch).where(eq(s.milestones.id, id)); },
+    async deleteMilestone(id) { await db().delete(s.milestones).where(eq(s.milestones.id, id)); },
 
     async getRoom(id) { const [r] = await db().select().from(s.rooms).where(eq(s.rooms.id, id)); return r ? iso<Room>(r) : null; },
     async updateRoom(id, patch) {

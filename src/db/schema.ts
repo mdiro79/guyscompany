@@ -29,8 +29,10 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   description: text('description').notNull().default(''),
   managerId: uuid('manager_id').references(() => profiles.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('active'), // planning | active | paused | done
+  dueDate: date('due_date'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [check('project_status', sql`${t.status} in ('planning', 'active', 'paused', 'done')`)]);
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -128,6 +130,68 @@ export const todos = pgTable('todos', {
   clearedAt: timestamp('cleared_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('todos_user_idx').on(t.userId), check('priority_range', sql`${t.priority} between 0 and 2`)]);
+
+// Project command center: bugs and defects (with screenshots), their discussion, ideas and upgrades
+// with member upvotes, and milestones.
+export const issues = pgTable('issues', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull().default('bug'), // bug | defect
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  steps: text('steps').notNull().default(''),
+  severity: smallint('severity').notNull().default(1), // 0 low, 1 medium, 2 high, 3 critical
+  status: text('status').notNull().default('open'), // open | in_progress | fixed | closed
+  reporterId: uuid('reporter_id').references(() => profiles.id, { onDelete: 'set null' }),
+  assigneeId: uuid('assignee_id').references(() => profiles.id, { onDelete: 'set null' }),
+  screenshotIds: uuid('screenshot_ids').array().notNull().default(sql`'{}'::uuid[]`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+}, (t) => [
+  index('issues_project_idx').on(t.projectId),
+  check('issue_kind', sql`${t.kind} in ('bug', 'defect')`),
+  check('issue_status', sql`${t.status} in ('open', 'in_progress', 'fixed', 'closed')`),
+  check('issue_severity', sql`${t.severity} between 0 and 3`),
+]);
+
+export const issueComments = pgTable('issue_comments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'set null' }),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('issue_comments_issue_idx').on(t.issueId)]);
+
+export const projectIdeas = pgTable('project_ideas', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull().default('idea'), // idea | upgrade
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('new'), // new | review | planned | done | rejected
+  authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'set null' }),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('project_ideas_project_idx').on(t.projectId),
+  check('idea_kind', sql`${t.kind} in ('idea', 'upgrade')`),
+  check('idea_status', sql`${t.status} in ('new', 'review', 'planned', 'done', 'rejected')`),
+]);
+
+export const ideaVotes = pgTable('idea_votes', {
+  ideaId: uuid('idea_id').notNull().references(() => projectIdeas.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+}, (t) => [primaryKey({ columns: [t.ideaId, t.userId] })]);
+
+export const milestones = pgTable('milestones', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  dueDate: date('due_date'),
+  done: boolean('done').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('milestones_project_idx').on(t.projectId)]);
 
 // Shared room settings changed from a wall panel (the conference room: light and glass frosting, 0–100).
 export const rooms = pgTable('rooms', {
