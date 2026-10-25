@@ -27,6 +27,8 @@ export function getRoom(): Room {
 function emitter() {
   const handlers = new Map<string, Set<Handler>>();
   const presenceCbs = new Set<(p: PresenceMeta[]) => void>();
+  // The latest list is replayed to late subscribers: the first sync often arrives before they listen.
+  let last: PresenceMeta[] | null = null;
   return {
     handlers, presenceCbs,
     on(event: string, cb: Handler) {
@@ -35,8 +37,8 @@ function emitter() {
       return () => { handlers.get(event)?.delete(cb); };
     },
     emit(event: string, payload: Record<string, unknown>) { handlers.get(event)?.forEach((h) => h(payload)); },
-    onPresence(cb: (p: PresenceMeta[]) => void) { presenceCbs.add(cb); return () => { presenceCbs.delete(cb); }; },
-    emitPresence(p: PresenceMeta[]) { presenceCbs.forEach((cb) => cb(p)); },
+    onPresence(cb: (p: PresenceMeta[]) => void) { presenceCbs.add(cb); if (last) cb(last); return () => { presenceCbs.delete(cb); }; },
+    emitPresence(p: PresenceMeta[]) { last = p; presenceCbs.forEach((cb) => cb(p)); },
   };
 }
 
@@ -57,6 +59,12 @@ function supabaseRoom(): Room {
     ready = true;
     if (meta) await channel.track(meta);
   });
+  // Phones suspend sockets in the background: announce ourselves again when the page is back or online.
+  if (typeof window !== 'undefined') {
+    const reannounce = () => { if (document.visibilityState === 'visible' && ready && meta) void channel.track(meta); };
+    document.addEventListener('visibilitychange', reannounce);
+    window.addEventListener('online', reannounce);
+  }
   // Clock offset against the server (Date header of a tiny request) for last-command-wins ordering.
   fetch('/api/time', { cache: 'no-store' }).then(async (r) => {
     const t0 = Date.now();
