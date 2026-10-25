@@ -23,11 +23,15 @@ interface Peer {
   pendingIce: RTCIceCandidateInit[];
 }
 
-function iceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
-  const urls = process.env.NEXT_PUBLIC_TURN_URLS;
-  if (urls) servers.push({ urls: urls.split(',').map((u) => u.trim()), username: process.env.NEXT_PUBLIC_TURN_USERNAME, credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL });
-  return servers;
+const STUN: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+
+// STUN plus the optional TURN relay, which the server hands out (see /api/turn).
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const r = await fetch('/api/turn', { cache: 'no-store' });
+    const { servers } = (await r.json()) as { servers: RTCIceServer[] };
+    return [...STUN, ...servers];
+  } catch { return STUN; }
 }
 
 export class Mesh {
@@ -40,12 +44,16 @@ export class Mesh {
   private peerListeners = new Set<(peers: PeerInfo[]) => void>();
   private localTrack: MediaStreamTrack | null = null;
   private presence: PresenceMeta[] = [];
+  private ice: RTCIceServer[] = STUN;
+  private ready: Promise<void>;
 
   constructor(userId: string, device: 'phone' | 'computer') {
     this.room = getRoom();
     this.self = { tabId: this.room.tabId, userId, device };
-    this.room.on('rtc', (msg) => { void this.onSignal(msg); });
-    this.room.onPresence((list) => this.syncPeers(list));
+    // Links are only created once the relay settings are known, so the first connection already has them.
+    this.ready = loadIceServers().then((servers) => { this.ice = servers; });
+    this.room.on('rtc', (msg) => { void this.ready.then(() => this.onSignal(msg)); });
+    this.room.onPresence((list) => { this.presence = list; void this.ready.then(() => this.syncPeers(list)); });
     // Stuck links (never connected, or dropped) get an ICE restart instead of staying silent forever.
     setInterval(() => {
       for (const p of this.peers.values()) {
@@ -101,7 +109,7 @@ export class Mesh {
   }
 
   private createPeer(info: PeerInfo, initiator: boolean): Peer {
-    const pc = new RTCPeerConnection({ iceServers: iceServers() });
+    const pc = new RTCPeerConnection({ iceServers: this.ice });
     const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [] };
     this.peers.set(info.tabId, peer);
     const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });

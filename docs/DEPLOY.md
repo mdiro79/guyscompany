@@ -25,7 +25,7 @@
 - در Supabase → Authentication → Sign In / Providers: گزینه‌ی **Allow new users to sign up** را خاموش کنید (حساب‌ها را فقط ادمین می‌سازد).
 - اگر می‌خواهید فقط شما ادمین اول را بسازید، قبل از قدم ۴ متغیر `ADMIN_SETUP_CODE` را در Vercel بگذارید؛ صفحه‌ی راه‌اندازی آن کد را می‌خواهد.
 - `CRON_SECRET`: برای محافظت از پاک‌سازی روزانه (`/api/cron/cleanup`). Vercel آن را خودش به درخواست کرون اضافه می‌کند.
-- TURN رایگان برای شبکه‌های سخت: `NEXT_PUBLIC_TURN_URLS`، `NEXT_PUBLIC_TURN_USERNAME`، `NEXT_PUBLIC_TURN_CREDENTIAL`.
+- TURN رایگان برای شبکه‌های سخت: `TURN_URLS`، `TURN_USERNAME`، `TURN_CREDENTIAL` (متغیر خصوصی، بدون NEXT_PUBLIC).
 - Region توابع Vercel را نزدیک Region پروژه‌ی Supabase بگذارید (Settings → Functions).
 
 ## رفع اشکال
