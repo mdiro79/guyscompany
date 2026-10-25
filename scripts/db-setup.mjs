@@ -2,6 +2,7 @@
 // sets POSTGRES_URL / POSTGRES_URL_NON_POOLING), it applies the Drizzle migrations and supabase-setup.sql.
 // Without one it does nothing, and the app builds in demo mode.
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -34,7 +35,20 @@ async function setup() {
   try {
     await migrate(drizzle(sql), { migrationsFolder: 'drizzle' });
     console.log('[db-setup] Migrations applied.');
-    await sql.unsafe(readFileSync('supabase-setup.sql', 'utf8'));
+    // The setup SQL (policies, realtime, slots) only runs when it changed: re-running it on every build
+    // waited on locks held by the live app and hit the statement timeout, making builds take minutes.
+    const setupSql = readFileSync('supabase-setup.sql', 'utf8');
+    const hash = createHash('sha256').update(setupSql).digest('hex');
+    await sql`create table if not exists public._gc_setup (id int primary key, hash text not null)`;
+    await sql`alter table public._gc_setup enable row level security`;
+    const [row] = await sql`select hash from public._gc_setup where id = 1`;
+    if (row?.hash === hash) {
+      console.log('[db-setup] RLS, realtime, office slots and storage bucket already up to date.');
+      return;
+    }
+    await sql.unsafe("set statement_timeout = 0; set lock_timeout = '30s';");
+    await sql.unsafe(setupSql);
+    await sql`insert into public._gc_setup (id, hash) values (1, ${hash}) on conflict (id) do update set hash = excluded.hash`;
     console.log('[db-setup] RLS, realtime, office slots and storage bucket are set up.');
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
