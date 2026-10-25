@@ -19,6 +19,10 @@ export interface Room {
 const tabId = typeof crypto !== 'undefined' ? crypto.randomUUID() : String(Math.random());
 let room: Room | null = null;
 
+// Connection state of the Realtime channel, shown by the debug badge (?debug=1).
+export const realtimeStatus = { value: 'idle' as string, listeners: new Set<() => void>() };
+function setStatus(value: string) { realtimeStatus.value = value; realtimeStatus.listeners.forEach((cb) => cb()); }
+
 export function getRoom(): Room {
   room ??= supabaseBrowser() ? supabaseRoom() : localRoom();
   return room;
@@ -54,7 +58,9 @@ function supabaseRoom(): Room {
     const state = channel.presenceState<PresenceMeta>();
     ev.emitPresence(Object.values(state).flat());
   });
-  channel.subscribe(async (status) => {
+  setStatus('connecting');
+  channel.subscribe(async (status, err) => {
+    setStatus(err ? `${status}: ${err.message}` : status);
     if (status !== 'SUBSCRIBED') return;
     ready = true;
     if (meta) await channel.track(meta);

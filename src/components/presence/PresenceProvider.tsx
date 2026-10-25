@@ -5,6 +5,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { detectDevice, isEmbedded } from '@/lib/device';
 import type { Profile } from '@/lib/data/types';
 import { PresenceCtx } from './PresenceContext';
+import { DebugBadge } from './DebugBadge';
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user, demo } = useShell();
@@ -25,5 +26,5 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       statusOf: (p: Profile) => (demo || onlineIds.has(p.id) ? p.status : 'offline' as const),
     };
   }, [peers, user.id, demo]);
-  return <PresenceCtx.Provider value={value}>{children}</PresenceCtx.Provider>;
+  return <PresenceCtx.Provider value={value}>{children}<DebugBadge userId={user.id} online={value.onlineIds.size} /></PresenceCtx.Provider>;
 }
