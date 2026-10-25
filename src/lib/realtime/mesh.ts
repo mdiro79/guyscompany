@@ -65,6 +65,7 @@ export class Mesh {
   }
 
   get presenceList() { return this.presence; }
+  debugLinks() { return [...this.peers.values()].map((p) => `${p.info.userId.slice(0, 4)}:${p.pc.connectionState}/${p.pc.iceConnectionState}`); }
   peersInfo() { return [...this.peers.values()].map((p) => p.info); }
   remoteStream(tabId: string) { return this.peers.get(tabId)?.remoteStream ?? null; }
 

@@ -52,12 +52,16 @@ export function useLive(tables: string[], intervalMs = 5000) {
     for (const table of key.split(',')) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh);
     }
+    // A socket that never answers reports nothing at all, so polling also starts if it is not up in time.
+    const giveUp = setTimeout(() => startPolling(FALLBACK_POLL_MS), 8000);
     channel.subscribe((status) => {
       // Realtime unavailable (blocked network, not enabled): keep data fresh by polling instead.
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling(FALLBACK_POLL_MS);
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startPolling(FALLBACK_POLL_MS);
+      if (status === 'SUBSCRIBED') clearTimeout(giveUp);
       if (status === 'SUBSCRIBED' && poll) { clearInterval(poll); poll = null; }
     });
     return () => {
+      clearTimeout(giveUp);
       if (poll) clearInterval(poll);
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
