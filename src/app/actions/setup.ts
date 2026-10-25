@@ -4,7 +4,7 @@ import { redirect } from '@/i18n/navigation';
 import { createAccount, signIn } from '@/lib/auth';
 import { store } from '@/lib/data';
 import { isDemo, USERNAME_PATTERN } from '@/lib/env';
-import { fail, type ActionResult } from './result';
+import { fail, guard, type ActionResult } from './result';
 
 export async function needsSetup() {
   const { ensureEnvAdmin } = await import('@/lib/bootstrap');
@@ -14,7 +14,7 @@ export async function needsSetup() {
 
 // First run after deploying: whoever opens the site first creates the admin account.
 // Set ADMIN_SETUP_CODE in Vercel to require a code for this step.
-export async function createFirstAdminAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+export const createFirstAdminAction = guard(async function createFirstAdminAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   if (!(await needsSetup())) return fail('done');
   const code = process.env.ADMIN_SETUP_CODE;
   if (code && String(form.get('code') ?? '') !== code) return fail('code');
@@ -29,4 +29,4 @@ export async function createFirstAdminAction(_: ActionResult | null, form: FormD
   await signIn(username, password);
   redirect({ href: '/', locale: await getLocale() });
   return { ok: true };
-}
+});

@@ -1,8 +1,10 @@
 import type {
-  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem,
+  DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
+  Issue, IssueComment, ProjectIdea, Milestone,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
 import { createSeed } from './seed';
+import { emptyCounters } from '@/lib/todo-game';
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
@@ -20,6 +22,13 @@ export function createMemoryStore(): DataStore {
     polls: seed.polls as Poll[],
     votes: [] as PollVote[],
     focus: seed.focus as FocusItem[],
+    todos: seed.todos as Todo[],
+    todoStats: new Map<string, TodoStats>(seed.todoStats),
+    issues: seed.issues as Issue[],
+    comments: seed.comments as IssueComment[],
+    ideas: seed.ideas as ProjectIdea[],
+    milestones: seed.milestones as Milestone[],
+    rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
     notifications: seed.notifications as Notification[],
     offices: seed.offices as Office[],
@@ -47,12 +56,15 @@ export function createMemoryStore(): DataStore {
     },
 
     async listProjects() { return clone(db.projects); },
-    async createProject(p) { const x = { ...p, id: uuid(), createdAt: now() }; db.projects.push(x); return clone(x); },
+    async createProject(p) { const x: Project = { status: 'active', dueDate: null, ...p, id: uuid(), createdAt: now() }; db.projects.push(x); return clone(x); },
     async updateProject(id, patch) { patchIn(db.projects, (p) => p.id === id, patch); },
     async deleteProject(id) {
       db.projects = db.projects.filter((p) => p.id !== id);
       db.tasks = db.tasks.filter((t) => t.projectId !== id);
       db.roles = db.roles.filter((r) => r.projectId !== id);
+      db.issues = db.issues.filter((r) => r.projectId !== id);
+      db.ideas = db.ideas.filter((r) => r.projectId !== id);
+      db.milestones = db.milestones.filter((r) => r.projectId !== id);
     },
 
     async listTasks() { return clone(db.tasks); },
@@ -103,6 +115,43 @@ export function createMemoryStore(): DataStore {
     async updateFocus(id, userId, patch) { patchIn(db.focus, (f) => f.id === id && f.userId === userId, patch); },
     async deleteFocus(id, userId) { db.focus = db.focus.filter((f) => !(f.id === id && f.userId === userId)); },
 
+    async listTodos(userId, doneSince) { return clone(db.todos.filter((t) => t.userId === userId && (!t.clearedAt || (t.doneAt ?? '') >= doneSince))); },
+    async createTodo(t) { const x: Todo = { category: 'personal', ...t, id: uuid(), done: false, doneAt: null, clearedAt: null, xp: 0, createdAt: now() }; db.todos.push(x); return clone(x); },
+    async getTodo(id, userId) { const t = db.todos.find((x) => x.id === id && x.userId === userId); return t ? clone(t) : null; },
+    async getTodoStats(userId) { const s = db.todoStats.get(userId); return s ? clone(s) : { xp: 0, counters: emptyCounters() }; },
+    async setTodoStats(userId, stats) { db.todoStats.set(userId, clone(stats)); },
+    async updateTodo(id, userId, patch) { patchIn(db.todos, (t) => t.id === id && t.userId === userId, patch); },
+    async deleteTodo(id, userId) { db.todos = db.todos.filter((t) => !(t.id === id && t.userId === userId)); },
+    async clearDoneTodos(userId) { for (const t of db.todos) if (t.userId === userId && t.done && !t.clearedAt) t.clearedAt = now(); },
+    async countOpenTodos(userId) { return db.todos.filter((t) => t.userId === userId && !t.done).length; },
+
+    async listIssues(projectId) { return clone(db.issues.filter((i) => !projectId || i.projectId === projectId)); },
+    async createIssue(i) { const x: Issue = { ...i, status: 'open', id: uuid(), createdAt: now(), updatedAt: now(), resolvedAt: null }; db.issues.push(x); return clone(x); },
+    async updateIssue(id, patch) { patchIn(db.issues, (i) => i.id === id, { ...patch, updatedAt: now() }); },
+    async deleteIssue(id) { db.issues = db.issues.filter((i) => i.id !== id); db.comments = db.comments.filter((c) => c.issueId !== id); },
+    async listIssueComments(ids) { return clone(db.comments.filter((c) => ids.includes(c.issueId))); },
+    async createIssueComment(c) { const x = { ...c, id: uuid(), createdAt: now() }; db.comments.push(x); return clone(x); },
+    async listIdeas(projectId) { return clone(db.ideas.filter((i) => !projectId || i.projectId === projectId)); },
+    async createIdea(i) { const x: ProjectIdea = { ...i, status: 'new', taskId: null, id: uuid(), createdAt: now(), voterIds: [] }; db.ideas.push(x); return clone(x); },
+    async updateIdea(id, patch) { patchIn(db.ideas, (i) => i.id === id, patch); },
+    async deleteIdea(id) { db.ideas = db.ideas.filter((i) => i.id !== id); },
+    async toggleIdeaVote(ideaId, userId) {
+      const idea = db.ideas.find((i) => i.id === ideaId);
+      if (idea) idea.voterIds = idea.voterIds.includes(userId) ? idea.voterIds.filter((u) => u !== userId) : [...idea.voterIds, userId];
+    },
+    async listMilestones(projectId) { return clone(db.milestones.filter((m) => !projectId || m.projectId === projectId)); },
+    async createMilestone(m) { const x = { ...m, done: false, id: uuid(), createdAt: now() }; db.milestones.push(x); return clone(x); },
+    async updateMilestone(id, patch) { patchIn(db.milestones, (m) => m.id === id, patch); },
+    async deleteMilestone(id) { db.milestones = db.milestones.filter((m) => m.id !== id); },
+
+    async getRoom(id) { const r = db.rooms.find((x) => x.id === id); return r ? clone(r) : null; },
+    async updateRoom(id, patch) {
+      let r = db.rooms.find((x) => x.id === id);
+      if (!r) { r = { id, light: 100, warmth: 40, frost: 0, updatedAt: now() }; db.rooms.push(r); }
+      Object.assign(r, patch, { updatedAt: now() });
+      return clone(r);
+    },
+
     async listEvents(from, to) { return clone(db.events.filter((e) => e.endsAt >= from && e.startsAt <= to)); },
     async createEvent(e) { const x = { ...e, id: uuid() }; db.events.push(x); return clone(x); },
     async deleteEvent(id) { db.events = db.events.filter((e) => e.id !== id); },
@@ -126,11 +175,12 @@ export function createMemoryStore(): DataStore {
     async createInvite(i) { const x: ChatInvite = { ...i, id: uuid(), status: 'pending', createdAt: now() }; db.invites.push(x); return clone(x); },
     async updateInvite(id, status) { return clone(patchIn(db.invites, (i) => i.id === id, { status }) ?? null); },
 
-    async purge(visitsBefore, notificationsBefore) {
-      const v = db.visits.length, n = db.notifications.length;
+    async purge(visitsBefore, notificationsBefore, todosBefore) {
+      const v = db.visits.length, n = db.notifications.length, t = db.todos.length;
       db.visits = db.visits.filter((x) => x.visitedAt >= visitsBefore);
       db.notifications = db.notifications.filter((x) => !x.readAt || x.readAt >= notificationsBefore);
-      return { visits: v - db.visits.length, notifications: n - db.notifications.length };
+      db.todos = db.todos.filter((x) => !x.clearedAt || x.clearedAt >= todosBefore);
+      return { visits: v - db.visits.length, notifications: n - db.notifications.length, todos: t - db.todos.length };
     },
   };
 }

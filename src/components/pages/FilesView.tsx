@@ -52,7 +52,7 @@ export function FilesView({ files }: { files: FileMeta[] }) {
                 <a href={`/api/files/${f.id}`} className="icon-btn" aria-label={t('download')}><Download className="size-5" /></a>
                 {(user.role === 'admin' || f.uploadedBy === user.id) && (
                   <button type="button" className="icon-btn text-muted hover:text-danger" aria-label={tc('delete')}
-                    onClick={() => { if (confirm(t('confirmDelete'))) start(async () => { await deleteFileAction(f.id); router.refresh(); }); }}><Trash2 className="size-5" /></button>
+                    onClick={() => { if (confirm(t('confirmDelete'))) start(async () => { await deleteFileAction(f.id); }); }}><Trash2 className="size-5" /></button>
                 )}
               </li>
             );

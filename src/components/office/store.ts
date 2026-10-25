@@ -3,15 +3,19 @@ import { useSyncExternalStore } from 'react';
 import type { EmoteId } from './emotes';
 
 export type PanelMode = 'none' | 'monitor' | 'fullscreen';
+// What E (or the phone action button) would do right now.
+export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' };
 
 export interface OfficeUiState {
   locked: boolean; // pointer lock active
   seatId: string | null;
   panel: PanelMode;
   emoteWheel: boolean;
-  nearSeatId: string | null;
+  interact: Interact | null;
   currentSlot: number | null; // office the player stands in
   inConference: boolean;
+  roomPanel: boolean; // the conference wall panel's controls are open
+  board: 'none' | 'mine' | 'screen'; // drawing board open over the office: one's own, or the presenter's (view only)
   lowQuality: boolean;
   myEmote: { id: EmoteId; until: number } | null;
   tutorialStep: number | null;
@@ -19,7 +23,7 @@ export interface OfficeUiState {
 }
 
 let state: OfficeUiState = {
-  locked: false, seatId: null, panel: 'none', emoteWheel: false, nearSeatId: null, currentSlot: null, inConference: false,
+  locked: false, seatId: null, panel: 'none', emoteWheel: false, interact: null, currentSlot: null, inConference: false, roomPanel: false, board: 'none',
   lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null,
 };
 const listeners = new Set<() => void>();

@@ -1,3 +1,4 @@
+import { emptyCounters } from '@/lib/todo-game';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
@@ -73,8 +74,8 @@ describe('db store', () => {
     expect((await store.listVisits(1, new Date(Date.now() - 60000).toISOString())).length).toBe(1);
     await store.createNotification({ userId: B, kind: 'mention', payload: { name: 'Alice' } });
     await store.markNotificationsRead(B);
-    const purged = await store.purge(new Date(Date.now() + 1000).toISOString(), new Date(Date.now() + 1000).toISOString());
-    expect(purged).toEqual({ visits: 1, notifications: 1 });
+    const purged = await store.purge(new Date(Date.now() + 1000).toISOString(), new Date(Date.now() + 1000).toISOString(), new Date(Date.now() + 1000).toISOString());
+    expect(purged).toEqual({ visits: 1, notifications: 1, todos: 0 });
   });
   it('focus items, events and files', async () => {
     const f = await store.createFocus({ userId: A, day: '2026-10-23', text: 'x' });
@@ -84,5 +85,74 @@ describe('db store', () => {
     expect((await store.listEvents('2026-10-23T00:00:00.000Z', '2026-10-24T00:00:00.000Z'))[0].id).toBe(e.id);
     const file = await store.createFile({ name: 'a.txt', storagePath: 'x/a.txt', size: 3, mime: 'text/plain', uploadedBy: A });
     expect((await store.getFile(file.id))?.name).toBe('a.txt');
+  });
+  it('project command center: issues with screenshots and comments, ideas with votes, milestones', async () => {
+    const p = await store.createProject({ name: 'P', description: '', managerId: A });
+    expect(p).toMatchObject({ status: 'active', dueDate: null });
+    await store.updateProject(p.id, { status: 'paused', dueDate: '2026-12-01' });
+    expect((await store.listProjects()).find((x) => x.id === p.id)).toMatchObject({ status: 'paused', dueDate: '2026-12-01' });
+    const shot = await store.createFile({ name: 's.png', storagePath: 'x/s.png', size: 9, mime: 'image/png', uploadedBy: B });
+    const i = await store.createIssue({ projectId: p.id, kind: 'bug', title: 'Crash', description: 'd', steps: '1', severity: 3, reporterId: B, assigneeId: A, screenshotIds: [shot.id] });
+    expect(i).toMatchObject({ status: 'open', severity: 3, screenshotIds: [shot.id], resolvedAt: null });
+    const resolvedAt = new Date().toISOString();
+    await store.updateIssue(i.id, { status: 'fixed', resolvedAt });
+    expect((await store.listIssues(p.id))[0]).toMatchObject({ status: 'fixed', resolvedAt });
+    await expect(store.updateIssue(i.id, { severity: 7 as never })).rejects.toThrow();
+    await store.createIssueComment({ issueId: i.id, authorId: A, body: 'on it' });
+    expect((await store.listIssueComments([i.id])).map((c) => c.body)).toEqual(['on it']);
+    const idea = await store.createIdea({ projectId: p.id, kind: 'upgrade', title: 'Dark mode', description: '', authorId: B });
+    await store.toggleIdeaVote(idea.id, A);
+    await store.toggleIdeaVote(idea.id, B);
+    await store.toggleIdeaVote(idea.id, B); // second vote removes it
+    await store.updateIdea(idea.id, { status: 'planned' });
+    expect((await store.listIdeas(p.id))[0]).toMatchObject({ status: 'planned', voterIds: [A] });
+    const m = await store.createMilestone({ projectId: p.id, title: 'Beta', dueDate: '2026-11-01' });
+    await store.updateMilestone(m.id, { done: true });
+    expect((await store.listMilestones(p.id))[0]).toMatchObject({ title: 'Beta', done: true });
+    await store.deleteProject(p.id); // cascades
+    expect(await store.listIssues(p.id)).toEqual([]);
+    expect(await store.listIdeas(p.id)).toEqual([]);
+  });
+  it('room settings: upsert, partial update and range check', async () => {
+    expect(await store.getRoom('conference')).toBeNull();
+    expect(await store.updateRoom('conference', { light: 30 })).toMatchObject({ id: 'conference', light: 30, warmth: 40, frost: 0 });
+    const r = await store.updateRoom('conference', { frost: 80, warmth: 10 });
+    expect(r).toMatchObject({ light: 30, warmth: 10, frost: 80 });
+    expect((await store.getRoom('conference'))?.frost).toBe(80);
+    await expect(store.updateRoom('conference', { light: 150 })).rejects.toThrow();
+  });
+  it('personal to-dos: private, done/cleared, streak window and cleanup', async () => {
+    const t = await store.createTodo({ userId: A, title: 'buy bread', due: '2026-10-25', priority: 2, starred: true });
+    expect(t).toMatchObject({ title: 'buy bread', due: '2026-10-25', priority: 2, starred: true, done: false, doneAt: null, clearedAt: null });
+    await store.createTodo({ userId: A, title: 'call', due: null, priority: 0, starred: false });
+    await store.updateTodo(t.id, B, { title: 'hacked' }); // other user cannot change it
+    await store.deleteTodo(t.id, B);
+    const since = new Date(Date.now() - 86400000).toISOString();
+    expect((await store.listTodos(A, since)).map((x) => x.title).sort()).toEqual(['buy bread', 'call']);
+    expect(await store.listTodos(B, since)).toEqual([]);
+    const doneAt = new Date().toISOString();
+    await store.updateTodo(t.id, A, { done: true, doneAt, due: null });
+    expect(await store.countOpenTodos(A)).toBe(1);
+    await store.clearDoneTodos(A);
+    const cleared = (await store.listTodos(A, since)).find((x) => x.id === t.id)!;
+    expect(cleared.clearedAt).not.toBeNull(); // still listed for the streak
+    expect(cleared.doneAt).toBe(doneAt);
+    expect((await store.listTodos(A, new Date(Date.now() + 60000).toISOString())).map((x) => x.title)).toEqual(['call']);
+    const far = new Date(Date.now() + 60000).toISOString();
+    expect(await store.purge(new Date(0).toISOString(), new Date(0).toISOString(), far)).toEqual({ visits: 0, notifications: 0, todos: 1 });
+  });
+
+  it('to-do game: categories, XP per to-do and the score per member', async () => {
+    const t = await store.createTodo({ userId: A, title: 'read', due: null, priority: 0, starred: false, category: 'learning' });
+    expect(t).toMatchObject({ category: 'learning', xp: 0 });
+    await store.updateTodo(t.id, A, { done: true, doneAt: new Date().toISOString(), xp: 15 });
+    expect(await store.getTodo(t.id, A)).toMatchObject({ done: true, xp: 15 });
+    expect(await store.getTodo(t.id, B)).toBeNull();
+    await expect(store.updateTodo(t.id, A, { category: 'nope' as never })).rejects.toThrow();
+    expect(await store.getTodoStats(A)).toEqual({ xp: 0, counters: emptyCounters() });
+    const stats = { xp: 135, counters: { ...emptyCounters(), done: 3, cat: { personal: 1, work: 0, learning: 2, health: 0 } } };
+    await store.setTodoStats(A, stats);
+    await store.setTodoStats(A, { ...stats, xp: 150 });
+    expect(await store.getTodoStats(A)).toEqual({ ...stats, xp: 150 });
   });
 });

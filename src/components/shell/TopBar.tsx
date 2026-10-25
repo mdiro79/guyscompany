@@ -1,11 +1,12 @@
 'use client';
-import { useState, useTransition, useMemo, useEffect, useRef } from 'react';
+import { useState, useTransition, useMemo, useEffect, useRef, useOptimistic } from 'react';
 import clsx from 'clsx';
 import { useTranslations, useLocale } from 'next-intl';
-import { Search, Bell, CalendarDays, Sun, Moon, Menu, ChevronDown, LogOut, Settings, Shield, Languages } from 'lucide-react';
-import { Link, useRouter, usePathname } from '@/i18n/navigation';
+import { Search, Bell, CalendarDays, Sun, Moon, Menu, ChevronDown, LogOut, Settings, Shield } from 'lucide-react';
+import { Link, useRouter } from '@/i18n/navigation';
 import { Logo } from '@/components/ui/Logo';
 import { Avatar } from '@/components/ui/Avatar';
+import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 import { setThemeAction, setStatusAction, markNotificationsReadAction } from '@/app/actions/misc';
 import { logoutAction } from '@/app/actions/auth';
 import { formatTime } from '@/lib/format';
@@ -24,11 +25,10 @@ function useClickOutside(onOutside: () => void) {
   return ref;
 }
 
-export function TopBar({ notifications, search, onMenu }: { notifications: Notification[]; search: SearchItem[]; onMenu: () => void }) {
+export function TopBar({ notifications, search, onMenu }: { notifications: Notification[]; search: SearchItem[]; onMenu?: () => void }) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
-  const pathname = usePathname();
   const { user } = useShell();
   const [, start] = useTransition();
   const [dark, setDark] = useState(false);
@@ -39,7 +39,8 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
   const bellRef = useClickOutside(() => open === 'bell' && close());
   const meRef = useClickOutside(() => open === 'me' && close());
   const unread = notifications.filter((n) => !n.readAt).length;
-  const focus = user.status === 'focus';
+  // The switch moves at once; it returns to the saved status if saving fails.
+  const [focus, setFocus] = useOptimistic(user.status === 'focus');
 
   useEffect(() => setDark(document.documentElement.classList.contains('dark')), []);
   useEffect(() => {
@@ -63,8 +64,8 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur sm:gap-3 sm:px-4">
-      <button type="button" className="icon-btn lg:hidden" onClick={onMenu} aria-label={t('nav.menu')}><Menu className="size-5" /></button>
+    <header className="sticky top-0 z-30 flex h-16 short:h-12 items-center gap-2 border-b border-line bg-bg/90 px-3 backdrop-blur sm:gap-3 sm:px-4">
+      {onMenu && <button type="button" className="icon-btn lg:hidden short:hidden" onClick={onMenu} aria-label={t('nav.menu')}><Menu className="size-5" /></button>}
       <Link href="/" className="flex items-center gap-2">
         <Logo className="size-9" />
         <span className="hidden text-xl font-bold sm:inline">Guyscompany</span>
@@ -91,8 +92,8 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
       </div>
 
       <div className="ms-auto flex items-center gap-1 sm:gap-2 md:ms-0">
-        <button type="button" onClick={() => start(() => { setStatusAction(focus ? 'online' : 'focus'); })}
-          className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm sm:flex" aria-pressed={focus}>
+        <button type="button" onClick={() => start(async () => { setFocus(!focus); await setStatusAction(focus ? 'online' : 'focus'); })}
+          className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm whitespace-nowrap sm:flex" aria-pressed={focus}>
           <span className={clsx('relative h-5 w-9 rounded-full transition-colors', focus ? 'bg-focus' : 'bg-line')}>
             <span className={clsx('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', focus ? 'start-[18px]' : 'start-0.5')} />
           </span>
@@ -102,6 +103,7 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
           <span className={clsx('rounded-full p-1.5', !dark && 'bg-surface-2')}><Sun className="size-4" /></span>
           <span className={clsx('rounded-full p-1.5', dark && 'bg-brand text-brand-ink')}><Moon className="size-4" /></span>
         </button>
+        <LocaleSwitch className="min-h-10 max-sm:px-2.5" />
         <div ref={bellRef} className="relative">
           <button type="button" className="icon-btn relative" onClick={() => setOpen(open === 'bell' ? null : 'bell')} aria-label={t('top.notifications')}>
             <Bell className="size-5" />
@@ -137,8 +139,6 @@ export function TopBar({ notifications, search, onMenu }: { notifications: Notif
             <div className="card absolute top-12 end-0 z-40 w-56 p-1 text-sm">
               <Link href="/settings" onClick={close} className="flex min-h-11 items-center gap-2 rounded-lg px-3 hover:bg-surface-2"><Settings className="size-4" />{t('settings.title')}</Link>
               {user.role === 'admin' && <Link href="/admin" onClick={close} className="flex min-h-11 items-center gap-2 rounded-lg px-3 hover:bg-surface-2"><Shield className="size-4" />{t('nav.admin')}</Link>}
-              <button type="button" onClick={() => { close(); router.replace(pathname, { locale: locale === 'fa' ? 'en' : 'fa' }); }}
-                className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 hover:bg-surface-2"><Languages className="size-4" />{locale === 'fa' ? 'English' : 'فارسی'}</button>
               <form action={logoutAction}>
                 <button className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-danger hover:bg-surface-2"><LogOut className="size-4" />{t('auth.signOut')}</button>
               </form>

@@ -1,8 +1,10 @@
 import 'server-only';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
-import { getDb, schema as s } from '@/db';
-import type { DataStore, Message, Notification } from './types';
+import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
+import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
+import { cleanCounters, emptyCounters } from '@/lib/todo-game';
+import type { DataStore, Issue, IssueComment, Message, Milestone, Notification, ProjectIdea, Room, Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -26,7 +28,7 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof s>;
 export function createDbStore(injected?: Db): DataStore {
   // Resolved per call so a stale serverless connection is replaced (see getDb).
   const db = () => injected ?? (getDb() as unknown as Db);
-  return {
+  const store: DataStore = {
     async listProfiles() { return isoAll(await db().select().from(s.profiles).orderBy(asc(s.profiles.createdAt))); },
     async getProfile(id) { const [r] = await db().select().from(s.profiles).where(eq(s.profiles.id, id)); return r ? iso(r) : null; },
     async getProfileByUsername(u) { const [r] = await db().select().from(s.profiles).where(eq(s.profiles.username, u)); return r ? iso(r) : null; },
@@ -87,6 +89,74 @@ export function createDbStore(injected?: Db): DataStore {
     async updateFocus(id, userId, patch) { await db().update(s.focusItems).set(patch).where(and(eq(s.focusItems.id, id), eq(s.focusItems.userId, userId))); },
     async deleteFocus(id, userId) { await db().delete(s.focusItems).where(and(eq(s.focusItems.id, id), eq(s.focusItems.userId, userId))); },
 
+    async listTodos(userId, doneSince) {
+      return isoAll<Todo>(await db().select().from(s.todos).where(and(eq(s.todos.userId, userId),
+        or(isNull(s.todos.clearedAt), gte(s.todos.doneAt, new Date(doneSince))))).orderBy(asc(s.todos.createdAt)));
+    },
+    async createTodo(t) { const [r] = await db().insert(s.todos).values(t).returning(); return iso<Todo>(r); },
+    async getTodo(id, userId) {
+      const [r] = await db().select().from(s.todos).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId)));
+      return r ? iso<Todo>(r) : null;
+    },
+    async getTodoStats(userId) {
+      const [r] = await db().select().from(s.todoStats).where(eq(s.todoStats.userId, userId));
+      return r ? { xp: r.xp, counters: cleanCounters(r.counters) } : { xp: 0, counters: emptyCounters() };
+    },
+    async setTodoStats(userId, stats) {
+      const row = { xp: stats.xp, counters: stats.counters, updatedAt: new Date() };
+      await db().insert(s.todoStats).values({ userId, ...row }).onConflictDoUpdate({ target: s.todoStats.userId, set: row });
+    },
+    async updateTodo(id, userId, patch) { await db().update(s.todos).set(dates(patch)).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
+    async deleteTodo(id, userId) { await db().delete(s.todos).where(and(eq(s.todos.id, id), eq(s.todos.userId, userId))); },
+    async clearDoneTodos(userId) {
+      await db().update(s.todos).set({ clearedAt: new Date() }).where(and(eq(s.todos.userId, userId), eq(s.todos.done, true), isNull(s.todos.clearedAt)));
+    },
+    async countOpenTodos(userId) {
+      const [{ n }] = await db().select({ n: sql<number>`count(*)` }).from(s.todos).where(and(eq(s.todos.userId, userId), eq(s.todos.done, false)));
+      return Number(n);
+    },
+
+    async listIssues(projectId) {
+      const q = db().select().from(s.issues);
+      return isoAll<Issue>(await (projectId ? q.where(eq(s.issues.projectId, projectId)) : q).orderBy(desc(s.issues.createdAt)));
+    },
+    async createIssue(i) { const [r] = await db().insert(s.issues).values(i).returning(); return iso<Issue>(r); },
+    async updateIssue(id, patch) { await db().update(s.issues).set({ ...dates(patch), updatedAt: new Date() }).where(eq(s.issues.id, id)); },
+    async deleteIssue(id) { await db().delete(s.issues).where(eq(s.issues.id, id)); },
+    async listIssueComments(ids) {
+      return ids.length ? isoAll<IssueComment>(await db().select().from(s.issueComments).where(inArray(s.issueComments.issueId, ids)).orderBy(asc(s.issueComments.createdAt))) : [];
+    },
+    async createIssueComment(c) { const [r] = await db().insert(s.issueComments).values(c).returning(); return iso<IssueComment>(r); },
+    async listIdeas(projectId) {
+      const q = db().select().from(s.projectIdeas);
+      const rows = await (projectId ? q.where(eq(s.projectIdeas.projectId, projectId)) : q).orderBy(desc(s.projectIdeas.createdAt));
+      const ids = rows.map((r) => r.id);
+      const votes = ids.length ? await db().select().from(s.ideaVotes).where(inArray(s.ideaVotes.ideaId, ids)) : [];
+      return rows.map((r) => ({ ...iso<Omit<ProjectIdea, 'voterIds'>>(r), voterIds: votes.filter((v) => v.ideaId === r.id).map((v) => v.userId) }));
+    },
+    async createIdea(i) { const [r] = await db().insert(s.projectIdeas).values(i).returning(); return { ...iso<Omit<ProjectIdea, 'voterIds'>>(r), voterIds: [] }; },
+    async updateIdea(id, patch) { await db().update(s.projectIdeas).set(patch).where(eq(s.projectIdeas.id, id)); },
+    async deleteIdea(id) { await db().delete(s.projectIdeas).where(eq(s.projectIdeas.id, id)); },
+    async toggleIdeaVote(ideaId, userId) {
+      const where = and(eq(s.ideaVotes.ideaId, ideaId), eq(s.ideaVotes.userId, userId));
+      const deleted = await db().delete(s.ideaVotes).where(where).returning();
+      if (!deleted.length) await db().insert(s.ideaVotes).values({ ideaId, userId });
+    },
+    async listMilestones(projectId) {
+      const q = db().select().from(s.milestones);
+      return isoAll<Milestone>(await (projectId ? q.where(eq(s.milestones.projectId, projectId)) : q).orderBy(asc(s.milestones.dueDate), asc(s.milestones.createdAt)));
+    },
+    async createMilestone(m) { const [r] = await db().insert(s.milestones).values(m).returning(); return iso<Milestone>(r); },
+    async updateMilestone(id, patch) { await db().update(s.milestones).set(patch).where(eq(s.milestones.id, id)); },
+    async deleteMilestone(id) { await db().delete(s.milestones).where(eq(s.milestones.id, id)); },
+
+    async getRoom(id) { const [r] = await db().select().from(s.rooms).where(eq(s.rooms.id, id)); return r ? iso<Room>(r) : null; },
+    async updateRoom(id, patch) {
+      const [r] = await db().insert(s.rooms).values({ id, ...patch, updatedAt: new Date() })
+        .onConflictDoUpdate({ target: s.rooms.id, set: { ...patch, updatedAt: new Date() } }).returning();
+      return iso<Room>(r);
+    },
+
     async listEvents(from, to) {
       return isoAll(await db().select().from(s.calendarEvents)
         .where(and(gte(s.calendarEvents.endsAt, new Date(from)), lte(s.calendarEvents.startsAt, new Date(to))))
@@ -124,12 +194,54 @@ export function createDbStore(injected?: Db): DataStore {
     async createInvite(i) { const [r] = await db().insert(s.privateChatInvites).values(i).returning(); return iso(r); },
     async updateInvite(id, status) { const [r] = await db().update(s.privateChatInvites).set({ status }).where(eq(s.privateChatInvites.id, id)).returning(); return r ? iso(r) : null; },
 
-    async purge(visitsBefore, notificationsBefore) {
+    async purge(visitsBefore, notificationsBefore, todosBefore) {
       const v = await db().delete(s.officeVisits).where(lt(s.officeVisits.visitedAt, new Date(visitsBefore))).returning({ id: s.officeVisits.id });
       const n = await db().delete(s.notifications)
         .where(and(isNotNull(s.notifications.readAt), lt(s.notifications.readAt, new Date(notificationsBefore))))
         .returning({ id: s.notifications.id });
-      return { visits: v.length, notifications: n.length };
+      const t = await db().delete(s.todos).where(and(isNotNull(s.todos.clearedAt), lt(s.todos.clearedAt, new Date(todosBefore)))).returning({ id: s.todos.id });
+      return { visits: v.length, notifications: n.length, todos: t.length };
     },
   };
+  return injected ? store : resilient(store);
 }
+
+const READ_TIMEOUT_MS = 8000;
+
+function timeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const t = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(`query took longer than ${ms} ms`), { code: 'QUERY_TIMEOUT' })), ms);
+  });
+  return Promise.race([p, t]).finally(() => clearTimeout(timer));
+}
+
+const RETRY_DELAY_MS = 250;
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// A dead or hung connection (e.g. after the serverless instance was frozen) or a busy pooler fails the query;
+// reads are retried once on fresh connections. Writes are retried only when the query certainly never
+// reached the database, so a write is never applied twice. Reads also get a time limit (writes have none).
+export function resilient(store: DataStore): DataStore {
+  const out = {} as Record<string, unknown>;
+  for (const [name, fn] of Object.entries(store) as [string, (...a: unknown[]) => Promise<unknown>][]) {
+    const read = /^(list|get)/.test(name);
+    const run = (args: unknown[]) => (read ? timeout(fn(...args), READ_TIMEOUT_MS) : fn(...args));
+    out[name] = async (...args: unknown[]) => {
+      let gen = dbGeneration();
+      try {
+        const p = run(args);
+        gen = dbGeneration(); // the query has picked its connection set synchronously
+        return await p;
+      } catch (e) {
+        if (!(read ? isConnectionError(e) : isNotSentError(e))) throw e;
+        console.warn(`[db] ${name} failed (${describeDbError(e).code}); retrying on a new connection`);
+        resetDb(0, gen);
+        await wait(RETRY_DELAY_MS);
+        return run(args);
+      }
+    };
+  }
+  return out as unknown as DataStore;
+}
+

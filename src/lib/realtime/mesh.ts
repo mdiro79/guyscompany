@@ -17,13 +17,21 @@ interface Peer {
   remoteStream: MediaStream | null;
   makingOffer: boolean;
   polite: boolean;
+  createdAt: number;
+  // Signals are handled one at a time, and candidates wait for the remote description.
+  queue: Promise<void>;
+  pendingIce: RTCIceCandidateInit[];
 }
 
-function iceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
-  const urls = process.env.NEXT_PUBLIC_TURN_URLS;
-  if (urls) servers.push({ urls: urls.split(',').map((u) => u.trim()), username: process.env.NEXT_PUBLIC_TURN_USERNAME, credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL });
-  return servers;
+const STUN: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+
+// STUN plus the optional TURN relay, which the server hands out (see /api/turn).
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const r = await fetch('/api/turn', { cache: 'no-store' });
+    const { servers } = (await r.json()) as { servers: RTCIceServer[] };
+    return [...STUN, ...servers];
+  } catch { return STUN; }
 }
 
 export class Mesh {
@@ -36,12 +44,24 @@ export class Mesh {
   private peerListeners = new Set<(peers: PeerInfo[]) => void>();
   private localTrack: MediaStreamTrack | null = null;
   private presence: PresenceMeta[] = [];
+  private ice: RTCIceServer[] = STUN;
+  private ready: Promise<void>;
 
   constructor(userId: string, device: 'phone' | 'computer') {
     this.room = getRoom();
     this.self = { tabId: this.room.tabId, userId, device };
-    this.room.on('rtc', (msg) => { void this.onSignal(msg); });
-    this.room.onPresence((list) => this.syncPeers(list));
+    // Links are only created once the relay settings are known, so the first connection already has them.
+    this.ready = loadIceServers().then((servers) => { this.ice = servers; });
+    this.room.on('rtc', (msg) => { void this.ready.then(() => this.onSignal(msg)); });
+    this.room.onPresence((list) => { this.presence = list; void this.ready.then(() => this.syncPeers(list)); });
+    // Stuck links (never connected, or dropped) get an ICE restart instead of staying silent forever.
+    setInterval(() => {
+      for (const p of this.peers.values()) {
+        const state = p.pc.connectionState;
+        if (state === 'connected' || state === 'closed') continue;
+        if (Date.now() - p.createdAt > 15000 && !p.polite) p.pc.restartIce();
+      }
+    }, 8000);
   }
 
   get presenceList() { return this.presence; }
@@ -89,8 +109,8 @@ export class Mesh {
   }
 
   private createPeer(info: PeerInfo, initiator: boolean): Peer {
-    const pc = new RTCPeerConnection({ iceServers: iceServers() });
-    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator };
+    const pc = new RTCPeerConnection({ iceServers: this.ice });
+    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [] };
     this.peers.set(info.tabId, peer);
     const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
     peer.sender = transceiver.sender;
@@ -121,7 +141,7 @@ export class Mesh {
       } finally { peer.makingOffer = false; }
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') pc.restartIce();
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') pc.restartIce();
       if (pc.connectionState === 'closed') this.peers.delete(info.tabId);
       this.emitPeers();
     };
@@ -132,28 +152,39 @@ export class Mesh {
     this.room.send('rtc', { ...payload, to, from: this.self.tabId, fromUser: this.self.userId, fromDevice: this.self.device });
   }
 
-  // "Perfect negotiation" pattern.
-  private async onSignal(msg: Record<string, unknown>) {
-    if (msg.to !== this.self.tabId) return;
+  // "Perfect negotiation" pattern. Messages of one peer are processed in order: a candidate arriving
+  // while the offer is still being applied used to be dropped, which left the link without a route.
+  private onSignal(msg: Record<string, unknown>) {
+    if (msg.to !== this.self.tabId) return Promise.resolve();
     const from = String(msg.from);
     let peer = this.peers.get(from);
     if (!peer) peer = this.createPeer({ tabId: from, userId: String(msg.fromUser), device: msg.fromDevice === 'phone' ? 'phone' : 'computer' }, false);
+    const target = peer;
+    target.queue = target.queue.then(() => this.handleSignal(target, msg));
+    return target.queue;
+  }
+
+  private async handleSignal(peer: Peer, msg: Record<string, unknown>) {
     const { pc } = peer;
+    const from = peer.info.tabId;
     try {
       if (msg.type === 'sdp') {
         const description = msg.description as RTCSessionDescriptionInit;
         const collision = description.type === 'offer' && (peer.makingOffer || pc.signalingState !== 'stable');
         if (collision && !peer.polite) return;
         await pc.setRemoteDescription(description);
+        for (const c of peer.pendingIce.splice(0)) await pc.addIceCandidate(c).catch(() => {});
         if (description.type === 'offer') {
           await pc.setLocalDescription();
           this.signal(from, { type: 'sdp', description: pc.localDescription!.toJSON() });
         }
       } else if (msg.type === 'ice') {
-        await pc.addIceCandidate(msg.candidate as RTCIceCandidateInit).catch(() => {});
+        const candidate = msg.candidate as RTCIceCandidateInit;
+        if (!pc.remoteDescription) peer.pendingIce.push(candidate);
+        else await pc.addIceCandidate(candidate).catch(() => {});
       }
     } catch {
-      // A failed negotiation step is retried by the next presence sync.
+      // A failed negotiation step is retried by the next presence sync or ICE restart.
     }
   }
 }

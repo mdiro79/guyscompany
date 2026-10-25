@@ -1,32 +1,65 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { setTutorialDoneAction } from '@/app/actions/profile';
+import { tour, useTourStep, stepArrived } from './tour';
+import { Check, ChevronRight } from 'lucide-react';
+import { RECEPTIONIST_CHARACTER } from './Receptionist';
+import { SpeechBubble, BubbleButton, TAIL_HEIGHT } from './SpeechBubble';
 
-const STEPS = ['s1', 's2', 's3', 's4', 's5', 's6'] as const;
-
-// Guided tour by the receptionist; shown on first visit (replayable from the user panel).
-export function Tutorial({ onDone }: { onDone: () => void }) {
+// Speech panel of the receptionist's guided tour (first visit, or press E next to her to replay).
+export function Tutorial({ markDone }: { markDone: boolean }) {
   const t = useTranslations('tutorial');
-  const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [, start] = useTransition();
-  const finish = () => start(async () => { await setTutorialDoneAction(true); onDone(); router.refresh(); });
+  const step = useTourStep();
+  const [arrived, setArrived] = useState(false);
+
+  useEffect(() => {
+    if (step === null) return;
+    setArrived(false);
+    const id = setInterval(() => setArrived(stepArrived()), 200);
+    return () => clearInterval(id);
+  }, [step]);
+
+  const finish = () => {
+    tour.stop();
+    if (markDone) void setTutorialDoneAction(true);
+  };
+  const next = () => {
+    if (!arrived) return;
+    if (step === tour.get().steps.length - 1) finish(); else tour.next();
+  };
+
+  useEffect(() => {
+    if (step === null) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); next(); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  });
+
+  if (step === null) return null;
+  const steps = tour.get().steps;
+  const key = steps[step].key;
+  const last = step === steps.length - 1;
   return (
-    <div className="pointer-events-auto absolute inset-x-3 top-20 z-30 mx-auto max-w-md sm:top-auto sm:bottom-10 rounded-2xl bg-white/95 p-4 text-[#1f2a24] shadow-xl sm:bottom-10">
-      <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/models/thumbs/kaykit-ranger.webp" alt="" className="size-9 rounded-full bg-[#f6e3cf]" />
-        {t('title')}
-        <span className="ms-auto text-xs text-[#6f7a73]">{step + 1}/{STEPS.length}</span>
-      </div>
-      <p className="text-sm leading-6" dir="auto">{t(STEPS[step])}</p>
-      <div className="mt-3 flex gap-2">
-        <button type="button" className="btn min-h-10 text-[#6f7a73]" onClick={finish}>{t('skip')}</button>
-        <button type="button" className="btn ms-auto min-h-10 bg-[#2f5d45] text-white"
-          onClick={() => (step === STEPS.length - 1 ? finish() : setStep(step + 1))}>{step === STEPS.length - 1 ? t('done') : t('next')}</button>
-      </div>
+    // Speech bubble above the receptionist's head (positioned by TourBubbleAnchor inside the 3D scene); the bottom padding is the tail's room.
+    <div id="gc-tour-bubble" className="group pointer-events-auto absolute top-0 left-1/2 z-50 w-[min(23rem,calc(100vw-2.5rem))] -translate-x-1/2 -translate-y-full short:w-[min(21rem,calc(100vw-2.5rem))]"
+      style={{ paddingBottom: TAIL_HEIGHT }}>
+      <SpeechBubble characterId={RECEPTIONIST_CHARACTER} title={t('title')} chip={`${step + 1}/${steps.length}`}
+        action={
+          <>
+            {!last && <button type="button" className="me-auto min-h-11 px-1 text-xs font-medium text-[#6f7a73] hover:text-[#1f2a24]" onClick={finish}>{t('skip')}</button>}
+            <BubbleButton onClick={next} disabled={!arrived} label={!arrived ? t('walking') : last ? t('done') : t('next')}>
+              {!arrived ? <span className="inline-flex gap-1"><Dot d={0} /><Dot d={150} /><Dot d={300} /></span>
+                : last ? <Check className="size-5" /> : <ChevronRight className="size-5 rtl:-scale-x-100" />}
+            </BubbleButton>
+          </>
+        }>
+        <p className="max-h-40 overflow-y-auto short:max-h-16">{t(key)}</p>
+      </SpeechBubble>
     </div>
   );
 }
+
+const Dot = ({ d }: { d: number }) => <span className="size-1.5 animate-bounce rounded-full bg-white" style={{ animationDelay: `${d}ms` }} />;

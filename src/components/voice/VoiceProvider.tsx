@@ -39,6 +39,14 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     return ctx.current;
   };
 
+  // Browsers keep the audio engine suspended until the page is touched; without this remote voices stay silent.
+  useEffect(() => {
+    const wake = () => { if (ctx.current && ctx.current.state === 'suspended') void ctx.current.resume(); };
+    window.addEventListener('pointerdown', wake);
+    window.addEventListener('keydown', wake);
+    return () => { window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
+  }, []);
+
   const stopMic = useCallback(() => {
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;

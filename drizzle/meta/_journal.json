@@ -8,6 +8,34 @@
       "when": 1792761602202,
       "tag": "0000_abandoned_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792794180649,
+      "tag": "0001_personal_todos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792794669096,
+      "tag": "0002_room_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792795696629,
+      "tag": "0003_project_command_center",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792814060698,
+      "tag": "0004_todo_game",
+      "breakpoints": true
     }
   ]
 }

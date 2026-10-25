@@ -2,7 +2,6 @@
 import { useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { BarChart3, EyeOff, ChevronDown } from 'lucide-react';
 import { voteAction } from '@/app/actions/polls';
 import { formatNumber } from '@/lib/format';
@@ -12,7 +11,6 @@ import type { PollSummary } from '@/lib/polls';
 export function TeamVote({ poll, summary }: { poll: Poll | null; summary: PollSummary | null }) {
   const t = useTranslations('widgets');
   const locale = useLocale();
-  const router = useRouter();
   const [open, setOpen] = useState(true);
   const [pending, start] = useTransition();
   const [local, setLocal] = useState<number | null>(null);
@@ -30,7 +28,7 @@ export function TeamVote({ poll, summary }: { poll: Poll | null; summary: PollSu
             <div className="mt-4 flex items-center justify-between gap-1" dir="ltr">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                 <button key={n} type="button" disabled={pending || summary.isClosed} aria-pressed={score === n}
-                  onClick={() => { setLocal(n); start(async () => { await voteAction(poll.id, n); router.refresh(); }); }}
+                  onClick={() => { setLocal(n); start(async () => { await voteAction(poll.id, n); }); }}
                   className="group flex flex-1 flex-col items-center gap-1">
                   <span className={clsx('size-3.5 rounded-full border-2 transition-all',
                     score === n ? 'scale-125 border-brand bg-brand' : score && n < score ? 'border-brand bg-brand/60' : 'border-line bg-surface group-hover:border-brand')} />

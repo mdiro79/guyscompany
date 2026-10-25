@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getLocale } from 'next-intl/server';
 import { currentUser } from '@/lib/auth';
 import { store } from '@/lib/data';
-import { isDemo } from '@/lib/env';
+import { configProblems, isDemo } from '@/lib/env';
 import { CHAT_PAGE_SIZE } from '@/lib/limits';
 import { AppShell } from '@/components/shell/AppShell';
 import type { SearchItem } from '@/components/shell/TopBar';
@@ -12,6 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
+  // Missing Vercel settings are explained on the login page instead of failing here.
+  if (configProblems().length) redirect(`/${locale}/login`);
   const user = await currentUser();
   if (!user) redirect(`/${locale}/login`);
   if (user.mustChangePassword) redirect(`/${locale}/change-password`);

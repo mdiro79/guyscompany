@@ -49,16 +49,17 @@ export function FirstPersonArms({ characterId, userId }: { characterId: string; 
     if (right.current) { right.current.position.y = -0.46 - swing + Math.cos(t.current * 3) * 0.03 * talk; right.current.rotation.x = -1.25 + talk * 0.5; }
   });
   if (seated) return null;
-  const Arm = ({ side, r }: { side: number; r: React.RefObject<THREE.Group | null> }) => (
+  const arm = (side: number, r: React.RefObject<THREE.Group | null>) => (
     <group ref={r} position={[side * 0.3, -0.46, -0.42]} rotation={[-1.25, side * -0.15, side * 0.1]}>
       <mesh position-y={-0.12}><capsuleGeometry args={[0.04, 0.3, 6, 12]} /><meshStandardMaterial color={sleeve} /></mesh>
       <mesh position-y={0.12}><sphereGeometry args={[0.045, 14, 12]} /><meshStandardMaterial color={skin} /></mesh>
     </group>
   );
+  // Called as functions, not <Arm />, so a re-render keeps the same meshes instead of rebuilding them.
   return (
     <group ref={group}>
-      <Arm side={-1} r={left} />
-      <Arm side={1} r={right} />
+      {arm(-1, left)}
+      {arm(1, right)}
     </group>
   );
 }

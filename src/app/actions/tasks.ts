@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { store, TASK_COLUMNS, type TaskColumn } from '@/lib/data';
-import { fail, okResult, type ActionResult } from './result';
+import { fail, okResult, guard, type ActionResult } from './result';
 
 const optionalId = z.string().uuid().nullable().catch(null);
 const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().catch(null);
@@ -38,7 +38,7 @@ async function notifyAssignee(assigneeId: string | null, actorId: string, title:
   }
 }
 
-export async function saveTaskAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
+export const saveTaskAction = guard(async function saveTaskAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const parsed = fromForm(form);
   if (!parsed.success) return fail('error');
@@ -53,26 +53,33 @@ export async function saveTaskAction(_: ActionResult | null, form: FormData): Pr
   }
   revalidatePath('/', 'layout');
   return okResult('saved');
-}
+});
 
-export async function moveTaskAction(id: string, column: TaskColumn) {
+export const moveTaskAction = guard(async function moveTaskAction(id: string, column: TaskColumn) {
   await requireUser();
   if (!TASK_COLUMNS.includes(column)) return fail('error');
   await store().updateTask(id, { column });
   revalidatePath('/', 'layout');
   return okResult();
-}
+});
 
-export async function deleteTaskAction(id: string) {
-  await requireUser();
+export const deleteTaskAction = guard(async function deleteTaskAction(id: string) {
+  const user = await requireUser();
+  // Same rule as the card menu: the creator or an admin.
+  const task = (await store().listTasks()).find((t) => t.id === id);
+  if (!task || (user.role !== 'admin' && task.createdBy !== user.id)) return fail('forbidden');
   await store().deleteTask(id);
   revalidatePath('/', 'layout');
   return okResult();
-}
+});
 
-export async function volunteerTaskAction(id: string) {
+// Volunteering only takes a task that asks for a volunteer or has nobody on it (never someone else's).
+export const volunteerTaskAction = guard(async function volunteerTaskAction(id: string) {
   const user = await requireUser();
+  const task = (await store().listTasks()).find((t) => t.id === id);
+  if (!task) return fail('error');
+  if (!task.needsVolunteer && task.assigneeId && task.assigneeId !== user.id) return fail('taken');
   await store().updateTask(id, { assigneeId: user.id, needsVolunteer: false });
   revalidatePath('/', 'layout');
   return okResult();
-}
+});

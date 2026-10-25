@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Phones in landscape (and other very short viewports). */
+@custom-variant short (@media (max-height: 500px));
 
 @theme {
   --font-sans: 'Inter Variable', 'Vazirmatn Variable', ui-sans-serif, system-ui, sans-serif;
@@ -38,6 +40,14 @@
   --teal: #1f8a8a;
   --teal-soft: #dcefee;
   --danger: #d9443c;
+  /* Charts (validated palette): tasks blue, bugs orange; task status as one blue ramp, idea → done. */
+  --viz-tasks: #2a78d6;
+  --viz-bugs: #eb6834;
+  --viz-s0: #9ec5f4;
+  --viz-s1: #5598e7;
+  --viz-s2: #2a78d6;
+  --viz-s3: #184f95;
+  --viz-grid: #ece6dc;
   color-scheme: light;
 }
 
@@ -57,6 +67,13 @@
   --teal-soft: #19312f;
   --danger: #f06b63;
   color-scheme: dark;
+  --viz-tasks: #3987e5;
+  --viz-bugs: #d95926;
+  --viz-s0: #1c5cab;
+  --viz-s1: #2a78d6;
+  --viz-s2: #5598e7;
+  --viz-s3: #9ec5f4;
+  --viz-grid: #332e26;
 }
 
 html, body { background: var(--bg); color: var(--ink); }
@@ -73,3 +90,43 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 @utility chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; }
 
 .scrollbar-thin { scrollbar-width: thin; }
+
+/* Office cursor (Tab): brand-coloured pointer with a trailing ring. */
+@keyframes gc-cursor-pulse { 0% { transform: scale(1); opacity: .9; } 70% { transform: scale(1.9); opacity: 0; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes gc-cursor-in { from { transform: scale(.2) rotate(-25deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+.gc-cursor-pulse { animation: gc-cursor-pulse 1.4s ease-out infinite; }
+.gc-cursor-in { animation: gc-cursor-in .28s cubic-bezier(.3,1.6,.5,1) both; }
+
+/* Office nameplates and speech bubbles: twinkling sparkles, a glowing tail, the receptionist's typing line. */
+@keyframes gc-twinkle { 0%, 100% { opacity: .35; transform: scale(.65) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(20deg); } }
+@keyframes gc-glow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes gc-typing { from { background-position: 0 0; } to { background-position: 28px 0; } }
+.gc-twinkle { animation: gc-twinkle 1.9s ease-in-out infinite; }
+.gc-glow { animation: gc-glow 1.6s ease-in-out infinite; }
+.gc-typing { background-image: repeating-linear-gradient(90deg, #3ee07a 0 14px, #2a9d5a 14px 28px); animation: gc-typing .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .gc-twinkle, .gc-glow, .gc-typing { animation: none; } }
+
+/* Personal to-dos: the check pops and a small confetti burst flies out. */
+@keyframes gc-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes gc-burst { 0% { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(.6); opacity: 0; } }
+@keyframes gc-rise { 0% { transform: translateY(6px); opacity: 0; } 15%, 80% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-4px); opacity: 0; } }
+.gc-pop { animation: gc-pop .35s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes gc-tab { 0% { transform: translateY(0) scale(1); } 35% { transform: translateY(-5px) scale(1.22); } 65% { transform: translateY(0) scale(.94); } 100% { transform: translateY(-2px) scale(1.06); } }
+.gc-tab { animation: gc-tab .5s cubic-bezier(.3,1.3,.5,1) both; }
+/* To-do game: "+XP" rising from a ticked box, the shine on the XP bar and a flickering streak flame. */
+@keyframes gc-float { 0% { opacity: 0; transform: translate(-50%, 0) scale(.7); } 20% { opacity: 1; transform: translate(-50%, -10px) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -42px) scale(1); } }
+.gc-float { animation: gc-float 1.1s ease-out both; }
+@keyframes gc-shine { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(220%); } }
+.gc-shine { background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.55) 50%, transparent 80%); animation: gc-shine 2.8s ease-in-out infinite; }
+@keyframes gc-flicker { 0%, 100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(-4deg); } 60% { transform: scale(.95) rotate(3deg); } }
+.gc-flicker { animation: gc-flicker 1.6s ease-in-out infinite; transform-origin: 50% 90%; }
+.gc-burst { animation: gc-burst .8s cubic-bezier(.2,.7,.3,1) forwards; }
+.gc-rise { animation: gc-rise 2.6s ease forwards; }
+@media (prefers-reduced-motion: reduce) { .gc-pop, .gc-burst, .gc-rise, .gc-tab, .gc-float, .gc-shine, .gc-flicker { animation: none; } }
+
+/* Range sliders of the office's wall panel: a coloured track, the filled part and a round white knob. */
+.gc-range { appearance: none; background: transparent; }
+.gc-range::-webkit-slider-runnable-track { height: 10px; border-radius: 999px; background: var(--track); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.gc-range::-moz-range-track { height: 10px; border-radius: 999px; background: var(--track); }
+.gc-range::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; margin-top: -7px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.gc-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }

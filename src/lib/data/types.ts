@@ -18,13 +18,64 @@ export interface Profile {
   createdAt: string;
 }
 
+export type ProjectStatus = 'planning' | 'active' | 'paused' | 'done';
+export const PROJECT_STATUSES: ProjectStatus[] = ['planning', 'active', 'paused', 'done'];
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   managerId: string | null;
+  status: ProjectStatus;
+  dueDate: string | null;
   createdAt: string;
 }
+
+// Project command center.
+export type IssueKind = 'bug' | 'defect';
+export type IssueStatus = 'open' | 'in_progress' | 'fixed' | 'closed';
+export type Severity = 0 | 1 | 2 | 3; // low, medium, high, critical
+export const ISSUE_STATUSES: IssueStatus[] = ['open', 'in_progress', 'fixed', 'closed'];
+
+export interface Issue {
+  id: string;
+  projectId: string;
+  kind: IssueKind;
+  title: string;
+  description: string;
+  steps: string;
+  severity: Severity;
+  status: IssueStatus;
+  reporterId: string | null;
+  assigneeId: string | null;
+  screenshotIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+export type NewIssue = Pick<Issue, 'projectId' | 'kind' | 'title' | 'description' | 'steps' | 'severity' | 'reporterId' | 'assigneeId' | 'screenshotIds'>;
+export type IssuePatch = Partial<Pick<Issue, 'title' | 'description' | 'steps' | 'severity' | 'status' | 'assigneeId' | 'kind' | 'screenshotIds' | 'resolvedAt'>>;
+
+export interface IssueComment { id: string; issueId: string; authorId: string | null; body: string; createdAt: string }
+
+export type IdeaKind = 'idea' | 'upgrade';
+export type IdeaStatus = 'new' | 'review' | 'planned' | 'done' | 'rejected';
+export const IDEA_STATUSES: IdeaStatus[] = ['new', 'review', 'planned', 'done', 'rejected'];
+
+export interface ProjectIdea {
+  id: string;
+  projectId: string;
+  kind: IdeaKind;
+  title: string;
+  description: string;
+  status: IdeaStatus;
+  authorId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  voterIds: string[];
+}
+
+export interface Milestone { id: string; projectId: string; title: string; dueDate: string | null; done: boolean; createdAt: string }
 
 export interface Task {
   id: string;
@@ -102,6 +153,29 @@ export interface FocusItem {
   done: boolean;
 }
 
+export type { TodoCategory, TodoStats } from '@/lib/todo-game';
+import type { TodoCategory, TodoStats } from '@/lib/todo-game';
+
+export interface Todo {
+  id: string;
+  userId: string;
+  title: string;
+  done: boolean;
+  doneAt: string | null;
+  due: string | null; // YYYY-MM-DD, team time zone
+  priority: 0 | 1 | 2;
+  starred: boolean;
+  clearedAt: string | null; // done and cleared from the list (kept for the streak)
+  category: TodoCategory;
+  xp: number; // XP given when it was finished
+  createdAt: string;
+}
+export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred' | 'category' | 'xp'>>;
+
+// Conference room light (brightness, warmth) and glass frosting, each 0–100.
+export interface RoomSettings { light: number; warmth: number; frost: number }
+export interface Room extends RoomSettings { id: string; updatedAt: string }
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -164,7 +238,7 @@ export interface DataStore {
   deleteProfile(id: string): Promise<void>;
 
   listProjects(): Promise<Project[]>;
-  createProject(p: Omit<Project, 'id' | 'createdAt'>): Promise<Project>;
+  createProject(p: Pick<Project, 'name' | 'description' | 'managerId'> & Partial<Pick<Project, 'status' | 'dueDate'>>): Promise<Project>;
   updateProject(id: string, patch: Partial<Omit<Project, 'id' | 'createdAt'>>): Promise<void>;
   deleteProject(id: string): Promise<void>;
 
@@ -198,6 +272,37 @@ export interface DataStore {
   updateFocus(id: string, userId: string, patch: Partial<Pick<FocusItem, 'done' | 'text'>>): Promise<void>;
   deleteFocus(id: string, userId: string): Promise<void>;
 
+  // Open and done to-dos, plus cleared ones finished since `doneSinceIso` (for the streak).
+  listTodos(userId: string, doneSinceIso: string): Promise<Todo[]>;
+  createTodo(t: Pick<Todo, 'userId' | 'title' | 'due' | 'priority' | 'starred'> & Partial<Pick<Todo, 'category'>>): Promise<Todo>;
+  getTodo(id: string, userId: string): Promise<Todo | null>;
+  getTodoStats(userId: string): Promise<TodoStats>;
+  setTodoStats(userId: string, stats: TodoStats): Promise<void>;
+  updateTodo(id: string, userId: string, patch: TodoPatch): Promise<void>;
+  deleteTodo(id: string, userId: string): Promise<void>;
+  clearDoneTodos(userId: string): Promise<void>;
+  countOpenTodos(userId: string): Promise<number>;
+
+  // Project command center (projectId omitted: every project).
+  listIssues(projectId?: string): Promise<Issue[]>;
+  createIssue(i: NewIssue): Promise<Issue>;
+  updateIssue(id: string, patch: IssuePatch): Promise<void>;
+  deleteIssue(id: string): Promise<void>;
+  listIssueComments(issueIds: string[]): Promise<IssueComment[]>;
+  createIssueComment(c: Pick<IssueComment, 'issueId' | 'authorId' | 'body'>): Promise<IssueComment>;
+  listIdeas(projectId?: string): Promise<ProjectIdea[]>;
+  createIdea(i: Pick<ProjectIdea, 'projectId' | 'kind' | 'title' | 'description' | 'authorId'>): Promise<ProjectIdea>;
+  updateIdea(id: string, patch: Partial<Pick<ProjectIdea, 'title' | 'description' | 'status' | 'kind' | 'taskId'>>): Promise<void>;
+  deleteIdea(id: string): Promise<void>;
+  toggleIdeaVote(ideaId: string, userId: string): Promise<void>;
+  listMilestones(projectId?: string): Promise<Milestone[]>;
+  createMilestone(m: Pick<Milestone, 'projectId' | 'title' | 'dueDate'>): Promise<Milestone>;
+  updateMilestone(id: string, patch: Partial<Pick<Milestone, 'title' | 'dueDate' | 'done'>>): Promise<void>;
+  deleteMilestone(id: string): Promise<void>;
+
+  getRoom(id: string): Promise<Room | null>;
+  updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;
+
   listEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]>;
   createEvent(e: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent>;
   deleteEvent(id: string): Promise<void>;
@@ -217,5 +322,5 @@ export interface DataStore {
   createInvite(i: Pick<ChatInvite, 'slot' | 'inviterId' | 'inviteeId'>): Promise<ChatInvite>;
   updateInvite(id: string, status: RequestStatus): Promise<ChatInvite | null>;
 
-  purge(visitsBeforeIso: string, readNotificationsBeforeIso: string): Promise<{ visits: number; notifications: number }>;
+  purge(visitsBeforeIso: string, readNotificationsBeforeIso: string, clearedTodosBeforeIso: string): Promise<{ visits: number; notifications: number; todos: number }>;
 }
