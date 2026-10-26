@@ -37,3 +37,17 @@ it('repeats a write only when it never reached the database', async () => {
   await expect(t.createMessage({ channel: 'team', authorId: null, body: 'x', fileId: null })).rejects.toThrow('CONNECTION_CLOSED');
   expect(createMessage).toHaveBeenCalledTimes(1);
 });
+
+it('asks a read again when the rows come back in the wrong shape', async () => {
+  // drizzle mapping an array column of another query's row: "a.map is not a function"
+  const listTasks = vi.fn().mockRejectedValueOnce(new TypeError('a.map is not a function')).mockResolvedValueOnce([]);
+  const s = resilient({ listTasks } as unknown as DataStore);
+  await expect(s.listTasks()).resolves.toEqual([]);
+  expect(listTasks).toHaveBeenCalledTimes(2);
+
+  // Writes are never repeated for it.
+  const createTask = vi.fn().mockRejectedValue(new TypeError('a.map is not a function'));
+  const t = resilient({ createTask } as unknown as DataStore);
+  await expect(t.createTask({ title: 'x' })).rejects.toThrow(TypeError);
+  expect(createTask).toHaveBeenCalledTimes(1);
+});

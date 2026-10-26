@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { currentUser } from '@/lib/auth';
+import { currentUserId } from '@/lib/auth';
 import { env, isDemo } from '@/lib/env';
 import { broadcast, type RelayMessage } from '@/lib/realtime/relay';
 import { ROOM_TOPIC, TAB_ID_PATTERN } from '@/lib/realtime/topic';
@@ -22,13 +22,13 @@ const device = (v: unknown) => (v === 'phone' ? 'phone' : 'computer') as 'phone'
 
 export async function GET(req: NextRequest) {
   if (isDemo) return NextResponse.json({ error: 'demo' }, { status: 404 });
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const userId = await currentUserId();
+  if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   const q = req.nextUrl.searchParams;
   const tabId = q.get('tab') ?? '';
   if (!TAB_ID_PATTERN.test(tabId)) return NextResponse.json({ error: 'tab' }, { status: 400 });
   // The user id always comes from the session, never from the request.
-  let meta = { userId: user.id, device: device(q.get('device')), micActive: q.get('mic') === '1', tabId, since: Number(q.get('since')) || Date.now() };
+  let meta = { userId, device: device(q.get('device')), micActive: q.get('mic') === '1', tabId, since: Number(q.get('since')) || Date.now() };
 
   const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const encoder = new TextEncoder();
@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (isDemo) return NextResponse.json({ error: 'demo' }, { status: 404 });
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const userId = await currentUserId();
+  if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   const text = await req.text();
   if (text.length > MAX_BODY) return NextResponse.json({ error: 'too large' }, { status: 413 });
   let body: { tab?: unknown; messages?: unknown; track?: { device?: unknown; micActive?: unknown } };
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       out.push({ event: m.event, payload: { ...(m.payload as Record<string, unknown>), __tab: tabId } });
     }
   }
-  if (body.track) out.push({ event: '__track', payload: { tabId, userId: user.id, device: device(body.track.device), micActive: !!body.track.micActive } });
+  if (body.track) out.push({ event: '__track', payload: { tabId, userId, device: device(body.track.device), micActive: !!body.track.micActive } });
   if (!out.length) return new NextResponse(null, { status: 204 });
   try {
     await broadcast(out);
