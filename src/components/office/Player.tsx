@@ -19,21 +19,26 @@ const SIT_EYE = 1.18;
 const SIT_LEAN = 0.4;
 const REMOTE_FRESH_MS = 5000;
 
-// Office access for visitors (owners always pass): a locked door or frosted glass closes the office;
-// a private office opens only for members with an accepted invite; a public one is open (view only).
-export function isDoorClosed(o: Office | undefined, viewerId: string, invitedSlots: number[]) {
+// Office access for visitors (owners always pass): a locked door or frosted glass keeps them out;
+// a private office lets in only members with an accepted invite; a public one is open (view only).
+// Doors look the same for everyone (shared open/closed state); access only decides who may walk in
+// and who may open or close the door.
+export function entryDenied(o: Office | undefined, viewerId: string, invitedSlots: number[]) {
   if (!o || !o.ownerId || o.ownerId === viewerId) return false;
   if (o.locked || o.glass === 'frosted') return true;
   return !o.isPublic && !invitedSlots.includes(o.slot);
 }
 
-// Whether this viewer may open a door with E (only office doors have access rules).
-export function doorAllowed(d: DoorDef, offices: Office[], viewerId: string, invitedSlots: number[]) {
-  return d.kind !== 'office' || !isDoorClosed(offices.find((o) => o.slot === d.slot), viewerId, invitedSlots);
+// Whether this viewer may open or close a door with E (only office doors have access rules).
+// Whoever is inside an office may always use its door, so nobody is ever shut in.
+export function doorAllowed(d: DoorDef, offices: Office[], viewerId: string, invitedSlots: number[], insideSlot: number | null = null) {
+  if (d.kind !== 'office' || d.slot === insideSlot) return true;
+  return !entryDenied(offices.find((o) => o.slot === d.slot), viewerId, invitedSlots);
 }
 
+// Doorways the viewer may not pass, even while the door stands open (the one they are inside excepted).
 export function blockingDoors(offices: Office[], viewerId: string, invitedSlots: number[] = []) {
-  return doorSegments().filter((d) => isDoorClosed(offices.find((x) => x.slot === d.slot), viewerId, invitedSlots));
+  return doorSegments().filter((d) => entryDenied(offices.find((x) => x.slot === d.slot), viewerId, invitedSlots));
 }
 
 export function canSit(seat: Seat, offices: Office[], viewerId: string) {
@@ -120,7 +125,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     const bodies: Circle[] = fresh.filter((r) => !r.pose.seatId).map((r) => ({ pos: [r.pose.x, r.pose.z], r: AVATAR_RADIUS }));
     bodies.push({ pos: guide.pos, r: AVATAR_RADIUS });
     const circles = [...props, ...bodies];
-    const solid = [...walls, ...noAccess, ...doorLeaves()];
+    const insideSlot = officeAt(pos.current[0], pos.current[1])?.slot ?? null;
+    const solid = [...walls, ...noAccess.filter((d) => d.slot !== insideSlot), ...doorLeaves()];
     const taken = new Set(fresh.map((r) => r.pose.seatId).filter(Boolean));
 
     // Touch look (joystick overlay writes deltas).
@@ -191,7 +197,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       for (const door of DOORS) {
         const c = doorCenter(door);
         const d = Math.hypot(c[0] - pos.current[0], c[1] - pos.current[1]);
-        if (d < 1.7 && ahead(c, d)) cand.push({ i: { kind: 'door', id: door.id, open: isDoorOpen(door.id), allowed: doorAllowed(door, offices, viewerId, invitedSlots) }, d: d + 0.2 });
+        if (d < 1.7 && ahead(c, d)) cand.push({ i: { kind: 'door', id: door.id, open: isDoorOpen(door.id), allowed: doorAllowed(door, offices, viewerId, invitedSlots, insideSlot) }, d: d + 0.2 });
       }
       const pd = Math.hypot(CONF_WALL_PANEL.pos[0] - pos.current[0], CONF_WALL_PANEL.pos[1] - pos.current[1]);
       if (pd < 1.5 && ahead(CONF_WALL_PANEL.pos, pd) && inConference(pos.current[0], pos.current[1])) {

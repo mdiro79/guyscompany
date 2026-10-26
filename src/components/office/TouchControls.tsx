@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { input } from './store';
 import { pressAt, toNdc } from './tablet';
 
@@ -12,6 +12,8 @@ export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
   const stick = useRef<{ id: number; cx: number; cy: number } | null>(null);
   const look = useRef<{ id: number; x: number; y: number; x0: number; y0: number; at: number } | null>(null);
   const R = 52;
+  // Hidden while the stick is held (chat opened, tour, desk): the player must not keep walking.
+  useEffect(() => () => { input.forward = input.right = 0; input.run = false; }, []);
   return (
     <div className="absolute inset-0 z-10 touch-none select-none" dir="ltr"
       onPointerDown={(e) => {

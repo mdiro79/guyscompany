@@ -203,6 +203,9 @@ export interface Office {
   isPublic: boolean;
 }
 
+// Settings of an office nobody owns (also what a newly claimed office starts with).
+export const OFFICE_DEFAULTS = { glass: 'clear', locked: false, focus: false, isPublic: false } as const satisfies Partial<Office>;
+
 export interface OfficeVisit {
   id: string;
   slot: number;
@@ -313,6 +316,8 @@ export interface DataStore {
 
   listOffices(): Promise<Office[]>;
   updateOffice(slot: number, patch: Partial<Omit<Office, 'slot' | 'wallColor'>>): Promise<void>;
+  // Takes an empty office for userId in one step ('taken' if someone else got it first). See db-store.
+  claimOffice(slot: number, userId: string): Promise<'claimed' | 'taken'>;
   addVisit(slot: number, visitorId: string): Promise<void>;
   listVisits(slot: number, sinceIso: string): Promise<OfficeVisit[]>;
   listSwapRequests(userId: string): Promise<SwapRequest[]>;

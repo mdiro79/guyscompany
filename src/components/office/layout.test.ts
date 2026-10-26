@@ -92,17 +92,25 @@ describe('receptionist tour', () => {
 });
 
 describe('door rules', async () => {
-  const { isDoorClosed } = await import('./Player');
+  const { entryDenied, doorAllowed } = await import('./Player');
   const office = { slot: 2, ownerId: 'owner', wallColor: 'teal' as const, glass: 'clear' as const, locked: false, focus: false, isPublic: false };
-  it('owner always passes', () => expect(isDoorClosed({ ...office, locked: true }, 'owner', [])).toBe(false));
+  it('owner always passes', () => expect(entryDenied({ ...office, locked: true }, 'owner', [])).toBe(false));
   it('private office needs an accepted invite', () => {
-    expect(isDoorClosed(office, 'guest', [])).toBe(true);
-    expect(isDoorClosed(office, 'guest', [2])).toBe(false);
+    expect(entryDenied(office, 'guest', [])).toBe(true);
+    expect(entryDenied(office, 'guest', [2])).toBe(false);
   });
   it('public office is open unless locked or frosted', () => {
-    expect(isDoorClosed({ ...office, isPublic: true }, 'guest', [])).toBe(false);
-    expect(isDoorClosed({ ...office, isPublic: true, locked: true }, 'guest', [2])).toBe(true);
-    expect(isDoorClosed({ ...office, isPublic: true, glass: 'frosted' }, 'guest', [])).toBe(true);
+    expect(entryDenied({ ...office, isPublic: true }, 'guest', [])).toBe(false);
+    expect(entryDenied({ ...office, isPublic: true, locked: true }, 'guest', [2])).toBe(true);
+    expect(entryDenied({ ...office, isPublic: true, glass: 'frosted' }, 'guest', [])).toBe(true);
   });
-  it('empty office is open', () => expect(isDoorClosed({ ...office, ownerId: null }, 'guest', [])).toBe(false));
+  it('empty office is open', () => expect(entryDenied({ ...office, ownerId: null }, 'guest', [])).toBe(false));
+  it('only those with access use the door, but anyone inside can get out', () => {
+    const door = doors().find((d) => d.id === 'o2')!;
+    const locked = [{ ...office, locked: true }];
+    expect(doorAllowed(door, locked, 'owner', [])).toBe(true);
+    expect(doorAllowed(door, locked, 'guest', [2])).toBe(false);
+    expect(doorAllowed(door, locked, 'guest', [2], 2)).toBe(true);
+    expect(doorAllowed(doors().find((d) => d.id === 'conf')!, locked, 'guest', [])).toBe(true);
+  });
 });

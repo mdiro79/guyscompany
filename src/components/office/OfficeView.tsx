@@ -1,35 +1,38 @@
 'use client';
-import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, MessageCircle, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast, KeyRound } from 'lucide-react';
 import { present, usePresenter } from '@/lib/board/sync';
 import { raiseHand, useHands } from '@/lib/board/hands';
 import { saveRoomAction } from '@/app/actions/rooms';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import { useChat, PENDING } from '@/components/chat/useChat';
 import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
 import { useVoice } from '@/components/voice/VoiceContext';
 import { getMesh } from '@/lib/realtime/mesh';
 import { useDevice, isEmbedded } from '@/lib/device';
-import { recordVisitAction, updateMyOfficeAction } from '@/app/actions/offices';
-import type { FileMeta, Message, Room } from '@/lib/data/types';
+import { recordVisitAction, updateMyOfficeAction, claimOfficeAction } from '@/app/actions/offices';
+import { OFFICE_DEFAULTS, type FileMeta, type Message, type Office, type Room } from '@/lib/data/types';
 import { useOfficeNet } from './useOfficeNet';
 import { officeUi, input, useOfficeUi } from './store';
 import { EMOTES } from './emotes';
 import { officeAt, inConference, areaAt, allSeats, SPAWN, CONF_SCREEN } from './layout';
-import { connectDoors } from './doors';
+import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, type TabletButton } from './tablet';
 import { RoomControls } from './RoomControls';
 import { canLook } from './Player';
-import { startTourFor, useTourStep } from './tour';
+import { startTourFor, useTourStep, tour } from './tour';
 import { TouchControls } from './TouchControls';
 import { OfficePanel, type OfficeSettings, type OfficeTab } from './OfficePanel';
 import { MonitorDashboard } from './MonitorDashboard';
 import { Tutorial } from './Tutorial';
 import { TabCursor } from './TabCursor';
+import { OfficeLabels } from './OfficeLabels';
+import { OfficeChat } from './OfficeChat';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 
@@ -58,6 +61,8 @@ const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canva
 
 export function OfficeView({ messages, privateChats, invitedSlots, files, room }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null }) {
   const t = useTranslations('office');
+  const tc = useTranslations('common');
+  const tChat = useTranslations('chat');
   const te = useTranslations('emotes');
   const tErr = useTranslations('errors');
   const tb = useTranslations('board');
@@ -65,7 +70,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const locale = useLocale();
   const { user, profiles, offices: savedOffices } = useShell();
   // The owner's office settings apply at once (glass, door, panel) while they save; failures roll back.
-  const [offices, applyOffice] = useOptimistic(savedOffices, (list, { slot, patch }: { slot: number; patch: OfficeSettings }) =>
+  const [offices, applyOffice] = useOptimistic(savedOffices, (list, { slot, patch }: { slot: number; patch: Partial<Omit<Office, 'slot'>> }) =>
     list.map((o) => (o.slot === slot ? { ...o, ...patch } : o)));
   const voice = useVoice();
   const device = useDevice();
@@ -79,7 +84,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     return () => window.removeEventListener('message', h);
   }, []);
   // Never run a second office inside the dashboard iframe (it would join the mesh as this user).
-  const avatarLabels = useMemo(() => ({ locale, older: t('olderMessage'), newer: t('newerMessage') }), [locale, t]);
+  const labelTexts = useMemo(() => ({ locale, older: t('olderMessage'), newer: t('newerMessage'), receptionist: t('receptionist') }), [locale, t]);
   const meetingLabels = useMemo(() => ({
     title: t('meeting.title'), subtitle: t('meeting.subtitle'), raiseHand: t('meeting.raiseHand'), shareIdea: t('meeting.shareIdea'),
     shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), hands: t('meeting.hands'), rtl: locale === 'fa',
@@ -98,6 +103,35 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const [myPos, setMyPos] = useState<[number, number]>([...SPAWN.pos]);
   const [guestChat, setGuestChat] = useState(false);
   const relock = useRef(false);
+
+  // Team chat inside the office: the panel, an unread count, a short preview of a new message while the
+  // panel is closed, and the newest messages above their writers' heads (OfficeLabels).
+  const team = useChat('team', messages);
+  const [chatSeenAt, setChatSeenAt] = useState(() => Date.now());
+  const [chatFocus, setChatFocus] = useState(0);
+  const [preview, setPreview] = useState<Message | null>(null);
+  const chatRelock = useRef(false);
+  const lastTeam = team.messages.at(-1);
+  useEffect(() => { if (ui.chat) setChatSeenAt(Date.now()); }, [ui.chat, lastTeam?.id]);
+  const unreadChat = ui.chat ? 0 : team.messages.filter((m) => m.authorId !== user.id && !m.id.startsWith(PENDING) && Date.parse(m.createdAt) > chatSeenAt).length;
+  const previewed = useRef(lastTeam?.id);
+  useEffect(() => {
+    if (previewed.current === lastTeam?.id) return;
+    previewed.current = lastTeam?.id;
+    if (lastTeam && lastTeam.authorId !== user.id && !officeUi.get().chat) setPreview(lastTeam);
+  }, [lastTeam, user.id]);
+  useEffect(() => { if (!preview) return; const id = setTimeout(() => setPreview(null), 5000); return () => clearTimeout(id); }, [preview]);
+  const openChat = useCallback(() => {
+    if (document.pointerLockElement) { chatRelock.current = true; document.exitPointerLock(); }
+    officeUi.set({ chat: true, emoteWheel: false });
+    setPreview(null);
+    setChatFocus((n) => n + 1);
+  }, []);
+  const closeChat = useCallback(() => {
+    officeUi.set({ chat: false });
+    if (chatRelock.current && !isPhone && canLook()) canvas()?.requestPointerLock?.();
+    chatRelock.current = false;
+  }, [isPhone]);
   const seat = ui.seatId ? SEATS.find((s) => s.id === ui.seatId) ?? null : null;
   const working = !!seat?.monitor; // at a desk with the dashboard on the monitor
   const hands = useHands();
@@ -139,7 +173,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
       net.external.current = { x, z, yaw, pitch: 0, moving: 0, seatId, t: Date.now() + 1e9 };
     };
     (window as unknown as { __gcRemote?: unknown }).__gcRemote = (userId: string, x: number, z: number, yaw: number, moving = 0, seatId: string | null = null, emote: string | null = null) => {
-      net.remotes.current.set(userId, { userId, pose: { x, z, yaw, pitch: 0, moving, seatId, t: Date.now() }, receivedAt: performance.now() + 6e7, emote: emote ? { id: emote as never, until: Date.now() + 6e7 } : null });
+      net.remotes.current.set(userId, { userId, pose: { x, z, yaw, pitch: 0, moving, seatId, t: Date.now() }, receivedAt: performance.now() + 6e7, emote: emote ? { id: emote as never, until: Date.now() + 6e7 } : null, typing: 0 });
+    };
+    (window as unknown as { __gcTyping?: unknown }).__gcTyping = (userId: string, on = true) => {
+      const r = net.remotes.current.get(userId);
+      if (r) r.typing = on ? Date.now() + 6e7 : 0;
     };
   }, [net]);
   useEffect(() => {
@@ -147,7 +185,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     const id = setTimeout(() => officeUi.set({ myEmote: null }), Math.max(0, ui.myEmote.until - Date.now()));
     return () => clearTimeout(id);
   }, [ui.myEmote]);
-  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false, board: 'none' }), []);
+  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false, board: 'none', chat: false }), []);
   // Leaving the office restores full volume for everyone (proximity only applies in 3D).
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -176,6 +214,12 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
         else if (canLook()) canvas()?.requestPointerLock?.();
         return;
       }
+      // Enter or T opens the team chat (Enter belongs to the tour while it runs).
+      if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyT') && !e.repeat && !working && tour.get().step === null) {
+        e.preventDefault();
+        openChat();
+        return;
+      }
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
       if (e.code === 'Escape') officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false });
@@ -184,7 +228,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [voice, isPhone, working, openWheel, sendEmote]);
+  }, [voice, isPhone, working, openWheel, sendEmote, openChat]);
 
   // Record a visit when entering someone else's office.
   useEffect(() => {
@@ -217,9 +261,30 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   // Called inside the panel's transition, which keeps the optimistic change until the saved data arrives.
   const mySlot = savedOffices.find((o) => o.ownerId === user.id)?.slot;
   const changeMyOffice = useCallback((patch: OfficeSettings) => {
-    if (mySlot !== undefined) applyOffice({ slot: mySlot, patch });
+    if (mySlot !== undefined) {
+      applyOffice({ slot: mySlot, patch });
+      // Locking the office or frosting its glass shuts its door for everyone.
+      if (patch.locked === true || patch.glass === 'frosted') setDoor(`o${mySlot}`, false);
+    }
     return updateMyOfficeAction(patch);
   }, [mySlot, applyOffice]);
+
+  // "Claim this office" in an empty office. Someone who already has an office confirms the move first.
+  const [claim, setClaim] = useState<'idle' | 'confirm' | 'saving' | 'failed' | 'taken' | 'done'>('idle');
+  const [, startClaim] = useTransition();
+  useEffect(() => { setClaim((c) => (c === 'done' ? c : 'idle')); }, [ui.currentSlot]);
+  useEffect(() => { if (claim !== 'done') return; const id = setTimeout(() => setClaim('idle'), 3500); return () => clearTimeout(id); }, [claim]);
+  const claimOffice = (slot: number) => {
+    const previous = offices.find((o) => o.ownerId === user.id);
+    if (previous && claim !== 'confirm') { setClaim('confirm'); return; }
+    setClaim('saving');
+    startClaim(async () => {
+      applyOffice({ slot, patch: previous ? { ownerId: user.id, glass: previous.glass, locked: previous.locked, focus: previous.focus, isPublic: previous.isPublic } : { ownerId: user.id, ...OFFICE_DEFAULTS } });
+      if (previous) applyOffice({ slot: previous.slot, patch: { ownerId: null, ...OFFICE_DEFAULTS } });
+      const r = await claimOfficeAction(slot).catch(() => null);
+      setClaim(r?.ok ? 'done' : r?.error === 'taken' ? 'taken' : 'failed');
+    });
+  };
 
   // The seat tablet: its labels, what it shows (hand, mic, presentation, light) and its button presses.
   const pressRef = useRef<(b: TabletButton) => void>(() => {});
@@ -309,10 +374,12 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
       <div className={clsx('absolute', boardSplit
         ? 'inset-x-0 top-0 h-[42dvh] landscape:inset-y-0 landscape:start-auto landscape:end-0 landscape:h-auto landscape:w-[42vw]'
         : 'inset-0')}>
-        <OfficeScene user={user} profiles={profiles} offices={offices} messages={messages} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
-          receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} avatarLabels={avatarLabels} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+        <OfficeScene user={user} profiles={profiles} offices={offices} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
+          loadingLabel={t('loadingModels')} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+        {/* Names, messages and emotes above the heads, placed in the 3D world by LabelProjector */}
+        <OfficeLabels profiles={profiles} messages={team.messages} remotes={net.remotes} seenAt={chatSeenAt} texts={labelTexts} />
       </div>
-      {isPhone && !touring && !working && <TouchControls lookOnly={!!ui.seatId} />}
+      {isPhone && !touring && !working && !ui.chat && <TouchControls lookOnly={!!ui.seatId} />}
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}
       <div id="gc-monitor-frame" className="absolute z-20 hidden overflow-hidden bg-white shadow-2xl">
@@ -360,6 +427,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
               {voice.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
             </button>
             <button type="button" onClick={() => openWheel(!ui.emoteWheel)} aria-label={t('emotes')} className="flex size-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur"><Smile className="size-5" /></button>
+            <button type="button" onClick={() => (ui.chat ? closeChat() : openChat())} aria-label={tChat('title')} aria-pressed={ui.chat} title={tChat('title')}
+              className={clsx('relative flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.chat ? 'bg-[#2f8f7a]' : 'bg-black/55')}>
+              <MessageCircle className="size-5" />
+              {unreadChat > 0 && <span className="absolute -top-1 -end-1 min-w-5 rounded-full bg-[#f07a2a] px-1 text-center text-[11px] leading-5 font-bold shadow">{unreadChat > 9 ? '9+' : unreadChat}</span>}
+            </button>
             <button type="button" onClick={() => officeUi.set({ lowQuality: !ui.lowQuality })} aria-label={ui.lowQuality ? t('highQuality') : t('lowQuality')} title={ui.lowQuality ? t('highQuality') : t('lowQuality')}
               className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.lowQuality ? 'bg-[#f07a2a]' : 'bg-black/55')}><Gauge className="size-5" /></button>
           </div>
@@ -372,13 +444,13 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] short:p-2">
           {!isPhone && !ui.locked && <div className="rounded-xl bg-black/60 px-4 py-2 text-sm">{ui.seatId ? t('cursorHint') : t('clickToLook')}</div>}
           {!isPhone && hint && <div className={clsx('rounded-xl px-4 py-2 text-sm', it?.kind === 'door' && !it.allowed ? 'bg-[#d9443c]/90' : 'bg-[#2f5d45]/90')}>{hint}</div>}
-          {!isPhone && <div className="hidden rounded-lg bg-black/40 px-3 py-1 text-xs text-white/80 md:block">{t('controlsDesktop')}</div>}
-          {isPhone && !ui.seatId && <div className="rounded-lg bg-black/40 px-3 py-1 text-xs text-white/80 short:hidden">{t('controlsMobile')}</div>}
+          {!isPhone && !ui.chat && <div className="hidden rounded-lg bg-black/40 px-3 py-1 text-xs text-white/80 md:block">{t('controlsDesktop')}</div>}
+          {isPhone && !ui.seatId && !ui.chat && <div className="rounded-lg bg-black/40 px-3 py-1 text-xs text-white/80 short:hidden">{t('controlsMobile')}</div>}
         </div>
       )}
 
       {/* Contextual action (phones; on computers it's E) */}
-      {isPhone && !working && !touring && action && !ui.roomPanel && (
+      {isPhone && !working && !touring && action && !ui.roomPanel && !ui.chat && (
         <div className="absolute end-4 bottom-6 z-40 pb-[env(safe-area-inset-bottom)] short:bottom-3">
           <button type="button" disabled={'disabled' in action} className="flex min-h-14 items-center gap-2 rounded-2xl bg-[#2f5d45] px-5 text-base font-semibold shadow-lg disabled:bg-[#d9443c]/90 short:min-h-12"
             onClick={() => { input.action = true; }}>
@@ -401,7 +473,51 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
         </div>
       )}
       {ui.myEmote && !working && (
-        <div className="pointer-events-none absolute top-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl bg-white/90 px-4 py-2 text-3xl shadow short:top-16">{EMOTES.find((e) => e.id === ui.myEmote!.id)?.emoji}</div>
+        <div key={ui.myEmote.until} className="gc-pop pointer-events-none absolute top-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border-[3px] border-[#1d4a3a] bg-[#fbf6ea] py-1 ps-2 pe-3 text-sm font-semibold text-[#1d4a3a] shadow-lg short:top-16">
+          <span className="text-2xl leading-none">{EMOTES.find((e) => e.id === ui.myEmote!.id)?.emoji}</span>{te(ui.myEmote.id)}
+        </div>
+      )}
+
+      {/* Team chat */}
+      {ui.chat && !working && (
+        <OfficeChat messages={team.messages} profiles={profiles} meId={user.id} remotes={net.remotes} onSend={team.send} onTyping={net.sendTyping} onClose={closeChat}
+          focusKey={isPhone ? 0 : chatFocus} />
+      )}
+      {preview && !ui.chat && !working && !touring && !ui.roomPanel && (
+        <button type="button" onClick={openChat}
+          className="gc-pop absolute top-[4.25rem] end-3 z-30 flex max-w-[min(18rem,calc(100vw-1.5rem))] items-center gap-2 rounded-2xl bg-black/65 py-1.5 ps-1.5 pe-3 text-start shadow-lg backdrop-blur short:top-14">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/models/thumbs/${profiles.find((p) => p.id === preview.authorId)?.characterId ?? 'kaykit-mage'}.webp`} alt="" className="size-8 shrink-0 rounded-full bg-[#f6e3cf] object-cover" />
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] font-bold text-[#ffd98a]">{profiles.find((p) => p.id === preview.authorId)?.displayName ?? '—'}</span>
+            <span dir="auto" className="block truncate text-sm">{preview.body || '📎'}</span>
+          </span>
+        </button>
+      )}
+
+      {/* Empty office: anyone inside can take it */}
+      {current && !current.ownerId && !ui.seatId && !touring && !working && (
+        <div className="absolute top-[4.25rem] left-1/2 z-30 flex w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 flex-col items-center gap-2 short:top-14">
+          {claim === 'confirm' && myOffice ? (
+            <div className="w-full rounded-2xl bg-black/75 p-3 text-sm shadow-xl backdrop-blur">
+              <p className="mb-3 leading-6">{t('claimMove', { slot: myOffice.slot })}</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setClaim('idle')} className="min-h-11 rounded-xl bg-white/15 px-4 hover:bg-white/25">{tc('cancel')}</button>
+                <button type="button" onClick={() => claimOffice(current.slot)} className="flex min-h-11 items-center gap-2 rounded-xl bg-[#f6c544] px-4 font-semibold text-[#1d3a2e]"><KeyRound className="size-4" />{t('claimMoveConfirm')}</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" disabled={claim === 'saving'} onClick={() => claimOffice(current.slot)}
+              className="flex min-h-12 items-center gap-2 rounded-2xl bg-[#f6c544] px-5 text-base font-bold text-[#1d3a2e] shadow-lg ring-2 ring-[#fff3c4]/70 transition active:scale-95 disabled:opacity-70">
+              <KeyRound className="size-5" />{claim === 'saving' ? tc('saving') : t('claim')}
+            </button>
+          )}
+          {claim === 'taken' && <p className="rounded-lg bg-[#d9443c]/90 px-3 py-1 text-xs" role="alert">{t('claimTaken')}</p>}
+          {claim === 'failed' && <p className="rounded-lg bg-[#d9443c]/90 px-3 py-1 text-xs" role="alert">{t('saveFailed')}</p>}
+        </div>
+      )}
+      {claim === 'done' && inMyOffice && !working && (
+        <div className="gc-pop pointer-events-none absolute top-[4.25rem] left-1/2 z-30 -translate-x-1/2 rounded-2xl bg-[#2f5d45] px-4 py-2 text-sm font-semibold shadow-lg short:top-14">{t('claimed')}</div>
       )}
 
       {/* Owner controls inside one's own office */}

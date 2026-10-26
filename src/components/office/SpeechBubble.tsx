@@ -1,49 +1,73 @@
 'use client';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
-import { Sparkle } from './Nameplate';
+import { Crown } from 'lucide-react';
 
-export const TAIL_HEIGHT = 44; // px of the dotted tail under the card (space the parent leaves for it)
+const RIM = '#1d4a3a';
+const PAPER = '#fbf6ea';
+export const TAIL_HEIGHT = 20; // px the tail reaches below the card (room the parent leaves for it)
 
-// Frosted-glass speech card shared by the receptionist's tour and teammates' chat messages:
-// a teal sparkle badge on the corner, the speaker's portrait, a title with a small counter chip,
-// the text, an optional round action button, and a dotted glowing tail that runs down to the head.
-// The tail's end follows `--tail` (horizontal offset of the head from the card centre, in px).
-export function SpeechBubble({ characterId, title, chip, children, action, tail = true, className }: {
-  characterId: string; title: ReactNode; chip?: ReactNode; children: ReactNode; action?: ReactNode; tail?: boolean; className?: string;
+// Gold-ringed round badge: a crown for the receptionist, the person's portrait otherwise.
+export function Badge({ characterId, crown, className }: { characterId?: string; crown?: boolean; className?: string }) {
+  return (
+    <span className={clsx('relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#163328] ring-[2.5px] ring-[#f6c544]', className)}>
+      {crown || !characterId
+        ? <Crown className="size-5 fill-[#f6c544] text-[#c9921a]" strokeWidth={1.6} />
+        : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/models/thumbs/${characterId}.webp`} alt="" className="size-full object-cover" />
+        )}
+    </span>
+  );
+}
+
+// Speech bubble above a character (owner reference image): a cream card with a thick dark-green rim,
+// a dark-green name tab on its top edge (badge, status dot, name), three yellow "pop" strokes at the
+// top corner and a tail down to the head. Persian or English text sets its own direction.
+// The tail's tip follows `--tail` (horizontal offset of the head from the card centre, in px).
+export function SpeechBubble({ name, characterId, crown, dot = '#3ee07a', chip, children, action, tail = true, className }: {
+  name: ReactNode; characterId?: string; crown?: boolean; dot?: string; chip?: ReactNode; children: ReactNode; action?: ReactNode; tail?: boolean; className?: string;
 }) {
   return (
-    <div className={clsx('relative', className)}>
-      <div className="relative rounded-[22px] border border-white/80 bg-white/80 p-3.5 text-[#1f2a24] shadow-[0_14px_34px_rgba(31,42,36,0.2)] backdrop-blur-xl sm:p-4">
-        {/* glossy top light */}
-        <span className="pointer-events-none absolute inset-x-3 top-0 h-1/2 rounded-t-[22px] bg-gradient-to-b from-white/60 to-transparent" />
-        <span className="absolute -top-4 -start-4 flex size-11 -rotate-6 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7fd0c2] to-[#3f998c] shadow-[0_6px_14px_rgba(63,153,140,0.45)] ring-2 ring-white/70">
-          <Sparkle className="size-5 text-white" />
-          <span className="gc-glow absolute -top-2 -end-1.5 h-2 w-0.5 rotate-[35deg] rounded-full bg-[#7fd0c2]" />
-          <span className="gc-glow absolute -start-2 -bottom-1 h-0.5 w-2 -rotate-[25deg] rounded-full bg-[#7fd0c2] [animation-delay:.5s]" />
-        </span>
-        <div className="relative flex items-start gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/models/thumbs/${characterId}.webp`} alt="" className="size-11 shrink-0 rounded-full bg-[#f6e3cf] object-cover shadow ring-2 ring-white short:size-9" />
-          <div className="min-w-0 pt-0.5">
-            <div className="truncate text-[15px] leading-5 font-bold">{title}</div>
-            {chip !== undefined && <span className="mt-1 inline-block rounded-full bg-[#1f2a24]/[0.07] px-2.5 py-0.5 text-xs font-medium text-[#4b5750]" dir="ltr">{chip}</span>}
-          </div>
-        </div>
-        <div className="relative mt-2 text-[15px] leading-6 text-[#1f2a24]/90 short:text-sm short:leading-5" dir="auto">{children}</div>
-        {action && <div className="relative -mb-1 mt-1 flex items-center justify-end gap-1">{action}</div>}
+    <div dir="ltr" className={clsx('relative pt-[26px]', className)}>
+      <div className="relative rounded-[26px] border-[3.5px] bg-[#fbf6ea] px-4 pt-6 pb-3 text-[#1f2a24] shadow-[0_10px_26px_rgba(20,40,30,0.28)]" style={{ borderColor: RIM }}>
+        <div className="text-[15px] leading-[1.65] font-semibold" dir="auto">{children}</div>
+        {action && <div className="mt-2 flex items-center justify-end gap-1.5">{action}</div>}
       </div>
+      {/* name tab on the rim */}
+      <div className="absolute top-0 left-3 flex max-w-[calc(100%-2.5rem)] items-center gap-2 rounded-[20px] py-1 ps-1 pe-4 text-white shadow-[0_4px_10px_rgba(20,30,25,0.3)]" style={{ background: RIM }}>
+        <Badge characterId={characterId} crown={crown} />
+        <span className="size-2.5 shrink-0 rounded-full shadow-[0_0_6px_currentColor]" style={{ background: dot, color: dot }} />
+        <span className="truncate text-[15px] leading-none font-extrabold tracking-tight">{name}</span>
+        {chip !== undefined && <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white/90">{chip}</span>}
+      </div>
+      {/* pop strokes at the top corner */}
+      <svg viewBox="0 0 32 32" className="pointer-events-none absolute top-0 -right-3 size-8 overflow-visible" aria-hidden>
+        {['M6 14 L2 4', 'M14 16 L20 6', 'M17 22 L28 18'].map((d) => (
+          <path key={d} d={d} stroke="#ffd23f" strokeWidth="4" strokeLinecap="round" className="gc-glow" />
+        ))}
+      </svg>
       {tail && (
-        <svg width="46" height={TAIL_HEIGHT} viewBox={`0 0 46 ${TAIL_HEIGHT}`} aria-hidden
-          className="pointer-events-none absolute top-full -mt-px overflow-visible group-data-[tail=0]:hidden"
-          style={{ left: 'calc(50% + var(--tail, 0px) - 4px)' }}>
-          <path d={`M40 0C40 18 10 20 4 ${TAIL_HEIGHT - 2}`} fill="none" stroke="#ffffff" strokeOpacity=".9" strokeWidth="2.5" strokeDasharray="1 5" strokeLinecap="round"
-            style={{ filter: 'drop-shadow(0 0 2px #5fc4b4)' }} />
-          <circle cx="38" cy="8" r="3.5" fill="#ffffff" stroke="#5fc4b4" strokeWidth="1.5" className="gc-glow" />
-          <circle cx="22" cy="24" r="4" fill="#ffffff" stroke="#5fc4b4" strokeWidth="1.5" className="gc-glow [animation-delay:.4s]" />
-          <circle cx="4" cy={TAIL_HEIGHT - 2} r="3" fill="#ffffff" stroke="#5fc4b4" strokeWidth="1.5" className="gc-glow [animation-delay:.8s]" />
+        <svg width="34" height="22" viewBox="0 0 34 22" aria-hidden
+          className="pointer-events-none absolute top-[calc(100%-3.5px)] -translate-x-1/2 overflow-visible group-data-[tail=0]:hidden"
+          style={{ left: 'calc(50% + var(--tail, 0px))' }}>
+          <path d="M2 0 L17 19 L32 0" fill={PAPER} stroke={RIM} strokeWidth="3.5" strokeLinejoin="round" />
         </svg>
       )}
+    </div>
+  );
+}
+
+// "…" while someone types: a small bubble in the same style, above their name.
+export function TypingBubble() {
+  return (
+    <div dir="ltr" className="relative mb-3 rounded-full border-[3px] bg-[#fbf6ea] px-3.5 py-2 shadow-[0_6px_14px_rgba(20,40,30,0.25)]" style={{ borderColor: RIM }}>
+      <span className="flex gap-1.5">
+        {[0, 160, 320].map((d) => <span key={d} className="size-2 animate-bounce rounded-full bg-[#1d4a3a]" style={{ animationDelay: `${d}ms` }} />)}
+      </span>
+      <svg width="20" height="13" viewBox="0 0 20 13" aria-hidden className="absolute top-[calc(100%-3px)] left-1/2 -translate-x-1/2 overflow-visible">
+        <path d="M1 0 L10 11 L19 0" fill={PAPER} stroke={RIM} strokeWidth="3" strokeLinejoin="round" />
+      </svg>
     </div>
   );
 }

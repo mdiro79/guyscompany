@@ -79,7 +79,8 @@ export function createSeed() {
     { slot: 1, ownerId: ids.mehdi, wallColor: 'orange', glass: 'clear', locked: false, focus: false, isPublic: true },
     { slot: 2, ownerId: ids.sara, wallColor: 'teal', glass: 'clear', locked: false, focus: false, isPublic: false },
     { slot: 3, ownerId: ids.nima, wallColor: 'teal', glass: 'frosted', locked: true, focus: true, isPublic: false },
-    { slot: 4, ownerId: ids.reza, wallColor: 'orange', glass: 'clear', locked: false, focus: false, isPublic: false },
+    // Empty in the demo, so "Claim this office" can be tried.
+    { slot: 4, ownerId: null, wallColor: 'orange', glass: 'clear', locked: false, focus: false, isPublic: false },
   ];
 
   const focus: FocusItem[] = [
