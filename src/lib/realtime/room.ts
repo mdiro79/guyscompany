@@ -1,6 +1,7 @@
 'use client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { ROOM_TOPIC } from './topic';
 
 export interface PresenceMeta { userId: string; device: 'phone' | 'computer'; tabId: string; micActive: boolean; since: number }
 type Handler = (payload: Record<string, unknown>) => void;
@@ -46,31 +47,30 @@ function emitter() {
   };
 }
 
+type Emitter = ReturnType<typeof emitter>;
+interface Transport { send(event: string, payload: Record<string, unknown>): void; track(meta: PresenceMeta): void; close(): void }
+
+// Some networks cut the browser's WebSocket to supabase.co (closed with 1006, then TIMED_OUT) while the
+// site itself loads fine. Then the room goes through our own server instead (/api/room), and the
+// choice is remembered for a day so the next visit does not wait for the direct attempt to fail.
+const DIRECT_TIMEOUT_MS = 8000;
+const RELAY_KEY = 'gc-room-relay';
+const RELAY_REMEMBER_MS = 24 * 60 * 60 * 1000;
+const relayRemembered = () => { try { return Date.now() - Number(localStorage.getItem(RELAY_KEY) ?? 0) < RELAY_REMEMBER_MS; } catch { return false; } };
+const rememberRelay = () => { try { localStorage.setItem(RELAY_KEY, String(Date.now())); } catch {} };
+
 function supabaseRoom(): Room {
-  const supabase = supabaseBrowser()!;
   const ev = emitter();
   let offset = 0;
   let meta: PresenceMeta | null = null;
-  let ready = false;
-  const channel: RealtimeChannel = supabase.channel('gc-room', { config: { broadcast: { self: false }, presence: { key: tabId } } });
-  channel.on('broadcast', { event: '*' }, ({ event, payload }) => ev.emit(event, payload as Record<string, unknown>));
-  channel.on('presence', { event: 'sync' }, () => {
-    const state = channel.presenceState<PresenceMeta>();
-    ev.emitPresence(Object.values(state).flat());
-  });
-  setStatus('connecting');
-  channel.subscribe(async (status, err) => {
-    setStatus(err ? `${status}: ${err.message}` : status);
-    if (status !== 'SUBSCRIBED') return;
-    ready = true;
-    if (meta) await channel.track(meta);
-  });
-  // Phones suspend sockets in the background: announce ourselves again when the page is back or online.
-  if (typeof window !== 'undefined') {
-    const reannounce = () => { if (document.visibilityState === 'visible' && ready && meta) void channel.track(meta); };
-    document.addEventListener('visibilitychange', reannounce);
-    window.addEventListener('online', reannounce);
-  }
+  let transport: Transport;
+  const useRelay = () => {
+    transport.close();
+    rememberRelay();
+    transport = relayTransport(ev);
+    if (meta) transport.track(meta);
+  };
+  transport = relayRemembered() ? relayTransport(ev) : directTransport(ev, () => meta, useRelay);
   // Clock offset against the server (Date header of a tiny request) for last-command-wins ordering.
   fetch('/api/time', { cache: 'no-store' }).then(async (r) => {
     const t0 = Date.now();
@@ -80,10 +80,107 @@ function supabaseRoom(): Room {
   return {
     tabId,
     on: ev.on,
-    send(event, payload) { channel.send({ type: 'broadcast', event, payload }); },
-    track(m) { meta = { ...m, tabId, since: meta?.since ?? Date.now() }; if (ready) channel.track(meta); },
+    send(event, payload) { transport.send(event, payload); },
+    track(m) { meta = { ...m, tabId, since: meta?.since ?? Date.now() }; transport.track(meta); },
     onPresence: ev.onPresence,
     serverOffsetMs: () => offset,
+  };
+}
+
+function directTransport(ev: Emitter, getMeta: () => PresenceMeta | null, fail: () => void): Transport {
+  const supabase = supabaseBrowser()!;
+  let ready = false;
+  let closed = false;
+  const channel: RealtimeChannel = supabase.channel(ROOM_TOPIC, { config: { broadcast: { self: false }, presence: { key: tabId } } });
+  channel.on('broadcast', { event: '*' }, ({ event, payload }) => ev.emit(event, payload as Record<string, unknown>));
+  channel.on('presence', { event: 'sync' }, () => {
+    const state = channel.presenceState<PresenceMeta>();
+    ev.emitPresence(Object.values(state).flat());
+  });
+  // Not connected in time (first join, or after losing the connection): switch to the relay.
+  let giveUp: ReturnType<typeof setTimeout> | null = setTimeout(() => fail(), DIRECT_TIMEOUT_MS);
+  setStatus('connecting');
+  channel.subscribe(async (status, err) => {
+    if (closed) return;
+    setStatus(err ? `${status}: ${err.message}` : status);
+    if (status !== 'SUBSCRIBED') {
+      ready = false;
+      giveUp ??= setTimeout(() => fail(), DIRECT_TIMEOUT_MS);
+      return;
+    }
+    if (giveUp) { clearTimeout(giveUp); giveUp = null; }
+    ready = true;
+    const meta = getMeta();
+    if (meta) await channel.track(meta);
+  });
+  // Phones suspend sockets in the background: announce ourselves again when the page is back or online.
+  const reannounce = () => { const meta = getMeta(); if (document.visibilityState === 'visible' && ready && meta) void channel.track(meta); };
+  document.addEventListener('visibilitychange', reannounce);
+  window.addEventListener('online', reannounce);
+  return {
+    send(event, payload) { void channel.send({ type: 'broadcast', event, payload }); },
+    track(meta) { if (ready) void channel.track(meta); },
+    close() {
+      closed = true;
+      if (giveUp) clearTimeout(giveUp);
+      document.removeEventListener('visibilitychange', reannounce);
+      window.removeEventListener('online', reannounce);
+      void supabase.removeChannel(channel);
+    },
+  };
+}
+
+// The room through our server: an event stream to receive, POST to send. The stream is opened on the
+// first track() (a page that never announces itself, like the dashboard on the 3D monitor, stays out).
+function relayTransport(ev: Emitter): Transport {
+  let meta: PresenceMeta | null = null;
+  let source: EventSource | null = null;
+  let outbox: { event: string; payload: Record<string, unknown> }[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  const post = (body: Record<string, unknown>) =>
+    fetch('/api/room', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tab: tabId, ...body }), keepalive: true }).catch(() => {});
+  // Signaling comes in bursts (ICE candidates); they leave together a moment later.
+  const flush = () => { flushTimer = null; const messages = outbox.splice(0); if (messages.length) void post({ messages }); };
+  const open = () => {
+    const m = meta!;
+    const q = new URLSearchParams({ tab: tabId, device: m.device, mic: m.micActive ? '1' : '0', since: String(m.since) });
+    const es = new EventSource(`/api/room?${q}`);
+    const parse = (e: Event) => JSON.parse((e as MessageEvent<string>).data);
+    es.addEventListener('status', (e) => {
+      const { status, error } = parse(e) as { status: string; error: string | null };
+      // A newer stream takes over once it is in the room; the old one closes only then.
+      if (status === 'SUBSCRIBED' && source !== es) { source?.close(); source = es; }
+      if (source !== es) return;
+      setStatus(`relay ${error ? `${status}: ${error}` : status}`);
+      // After an automatic reconnect the server only knows the meta from the stream's address.
+      if (status === 'SUBSCRIBED' && meta) void post({ track: { device: meta.device, micActive: meta.micActive } });
+    });
+    es.addEventListener('msg', (e) => { if (source === es) { const { event, payload } = parse(e); ev.emit(event, payload); } });
+    es.addEventListener('presence', (e) => { if (source === es) ev.emitPresence(parse(e)); });
+    es.addEventListener('rotate', () => { if (source === es) open(); });
+    es.onerror = () => { if (source === es) setStatus('relay reconnecting'); };
+    return es;
+  };
+  // A stream the browser gave up on (phone in the background, network change) is opened again.
+  const revive = () => { if (document.visibilityState === 'visible' && source?.readyState === EventSource.CLOSED) source = open(); };
+  document.addEventListener('visibilitychange', revive);
+  window.addEventListener('online', revive);
+  setStatus('relay connecting');
+  return {
+    send(event, payload) { outbox.push({ event, payload }); flushTimer ??= setTimeout(flush, 40); },
+    track(m) {
+      const first = !meta;
+      meta = m;
+      if (first) source = open();
+      else void post({ track: { device: m.device, micActive: m.micActive } });
+    },
+    close() {
+      source?.close(); source = null;
+      if (flushTimer) clearTimeout(flushTimer);
+      outbox = [];
+      document.removeEventListener('visibilitychange', revive);
+      window.removeEventListener('online', revive);
+    },
   };
 }
 
