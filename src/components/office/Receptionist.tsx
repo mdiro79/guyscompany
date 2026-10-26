@@ -1,22 +1,32 @@
 'use client';
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { CharacterModel, CHARACTER_HEIGHT, type Motion } from '@/components/three/CharacterModel';
+import { CharacterModel, type HeadListener, type Motion } from '@/components/three/CharacterModel';
 import { RECEPTIONIST_SEAT } from './layout';
-import { Nameplate } from './Nameplate';
 import { GroundShadow } from './GroundShadow';
 import { tour, guide, me, pointAt, GUIDE_SPEED } from './tour';
+import { anchors } from './labels';
 
 export const RECEPTIONIST_CHARACTER = 'kaykit-ranger';
 const SIT_Y = 0.08;
 
 // The receptionist works at her computer behind the desk; for the tour she gets up, walks to each
-// part of the office (paths from tour.ts) and comes back to sit down again.
-export function Receptionist({ label }: { label: string }) {
+// part of the office (paths from tour.ts) and comes back to sit down again. Her name above the head is
+// drawn by the page (OfficeLabels) while she sits; during the tour her speech panel takes its place.
+export function Receptionist() {
   const group = useRef<THREE.Group>(null);
   const [motion, setMotion] = useState<Motion>('sit');
+  const head = useRef<{ head: THREE.Object3D | null; top: number }>({ head: null, top: 0 });
+  const onHead = useCallback<HeadListener>((bone, top) => {
+    head.current = { head: bone, top };
+    const a = anchors.get('receptionist');
+    if (a) Object.assign(a, head.current);
+  }, []);
+  useEffect(() => {
+    if (group.current) anchors.set('receptionist', { root: group.current, ...head.current, talk: 0, hidden: false });
+    return () => { anchors.delete('receptionist'); };
+  }, []);
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
@@ -45,16 +55,13 @@ export function Receptionist({ label }: { label: string }) {
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * (1 - Math.exp(-dt * 8));
     if (m !== motion) setMotion(m);
+    const anchor = anchors.get('receptionist');
+    if (anchor) anchor.hidden = m !== 'sit';
   });
   return (
     <group ref={group} position={[RECEPTIONIST_SEAT.pos[0], 0, RECEPTIONIST_SEAT.pos[1]]}>
       <GroundShadow size={[0.75, 0.75]} opacity={0.35} y={0.01 - SIT_Y} />
-      <Suspense fallback={null}><CharacterModel characterId={RECEPTIONIST_CHARACTER} motion={motion} typing={motion === 'sit'} /></Suspense>
-      {motion === 'sit' && (
-        <Html position={[0, CHARACTER_HEIGHT + 0.25, 0]} center zIndexRange={[10, 0]} style={{ direction: 'ltr' }}>
-          <div className="-translate-y-full"><Nameplate name={label} crown typing /></div>
-        </Html>
-      )}
+      <Suspense fallback={null}><CharacterModel characterId={RECEPTIONIST_CHARACTER} motion={motion} typing={motion === 'sit'} onHead={onHead} /></Suspense>
     </group>
   );
 }

@@ -20,11 +20,12 @@ export interface OfficeUiState {
   myEmote: { id: EmoteId; until: number } | null;
   tutorialStep: number | null;
   selectedUserId: string | null; // avatar whose message history is open
+  chat: boolean; // the team chat panel is open
 }
 
 let state: OfficeUiState = {
   locked: false, seatId: null, panel: 'none', emoteWheel: false, interact: null, currentSlot: null, inConference: false, roomPanel: false, board: 'none',
-  lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null,
+  lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null, chat: false,
 };
 const listeners = new Set<() => void>();
 

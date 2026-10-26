@@ -3,9 +3,9 @@ import type { Mesh } from '@/lib/realtime/mesh';
 import { syncedNow } from '@/lib/realtime/room';
 import { doors, doorLeaf, type DoorDef, type Segment } from './layout';
 
-// Shared open/closed state of the hinged doors (E toggles them). Changes travel over the WebRTC
-// events channel with a server-corrected timestamp; the newest command wins, late joiners catch up
-// from a periodic snapshot. Nothing is stored in the database.
+// Shared open/closed state of the hinged doors (E toggles them), the same for everyone. Changes travel
+// over the WebRTC events channel with a server-corrected timestamp; the newest command wins, late
+// joiners catch up from a snapshot (sent when a link opens, and every few seconds). Nothing is stored.
 
 export const DOORS: DoorDef[] = doors();
 const state = new Map<string, { open: boolean; t: number }>(DOORS.map((d) => [d.id, { open: d.defaultOpen, t: 0 }]));
@@ -25,8 +25,10 @@ function apply(id: string, open: boolean, t: number) {
   return true;
 }
 
+// A new command always beats the state on screen, even when this device's clock is behind the device
+// that sent it (otherwise a door could stay stuck for others until the clocks caught up).
 export function setDoor(id: string, open: boolean) {
-  const t = syncedNow();
+  const t = Math.max(syncedNow(), (state.get(id)?.t ?? 0) + 1);
   if (apply(id, open, t)) mesh?.sendEvent({ type: 'door', id, open, t });
 }
 
@@ -50,7 +52,7 @@ export function connectDoors(m: Mesh | null) {
     const list = [...state.entries()].filter(([, v]) => v.t > 0).map(([id, v]) => ({ id, ...v }));
     if (list.length) m.sendEvent({ type: 'doors', list });
   };
-  const offPeers = m.onPeers(() => setTimeout(snapshot, 1500));
+  const offPeers = m.onPeers(() => setTimeout(snapshot, 400));
   const timer = setInterval(snapshot, 8000);
   return () => { off(); offPeers(); clearInterval(timer); mesh = null; };
 }

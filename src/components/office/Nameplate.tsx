@@ -15,9 +15,10 @@ const RAYS = [-62, -28, 6, 40]; // degrees of the short rays above the badge
 
 // Name label above a character: dark green pill with a cream rim, a gold-ringed badge (a crown for the
 // receptionist, the person's portrait otherwise), sparkles, and a status dot with a line under the name.
-// The line is the voice level while someone talks, or moves while the receptionist types.
-export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', level = 0, typing = false, unread = 0 }: {
-  name: string; characterId?: string; crown?: boolean; dot?: string; level?: number; typing?: boolean; unread?: number;
+// The line is the voice level while someone talks (`level`, or the --talk CSS variable set by the label
+// layer every frame), or moves while the receptionist types. `emoji`: the emote being shown.
+export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', level, typing = false, unread = 0, emoji }: {
+  name: string; characterId?: string; crown?: boolean; dot?: string; level?: number; typing?: boolean; unread?: number; emoji?: string;
 }) {
   return (
     <div dir="ltr" className="relative flex items-center gap-2 rounded-full border-2 border-[#f3e7d3] bg-gradient-to-b from-[#2f5d4a] to-[#1c3d31] py-1 ps-1 pe-4 text-white shadow-[0_6px_14px_rgba(20,30,25,0.35),inset_0_1px_0_rgba(255,255,255,0.18)]">
@@ -41,10 +42,11 @@ export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', l
           <span className="size-2 shrink-0 rounded-full shadow-[0_0_6px_currentColor]" style={{ background: dot, color: dot }} />
           <span className="h-1 w-16 overflow-hidden rounded-full bg-white/15">
             <span className={clsx('block h-full rounded-full transition-[width] duration-150', typing && 'gc-typing')}
-              style={{ width: typing ? '100%' : `${60 + Math.min(1, level) * 40}%`, background: typing ? undefined : dot }} />
+              style={{ width: typing ? '100%' : level !== undefined ? `${60 + Math.min(1, level) * 40}%` : 'calc(60% + min(1, var(--talk, 0)) * 40%)', background: typing ? undefined : dot }} />
           </span>
         </span>
       </span>
+      {emoji && <span key={emoji} className="gc-pop -my-1 -me-2 flex size-8 items-center justify-center rounded-full bg-[#fbf6ea] text-lg leading-none shadow-inner">{emoji}</span>}
       {unread > 0 && <span className="rounded-full bg-[#f07a2a] px-1.5 text-[11px] font-bold">{unread}</span>}
       <Sparkle className="gc-twinkle absolute -top-2.5 end-1 size-4 text-[#ffd23f]" />
       <Sparkle className="gc-twinkle absolute -top-1 -end-2.5 size-2.5 text-[#ffe48a] [animation-delay:.7s]" />

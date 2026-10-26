@@ -4,11 +4,12 @@ import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import type { Message, Office, Profile } from '@/lib/data/types';
+import type { Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
 import { Furniture } from './Furniture';
 import { Player, type Pose } from './Player';
-import { Avatars, type AvatarLabels } from './Avatars';
+import { Avatars } from './Avatars';
+import { LabelProjector } from './LabelProjector';
 import { Receptionist } from './Receptionist';
 import { FirstPersonArms } from './FirstPersonArms';
 import { preloadCharacter } from '@/components/three/CharacterModel';
@@ -22,8 +23,8 @@ import type { RemoteAvatar } from './useOfficeNet';
 import { officeUi } from './store';
 
 export interface SceneProps {
-  user: Profile; profiles: Profile[]; offices: Office[]; messages: Message[]; invitedSlots: number[];
-  lowQuality: boolean; isPhone: boolean; receptionLabel: string; loadingLabel: string; avatarLabels: AvatarLabels; meetingLabels: MeetingLabels;
+  user: Profile; profiles: Profile[]; offices: Office[]; invitedSlots: number[];
+  lowQuality: boolean; isPhone: boolean; loadingLabel: string; meetingLabels: MeetingLabels;
   remotes: React.RefObject<Map<string, RemoteAvatar>>; external: React.RefObject<Pose | null>;
   onPose: (p: Pose) => void; voiceDistance: (pos: [number, number], userId: string) => void;
 }
@@ -145,16 +146,17 @@ export default function OfficeScene(p: SceneProps) {
       <SoftEnvironment />
       <ConferenceRoom labels={p.meetingLabels} lowQuality={p.lowQuality} />
       <Suspense fallback={null}>
-        <Building offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} />
+        <Building offices={p.offices} />
         <Furniture />
-        <Receptionist label={p.receptionLabel} />
-        <Avatars remotes={p.remotes} profiles={p.profiles} messages={p.messages} labels={p.avatarLabels} voiceDistance={p.voiceDistance} />
+        <Receptionist />
+        <Avatars remotes={p.remotes} profiles={p.profiles} voiceDistance={p.voiceDistance} />
         <FirstPersonArms characterId={p.user.characterId} userId={p.user.id} />
         <SceneReady onReady={markReady} />
       </Suspense>
       <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />
       <MonitorFrame />
       <TourBubbleAnchor />
+      <LabelProjector offices={p.offices} />
       {!p.lowQuality && ready && <Suspense fallback={null}><Effects phone={p.isPhone} /></Suspense>}
     </Canvas>
     </>

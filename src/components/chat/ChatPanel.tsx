@@ -1,22 +1,19 @@
 'use client';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
 import { MessageCircle, MoreHorizontal, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
-import { sendMessageAction, toggleReactionAction } from '@/app/actions/chat';
+import { toggleReactionAction } from '@/app/actions/chat';
 import { formatBytes, formatTime } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
 import { uploadFile } from '@/lib/upload';
 import type { FileMeta, Message } from '@/lib/data/types';
 import { useShell } from '@/components/shell/ShellContext';
-import { onNewMessage } from '@/lib/live-messages';
+import { useChat, PENDING } from './useChat';
 
 const QUICK = ['👍', '🔥', '❤️', '😂', '🎉', '👏'];
-const EMOJI = ['😀', '😂', '😍', '🤔', '😎', '😴', '😢', '😡', '👍', '👌', '🙏', '🔥', '❤️', '🎉', '✅', '🚀', '☕', '💡'];
-
-const PENDING = 'pending:';
-const byTime = (a: Message, b: Message) => a.createdAt.localeCompare(b.createdAt);
+export const EMOJI = ['😀', '😂', '😍', '🤔', '😎', '😴', '😢', '😡', '👍', '👌', '🙏', '🔥', '❤️', '🎉', '✅', '🚀', '☕', '💡'];
 
 export function ChatPanel({ channel = 'team', messages: saved, files, title, className }: {
   channel?: string; messages: Message[]; files: FileMeta[]; title?: string; className?: string;
@@ -29,27 +26,9 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
   const [reactFor, setReactFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
-  // Messages not yet in the server data: our own while sending (and once saved) and others' from Realtime.
-  // They show at once; the next page refresh brings them in `saved` and the local copies are dropped.
-  const [local, setLocal] = useState<Message[]>([]);
+  const { messages, send: post } = useChat(channel, saved);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => onNewMessage((m) => {
-    if (m.channel !== channel) return;
-    setLocal((l) => {
-      if (l.some((x) => x.id === m.id)) return l;
-      // Our own message can arrive here before the send finishes: it takes the place of its "sending" copy.
-      const own = m.authorId === user.id ? l.findIndex((x) => x.id.startsWith(PENDING) && x.body === m.body && x.fileId === m.fileId) : -1;
-      return own < 0 ? [...l, m] : l.map((x, i) => (i === own ? m : x));
-    });
-  }), [channel, user.id]);
-  const savedIds = useMemo(() => new Set(saved.map((m) => m.id)), [saved]);
-  useEffect(() => { setLocal((l) => (l.some((m) => savedIds.has(m.id)) ? l.filter((m) => !savedIds.has(m.id)) : l)); }, [savedIds]);
-  const messages = useMemo(() => {
-    const extra = local.filter((m) => !savedIds.has(m.id));
-    return extra.length ? [...saved, ...extra].sort(byTime) : saved;
-  }, [saved, local, savedIds]);
 
   // The list is capped, so follow the newest message id rather than the count.
   const lastId = messages.at(-1)?.id;
@@ -57,21 +36,12 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [lastId]);
 
-  // The message shows right away as "sending"; the text comes back if sending fails.
+  // The text comes back if sending fails.
   const send = (body: string, fileId: string | null = null) => {
     setError(null);
     setText('');
-    const tempId = `${PENDING}${crypto.randomUUID()}`;
-    setLocal((l) => [...l, { id: tempId, channel, authorId: user.id, body: body.trim(), fileId, createdAt: new Date().toISOString(), reactions: [] }]);
-    start(async () => {
-      const r = await sendMessageAction(channel, body, fileId).catch(() => null);
-      if (r?.ok && r.sent) {
-        const sent = r.sent;
-        // Realtime may have delivered it already.
-        setLocal((l) => (l.some((m) => m.id === sent.id) ? l.filter((m) => m.id !== tempId) : l.map((m) => (m.id === tempId ? sent : m))));
-        return;
-      }
-      setLocal((l) => l.filter((m) => m.id !== tempId));
+    void post(body, fileId).then((ok) => {
+      if (ok) return;
       setText((cur) => cur || body);
       setError(t('sendFailed'));
     });

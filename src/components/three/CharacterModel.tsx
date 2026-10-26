@@ -25,7 +25,9 @@ const findBone = (root: THREE.Object3D, re: RegExp, not?: RegExp) => {
   return found as THREE.Object3D | null;
 };
 
-interface CharacterProps { characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean; typing?: boolean }
+// Reports the head bone and how far the top of the head is above it (metres), for labels above the head.
+export type HeadListener = (head: THREE.Object3D | null, top: number) => void;
+interface CharacterProps { characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean; typing?: boolean; onHead?: HeadListener }
 
 /**
  * One of the 20 characters, normalised to CHARACTER_HEIGHT with feet at y=0.
@@ -45,12 +47,12 @@ function KaykitCharacter(props: CharacterProps) {
   return <Rig {...props} sharedClips={clips} />;
 }
 
-function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, typing = false, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
+function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, typing = false, onHead, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
   const character = getCharacter(characterId);
   const gltf = useGLTF(character.model);
   const talk = useRef(0);
 
-  const { object, scale, offsetY, bones } = useMemo(() => {
+  const { object, scale, offsetY, headTop, bones } = useMemo(() => {
     const object = cloneSkinned(gltf.scene) as THREE.Object3D;
     object.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -59,10 +61,14 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
     const box = new THREE.Box3().setFromObject(object);
     const height = box.max.y - box.min.y || 1;
     const scale = CHARACTER_HEIGHT / height;
+    const head = findBone(object, /head/i, /end|top/i);
+    // Measured in the rest pose, before any animation: from the head bone to the top of the model.
+    object.updateMatrixWorld(true);
+    const headTop = head ? Math.max(0.15, (box.max.y - head.getWorldPosition(new THREE.Vector3()).y) * scale) : 0;
     return {
-      object, scale, offsetY: -box.min.y * scale,
+      object, scale, offsetY: -box.min.y * scale, headTop,
       bones: {
-        head: findBone(object, /head/i, /end|top/i),
+        head,
         neck: findBone(object, /neck/i),
         armL: findBone(object, /(upperarm|arm).*(l|left)\b|(l|left).*upperarm|shoulder\.?l|ArmLeft|upperarm_l/i),
         armR: findBone(object, /(upperarm|arm).*(r|right)\b|(r|right).*upperarm|shoulder\.?r|ArmRight|upperarm_r/i),
@@ -104,6 +110,8 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
   useEffect(() => {
     if (bones.head) bones.head.scale.setScalar(hideHead ? 0.001 : 1);
   }, [hideHead, bones.head]);
+
+  useEffect(() => { onHead?.(bones.head, headTop); }, [onHead, bones.head, headTop]);
 
   useEffect(() => {
     if (!onlyArms) return;
