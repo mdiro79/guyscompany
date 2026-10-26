@@ -3,7 +3,6 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
-import { doorAllowed } from './Player';
 import { DOORS, doorAngles, isDoorOpen } from './doors';
 import { buildWalls, OFFICES, WALL_HEIGHT, H, OUT, SOUTH, PORCH, CONF_RADIUS, RECEPTION_Z, guideLines, type DoorDef, type Segment } from './layout';
 import { wallWash } from './textures';
@@ -93,12 +92,12 @@ function WallPiece({ w, color, glass, frosted, shared }: { w: Segment; color: st
   );
 }
 
-// Hinged door leaf; E toggles it (shared state) and it swings smoothly. A visitor without access
-// always sees it closed. The animated angle is also what the player collides with.
-function Door({ def, allowed }: { def: DoorDef; allowed: boolean }) {
+// Hinged door leaf; E toggles it and it swings smoothly. Everyone sees the same state (shared over
+// WebRTC); access rules only decide who may pass (Player). The animated angle is what the player collides with.
+function Door({ def }: { def: DoorDef }) {
   const ref = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
-    const target = isDoorOpen(def.id) && allowed ? def.open : def.closed;
+    const target = isDoorOpen(def.id) ? def.open : def.closed;
     const cur = doorAngles.get(def.id) ?? def.closed;
     const next = cur + (target - cur) * (1 - Math.exp(-dt * 7));
     doorAngles.set(def.id, Math.abs(target - next) < 0.002 ? target : next);
@@ -167,7 +166,7 @@ function GuideLines() {
   );
 }
 
-export function Building({ offices, viewerId, invitedSlots }: { offices: Office[]; viewerId: string; invitedSlots: number[] }) {
+export function Building({ offices }: { offices: Office[] }) {
   // Obstacles are invisible; the conference room draws its own panelling (ConferenceRoom).
   const walls = useMemo(() => buildWalls().filter((w) => w.kind !== 'obstacle' && !(w.kind === 'solid' && onConferenceRing(w))), []);
   const tex = useMemo(() => floorTexture(), []);
@@ -192,7 +191,7 @@ export function Building({ offices, viewerId, invitedSlots }: { offices: Office[
         const frosted = w.kind === 'glass' && !!o && o.glass === 'frosted';
         return <WallPiece key={i} w={w} color={wallColor(w)} glass={w.kind === 'glass'} frosted={frosted} shared={w.kind === 'glass' && onConferenceRing(w) ? confGlass : undefined} />;
       })}
-      {DOORS.map((d) => <Door key={d.id} def={d} allowed={doorAllowed(d, offices, viewerId, invitedSlots)} />)}
+      {DOORS.map((d) => <Door key={d.id} def={d} />)}
       {DOORS.map((d) => <DoorHeader key={d.id} def={d} frosted={officeState(d.slot)?.glass === 'frosted'} />)}
       <GuideLines />
       {/* Ceiling lamps */}

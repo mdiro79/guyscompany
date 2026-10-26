@@ -130,3 +130,16 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 .gc-range::-moz-range-track { height: 10px; border-radius: 999px; background: var(--track); }
 .gc-range::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; margin-top: -7px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 .gc-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: #fff; border: 3px solid #2f5d45; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+
+/* Emote stickers around a character's head (EmoteStickers): pop in, then bob, rise, shake or spin. */
+.gc-sticker { --t: rotate(var(--r, 0deg)) scaleX(var(--flip, 1)); transform: var(--t); transform-origin: center; filter: drop-shadow(0 2px 2px rgb(0 0 0 / .28)); animation: gc-st-in .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0ms) both; }
+.gc-sticker-bob { animation: gc-st-in .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0ms) both, gc-st-bob 1.4s ease-in-out calc(var(--d, 0ms) + .45s) infinite; }
+.gc-sticker-rise { animation: gc-st-in .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0ms) both, gc-st-rise 1.7s ease-out calc(var(--d, 0ms) + .45s) infinite; }
+.gc-sticker-shake { animation: gc-st-in .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0ms) both, gc-st-shake .5s ease-in-out calc(var(--d, 0ms) + .45s) infinite; }
+.gc-sticker-spin { animation: gc-st-in .45s cubic-bezier(.3, 1.6, .5, 1) var(--d, 0ms) both, gc-st-spin 3.5s linear calc(var(--d, 0ms) + .45s) infinite; }
+@keyframes gc-st-in { from { transform: var(--t) scale(0); opacity: 0; } 70% { transform: var(--t) scale(1.18); opacity: 1; } to { transform: var(--t) scale(1); opacity: 1; } }
+@keyframes gc-st-bob { 0%, 100% { transform: var(--t) translateY(0); } 50% { transform: var(--t) translateY(-7%) rotate(5deg); } }
+@keyframes gc-st-rise { 0% { transform: var(--t) translateY(0); opacity: 1; } 75% { opacity: 1; } 100% { transform: var(--t) translateY(-45%); opacity: 0; } }
+@keyframes gc-st-shake { 0%, 100% { transform: var(--t) scale(1); } 25% { transform: var(--t) rotate(-8deg) scale(1.08); } 75% { transform: var(--t) rotate(8deg) scale(.96); } }
+@keyframes gc-st-spin { from { transform: var(--t) rotate(0deg); } to { transform: var(--t) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gc-sticker { animation: none !important; } }

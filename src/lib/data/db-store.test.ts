@@ -77,6 +77,24 @@ describe('db store', () => {
     const purged = await store.purge(new Date(Date.now() + 1000).toISOString(), new Date(Date.now() + 1000).toISOString(), new Date(Date.now() + 1000).toISOString());
     expect(purged).toEqual({ visits: 1, notifications: 1, todos: 0 });
   });
+  it('claiming an empty office: first come wins, a move takes the private chat along, leftovers go', async () => {
+    // A owns office 1 (frosted, locked) with an invite for B; office 2 holds a former owner's private chat.
+    await store.createMessage({ channel: 'office:1', authorId: A, body: 'mine', fileId: null });
+    await store.createMessage({ channel: 'office:2', authorId: B, body: 'old secret', fileId: null });
+    await store.createInvite({ slot: 2, inviterId: B, inviteeId: A });
+    expect(await store.claimOffice(2, A)).toBe('claimed');
+    const offices = await store.listOffices();
+    expect(offices[0]).toMatchObject({ slot: 1, ownerId: null, glass: 'clear', locked: false, focus: false, isPublic: false });
+    expect(offices[1]).toMatchObject({ slot: 2, ownerId: A, glass: 'frosted', locked: true });
+    expect((await store.listMessages('office:2', 10)).map((m) => m.body)).toEqual(['mine']);
+    expect(await store.listMessages('office:1', 10)).toEqual([]);
+    expect((await store.listInvites(B)).map((i) => [i.slot, i.inviterId])).toEqual([[2, A]]);
+    expect(await store.claimOffice(2, B)).toBe('taken');
+    expect(await store.claimOffice(2, A)).toBe('claimed'); // already theirs
+    expect(await store.claimOffice(3, B)).toBe('claimed');
+    expect((await store.listOffices())[2]).toMatchObject({ slot: 3, ownerId: B, glass: 'clear', locked: false });
+    expect(await store.claimOffice(9, B)).toBe('taken');
+  });
   it('focus items, events and files', async () => {
     const f = await store.createFocus({ userId: A, day: '2026-10-23', text: 'x' });
     await store.updateFocus(f.id, B, { done: true }); // other user cannot change it

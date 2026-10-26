@@ -3,6 +3,7 @@ import type {
   Issue, IssueComment, ProjectIdea, Milestone,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
+import { OFFICE_DEFAULTS } from './types';
 import { createSeed } from './seed';
 import { emptyCounters } from '@/lib/todo-game';
 
@@ -166,6 +167,28 @@ export function createMemoryStore(): DataStore {
 
     async listOffices() { return clone(db.offices).sort((a, b) => a.slot - b.slot); },
     async updateOffice(slot, patch) { patchIn(db.offices, (o) => o.slot === slot, patch); },
+    // Same rules as the database store: a move carries the owner's office along, leftovers are removed.
+    async claimOffice(slot, userId) {
+      const target = db.offices.find((o) => o.slot === slot);
+      if (!target) return 'taken';
+      if (target.ownerId) return target.ownerId === userId ? 'claimed' : 'taken';
+      const previous = db.offices.find((o) => o.ownerId === userId);
+      const channel = `office:${slot}`;
+      db.messages = db.messages.filter((m) => m.channel !== channel);
+      db.invites = db.invites.filter((i) => i.slot !== slot);
+      db.visits = db.visits.filter((v) => v.slot !== slot);
+      if (previous) {
+        db.messages.forEach((m) => { if (m.channel === `office:${previous.slot}`) m.channel = channel; });
+        db.invites.forEach((i) => { if (i.slot === previous.slot) i.slot = slot; });
+        db.visits.forEach((v) => { if (v.slot === previous.slot) v.slot = slot; });
+        Object.assign(target, { glass: previous.glass, locked: previous.locked, focus: previous.focus, isPublic: previous.isPublic });
+        Object.assign(previous, { ownerId: null, ...OFFICE_DEFAULTS });
+      } else {
+        Object.assign(target, OFFICE_DEFAULTS);
+      }
+      target.ownerId = userId;
+      return 'claimed';
+    },
     async addVisit(slot, visitorId) { db.visits.push({ id: uuid(), slot, visitorId, visitedAt: now() }); },
     async listVisits(slot, since) { return clone(db.visits.filter((v) => v.slot === slot && v.visitedAt >= since)); },
     async listSwapRequests(userId) { return clone(db.swaps.filter((s) => s.fromUserId === userId || s.toUserId === userId)); },

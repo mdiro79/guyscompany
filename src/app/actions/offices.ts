@@ -20,6 +20,16 @@ export const updateMyOfficeAction = guard(async function updateMyOfficeAction(pa
   return okResult();
 });
 
+// "Claim this office" inside an empty office: it becomes the member's. Someone who already has an office
+// moves into this one and takes its settings and private chat along (see store.claimOffice).
+export const claimOfficeAction = guard(async function claimOfficeAction(slot: number) {
+  const user = await requireUser();
+  if (!Number.isInteger(slot)) return fail('error');
+  if ((await store().claimOffice(slot, user.id)) === 'taken') return fail('taken');
+  revalidatePath('/', 'layout');
+  return okResult();
+});
+
 // Visitor log (kept 30 days by the cleanup cron). One entry per visitor per office per hour.
 export const recordVisitAction = guard(async function recordVisitAction(slot: number) {
   const user = await requireUser();

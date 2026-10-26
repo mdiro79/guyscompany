@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql }
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
 import { cleanCounters, emptyCounters } from '@/lib/todo-game';
-import type { DataStore, Issue, IssueComment, Message, Milestone, Notification, ProjectIdea, Room, Todo } from './types';
+import { OFFICE_DEFAULTS, type DataStore, type Issue, type IssueComment, type Message, type Milestone, type Notification, type ProjectIdea, type Room, type Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -179,6 +179,31 @@ export function createDbStore(injected?: Db): DataStore {
 
     async listOffices() { return db().select().from(s.offices).orderBy(asc(s.offices.slot)); },
     async updateOffice(slot, patch) { await db().update(s.offices).set(patch).where(eq(s.offices.slot, slot)); },
+    // The row lock makes a race fair: the second of two people claiming the same office gets 'taken'.
+    // A member who already has an office moves: its settings, private chat, invites and visitor log come
+    // along and the old office is left empty. Whatever a former owner left in the target office (private
+    // chat, invites, visits) is removed first, so nobody reads someone else's private chat.
+    async claimOffice(slot, userId) {
+      return db().transaction(async (tx) => {
+        const [target] = await tx.select().from(s.offices).where(eq(s.offices.slot, slot)).for('update');
+        if (!target) return 'taken';
+        if (target.ownerId) return target.ownerId === userId ? 'claimed' : 'taken';
+        const [previous] = await tx.select().from(s.offices).where(eq(s.offices.ownerId, userId));
+        const channel = `office:${slot}`;
+        await tx.delete(s.messages).where(eq(s.messages.channel, channel));
+        await tx.delete(s.privateChatInvites).where(eq(s.privateChatInvites.slot, slot));
+        await tx.delete(s.officeVisits).where(eq(s.officeVisits.slot, slot));
+        if (previous) {
+          await tx.update(s.messages).set({ channel }).where(eq(s.messages.channel, `office:${previous.slot}`));
+          await tx.update(s.privateChatInvites).set({ slot }).where(eq(s.privateChatInvites.slot, previous.slot));
+          await tx.update(s.officeVisits).set({ slot }).where(eq(s.officeVisits.slot, previous.slot));
+          await tx.update(s.offices).set({ ownerId: null, ...OFFICE_DEFAULTS }).where(eq(s.offices.slot, previous.slot));
+        }
+        const settings = previous ? { glass: previous.glass, locked: previous.locked, focus: previous.focus, isPublic: previous.isPublic } : OFFICE_DEFAULTS;
+        await tx.update(s.offices).set({ ownerId: userId, ...settings }).where(eq(s.offices.slot, slot));
+        return 'claimed';
+      });
+    },
     async addVisit(slot, visitorId) { await db().insert(s.officeVisits).values({ slot, visitorId }); },
     async listVisits(slot, since) {
       return isoAll(await db().select().from(s.officeVisits).where(and(eq(s.officeVisits.slot, slot), gte(s.officeVisits.visitedAt, new Date(since)))).orderBy(desc(s.officeVisits.visitedAt)));

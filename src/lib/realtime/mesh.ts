@@ -123,6 +123,8 @@ export class Mesh {
         (dc.label === 'state' ? this.stateListeners : this.eventListeners).forEach((cb) => cb(peer.info, msg));
       };
       if (dc.label === 'state') peer.state = dc; else peer.events = dc;
+      // Listeners send their snapshots (doors, room, board) as soon as the channel can carry them.
+      if (dc.readyState === 'open') this.emitPeers(); else dc.onopen = () => this.emitPeers();
     };
     if (initiator) {
       wire(pc.createDataChannel('state', { ordered: false, maxRetransmits: 0 }));

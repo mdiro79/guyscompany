@@ -593,7 +593,7 @@
     "noVisitors": "No visits",
     "invite": "Invite to private chat",
     "myOffice": "My office",
-    "controlsDesktop": "WASD move · mouse look · E interact · Q emotes · M mic · Tab cursor",
+    "controlsDesktop": "WASD move · mouse look · E interact · Enter chat · Q emotes · M mic · Tab cursor",
     "controlsMobile": "Joystick to move · drag to look",
     "viewOnly": "Public office: view only",
     "action": "Action",
@@ -655,7 +655,13 @@
       "shareImage": "Share Image",
       "shareScreen": "Share Screen",
       "more": "More"
-    }
+    },
+    "claim": "Claim this office",
+    "claimMove": "Move into this office? Office {slot} becomes empty; your settings, private chat and visitor list come with you.",
+    "claimMoveConfirm": "Move here",
+    "claimTaken": "Someone else just took this office",
+    "claimed": "This office is yours now",
+    "typing": "{name} is typing…"
   },
   "emotes": {
     "smile": "Smile",
