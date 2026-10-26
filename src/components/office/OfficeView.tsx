@@ -4,7 +4,9 @@ import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast } from 'lucide-react';
-import { usePresenter } from '@/lib/board/sync';
+import { present, usePresenter } from '@/lib/board/sync';
+import { raiseHand, useHands } from '@/lib/board/hands';
+import { saveRoomAction } from '@/app/actions/rooms';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
@@ -16,9 +18,10 @@ import type { FileMeta, Message, Room } from '@/lib/data/types';
 import { useOfficeNet } from './useOfficeNet';
 import { officeUi, input, useOfficeUi } from './store';
 import { EMOTES } from './emotes';
-import { officeAt, inConference, areaAt, allSeats, SPAWN } from './layout';
+import { officeAt, inConference, areaAt, allSeats, SPAWN, CONF_SCREEN } from './layout';
 import { connectDoors } from './doors';
-import { connectRoomControls, roomControls } from './roomControls';
+import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
+import { tablet, type TabletButton } from './tablet';
 import { RoomControls } from './RoomControls';
 import { canLook } from './Player';
 import { startTourFor, useTourStep } from './tour';
@@ -46,6 +49,10 @@ function SceneLoading() {
 const OfficeScene = dynamic(() => import('./OfficeScene'), { ssr: false, loading: SceneLoading });
 const SEATS = allSeats();
 const MONITOR_PRELOAD_MS = 8000;
+const SCREEN_CENTER: [number, number, number] = [0, CONF_SCREEN.bottom + CONF_SCREEN.height / 2, CONF_SCREEN.z];
+// Light scenes the tablet switches between (same as the wall panel's Meeting and Present).
+const MEETING_LIGHT = { light: 100, warmth: 45 }, PRESENT_LIGHT = { light: 25, warmth: 55 };
+const SPLIT_KEY = 'gc-board-split';
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
 
@@ -75,7 +82,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const avatarLabels = useMemo(() => ({ locale, older: t('olderMessage'), newer: t('newerMessage') }), [locale, t]);
   const meetingLabels = useMemo(() => ({
     title: t('meeting.title'), subtitle: t('meeting.subtitle'), raiseHand: t('meeting.raiseHand'), shareIdea: t('meeting.shareIdea'),
-    shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), rtl: locale === 'fa',
+    shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), hands: t('meeting.hands'), rtl: locale === 'fa',
+  }), [locale, t]);
+  const tabletLabels = useMemo(() => ({
+    title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
+    raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),
+    board: t('tablet.board'), present: t('tablet.present'), stopPresent: t('tablet.stopPresent'), view: t('tablet.view'),
+    react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'),
+    stand: t('tablet.stand'), hands: t('meeting.hands'), rtl: locale === 'fa',
   }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
   const net = useOfficeNet(mesh, user.id);
@@ -86,6 +100,17 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const relock = useRef(false);
   const seat = ui.seatId ? SEATS.find((s) => s.id === ui.seatId) ?? null : null;
   const working = !!seat?.monitor; // at a desk with the dashboard on the monitor
+  const hands = useHands();
+  const roomNow = useRoomSettings();
+  // The drawing board beside the office (default) or over all of it; remembered on this device.
+  const [split, setSplitState] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem(SPLIT_KEY) === '0') setSplitState(false); } catch { /* storage blocked */ } }, []);
+  const setSplit = useCallback((on: boolean) => {
+    setSplitState(on);
+    try { localStorage.setItem(SPLIT_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+    if (on && officeUi.get().inConference) input.lookAt = SCREEN_CENTER;
+  }, []);
+  const boardSplit = ui.board !== 'none' && split;
 
   // The desk dashboard loads in the background once the office had time to load, so sitting down is instant.
   const [preloadMonitor, setPreloadMonitor] = useState(false);
@@ -96,6 +121,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   useEffect(() => { if (room) roomControls.load(room); }, [room]);
   // The wall panel's controls close when you leave the room.
   useEffect(() => { if (!ui.inConference) officeUi.set({ roomPanel: false }); }, [ui.inConference]);
+  // A raised hand comes down when you get up from the conference table.
+  const atConfSeat = !!ui.seatId?.startsWith('conf-');
+  useEffect(() => { if (!atConfSeat) raiseHand(false); }, [atConfSeat]);
+  useEffect(() => () => raiseHand(false), []);
   // First visit: the receptionist starts her tour once the scene had a moment to load.
   const tutorialDone = useRef(user.tutorialDone);
   useEffect(() => {
@@ -192,6 +221,16 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     return updateMyOfficeAction(patch);
   }, [mySlot, applyOffice]);
 
+  // The seat tablet: its labels, what it shows (hand, mic, presentation, light) and its button presses.
+  const pressRef = useRef<(b: TabletButton) => void>(() => {});
+  useEffect(() => { tablet.handle((b) => pressRef.current(b)); return () => tablet.handle(null); }, []);
+  useEffect(() => tablet.set({ labels: tabletLabels }), [tabletLabels]);
+  useEffect(() => tablet.set({
+    hand: hands.includes(user.id), mic: voice.micOn, hands: hands.length, dimmed: roomNow.light <= 40,
+    presenting: presenterId ? (presenterId === user.id ? 'me' : 'other') : null,
+    presenterName: profiles.find((p) => p.id === presenterId)?.displayName ?? '',
+  }), [hands, user.id, voice.micOn, roomNow.light, presenterId, profiles]);
+
   if (embedded) {
     return <div className="flex min-h-dvh items-center justify-center p-6 text-center text-muted">{t('embedded')}</div>;
   }
@@ -211,11 +250,34 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   const openBoard = (mode: 'mine' | 'screen') => {
     if (document.pointerLockElement) document.exitPointerLock();
     officeUi.set({ board: mode, emoteWheel: false, roomPanel: false });
+    if (split && ui.inConference) input.lookAt = SCREEN_CENTER;
   };
+  // Buttons pressed on the seat tablet (see tablet.ts).
+  const pressTablet = (b: TabletButton) => {
+    switch (b) {
+      case 'hand': raiseHand(!hands.includes(user.id)); break;
+      case 'mic': voice.toggleMic(); break;
+      case 'board': openBoard('mine'); break;
+      case 'present':
+        if (presenterId === user.id) present(false);
+        else if (presenterId) openBoard('screen');
+        else { present(true); openBoard('mine'); }
+        break;
+      case 'react': openWheel(true); break;
+      case 'look': input.lookAt = SCREEN_CENTER; break;
+      case 'lights': {
+        roomControls.set(roomNow.light <= 40 ? MEETING_LIGHT : PRESENT_LIGHT);
+        void saveRoomAction('conference', roomControls.get());
+        break;
+      }
+      case 'stand': input.action = true; break;
+    }
+  };
+  pressRef.current = pressTablet;
   const officeControls = inMyOffice && !!myOffice && !ui.seatId && !touring;
   const showCursor = !isPhone && !ui.locked && !(working && ui.panel !== 'none');
   const it = ui.interact;
-  const hint = ui.seatId ? (working ? null : t('standHint'))
+  const hint = ui.seatId ? (working ? null : atTable ? t('tabletHint') : t('standHint'))
     : !it ? null
       : it.kind === 'seat' ? t('pressE')
         : it.kind === 'guide' ? t('pressTalk')
@@ -243,8 +305,13 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
 
   return (
     <div id="gc-office" className={clsx('fixed inset-0 bg-[#2a221c] text-white select-none', showCursor && 'cursor-none [&_*]:cursor-none')}>
-      <OfficeScene user={user} profiles={profiles} offices={offices} messages={messages} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
-        receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} avatarLabels={avatarLabels} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+      {/* The 3D view: all of the screen, or beside (landscape) or above (portrait) the drawing board in split view. */}
+      <div className={clsx('absolute', boardSplit
+        ? 'inset-x-0 top-0 h-[42dvh] landscape:inset-y-0 landscape:start-auto landscape:end-0 landscape:h-auto landscape:w-[42vw]'
+        : 'inset-0')}>
+        <OfficeScene user={user} profiles={profiles} offices={offices} messages={messages} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
+          receptionLabel={t('receptionist')} loadingLabel={t('loadingModels')} avatarLabels={avatarLabels} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+      </div>
       {isPhone && !touring && !working && <TouchControls lookOnly={!!ui.seatId} />}
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}
@@ -301,7 +368,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
 
       {/* Crosshair and hints */}
       {ui.locked && !working && <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80" />}
-      {!working && !touring && (
+      {!working && !touring && ui.board === 'none' && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] short:p-2">
           {!isPhone && !ui.locked && <div className="rounded-xl bg-black/60 px-4 py-2 text-sm">{ui.seatId ? t('cursorHint') : t('clickToLook')}</div>}
           {!isPhone && hint && <div className={clsx('rounded-xl px-4 py-2 text-sm', it?.kind === 'door' && !it.allowed ? 'bg-[#d9443c]/90' : 'bg-[#2f5d45]/90')}>{hint}</div>}
@@ -381,7 +448,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
           )}
         </div>
       )}
-      {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} onClose={() => officeUi.set({ board: 'none' })} />}
+      {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} split={split} onSplit={setSplit} onClose={() => officeUi.set({ board: 'none' })} />}
 
       <Tutorial markDone={!user.tutorialDone} />
       {showCursor && <TabCursor />}

@@ -10,11 +10,13 @@ import { DOORS, doorLeaves, isDoorOpen, toggleDoor, setDoor } from './doors';
 import { tour, guide, me, pointAt, startTourFor, GUIDE_SPEED, PLAYER_DELAY } from './tour';
 import type { RemoteAvatar } from './useOfficeNet';
 import { syncedNow } from '@/lib/realtime/room';
+import { tabletHit } from './tablet';
 
 export interface Pose { x: number; z: number; yaw: number; pitch: number; moving: number; seatId: string | null; t: number }
 
 const WALK = 2.6, RUN = 4.6, LOOK = 0.0024, TOUCH_LOOK = 0.006;
 const SIT_EYE = 1.18;
+const SIT_LEAN = 0.4;
 const REMOTE_FRESH_MS = 5000;
 
 // Office access for visitors (owners always pass): a locked door or frosted glass closes the office;
@@ -83,9 +85,11 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       if (document.pointerLockElement !== el) return;
       yaw.current -= e.movementX * LOOK;
       pitch.current = Math.max(-1.35, Math.min(1.35, pitch.current - e.movementY * LOOK));
+      if (e.movementX || e.movementY) input.lookAt = null;
       lastLocalInput.current = syncedNow();
     };
-    const click = () => { if (!isPhone && canLook()) el.requestPointerLock?.(); };
+    // A click that pressed a button on the seat tablet does not start mouse look.
+    const click = () => { if (!isPhone && canLook() && performance.now() - tabletHit.pressedAt > 500) el.requestPointerLock?.(); };
     const lock = () => officeUi.set({ locked: document.pointerLockElement === el });
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -124,6 +128,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       yaw.current -= input.lookDX * TOUCH_LOOK;
       pitch.current = Math.max(-1.35, Math.min(1.35, pitch.current - input.lookDY * TOUCH_LOOK));
       input.lookDX = input.lookDY = 0;
+      input.lookAt = null;
       lastLocalInput.current = now;
     }
 
@@ -229,6 +234,17 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     }
 
     const seat = ui.seatId ? seats.find((s) => s.id === ui.seatId) ?? null : null;
+    // Asked to look at something (e.g. the conference screen): turn there smoothly.
+    if (input.lookAt && !seat?.monitor) {
+      const [lx, ly, lz] = input.lookAt;
+      const dx = lx - pos.current[0], dz = lz - pos.current[1];
+      const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(ly - (seat ? SIT_EYE : EYE_HEIGHT), Math.hypot(dx, dz) || 1);
+      const dYaw = Math.atan2(Math.sin(wantYaw - yaw.current), Math.cos(wantYaw - yaw.current));
+      const kk = 1 - Math.exp(-dt * 5);
+      yaw.current += dYaw * kk;
+      pitch.current += (wantPitch - pitch.current) * kk;
+      if (Math.abs(dYaw) < 0.004 && Math.abs(wantPitch - pitch.current) < 0.004) input.lookAt = null;
+    }
     let moving = 0;
     if (seat) {
       sitT.current += dt;
@@ -242,8 +258,10 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         lookAt = new THREE.Vector3(mx, my, mz);
         if (sitT.current > 1.1 && ui.panel === 'none') officeUi.set({ panel: isPhone ? 'fullscreen' : 'monitor' });
       } else {
-        // Chairs without a monitor (conference, lounge): look around freely while seated.
-        target = new THREE.Vector3(seat.pos[0], SIT_EYE, seat.pos[1]);
+        // Chairs without a monitor (conference, lounge): look around freely while seated. Phones held sideways
+        // lean in at the conference table so the seat tablet's buttons are big enough to tap.
+        const lean = seat.area === 'conference' && isPhone && (camera as THREE.PerspectiveCamera).aspect > 1 ? SIT_LEAN : 0;
+        target = new THREE.Vector3(seat.pos[0] - Math.sin(seat.facing) * lean, SIT_EYE, seat.pos[1] - Math.cos(seat.facing) * lean);
         if (sitT.current - dt <= 0) { yaw.current = seat.facing; pitch.current = -0.12; }
       }
       camTarget.current.lerp(target, 1 - Math.exp(-dt * 6));

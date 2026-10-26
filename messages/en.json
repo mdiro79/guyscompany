@@ -123,8 +123,8 @@
     "size": "Size",
     "undo": "Undo",
     "redo": "Redo",
-    "clear": "Clear all",
-    "confirmClear": "Clear the whole board?",
+    "clear": "Clear page",
+    "confirmClear": "Clear everything on this page?",
     "present": "Show on screen",
     "stopPresent": "Stop showing",
     "presenting": "{name} is presenting",
@@ -141,7 +141,25 @@
     "close": "Close",
     "empty": "Draw, write or add a picture ✏️",
     "sameBoard": "Your board is the same on your phone and computer: draw on the phone, show it on the screen.",
-    "presentHint": "Sit at the conference table to open your board."
+    "presentHint": "Sit at the conference table to open your board.",
+    "highlighter": "Highlighter",
+    "laser": "Laser pointer",
+    "splitView": "Side by side",
+    "fullView": "Full screen",
+    "everyoneDraws": "Everyone can write on the screen; each name shows next to what they wrote.",
+    "onlyPresenter": "Only {name} writes on the screen",
+    "everyoneDrawsShort": "Everyone writes",
+    "onlyMe": "Only me",
+    "timer": "Timer",
+    "minutes": "{n} min",
+    "stopTimer": "Stop timer",
+    "page": "Page",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "addPage": "New page",
+    "deletePage": "Delete this page",
+    "confirmDeletePage": "Delete this page and everything on it?",
+    "lowerHand": "Lower {name}'s hand"
   },
   "top": {
     "focusMode": "Focus Mode",
@@ -619,6 +637,24 @@
     "saveFailed": "Not saved; try again",
     "pressPanel": "Press E for the light and glass",
     "roomControls": "Light & glass",
+    "tabletHint": "Click the buttons on the tablet · E to stand up",
+    "tablet": {
+      "title": "Meeting",
+      "idle": "Nobody is presenting",
+      "presenting": "{name} is presenting",
+      "raiseHand": "Raise hand",
+      "lowerHand": "Lower hand",
+      "micOn": "Mic on",
+      "micOff": "Mic off",
+      "board": "Board",
+      "present": "Show on screen",
+      "stopPresent": "Stop showing",
+      "view": "View screen",
+      "react": "Reactions",
+      "look": "Look at screen",
+      "lightPresent": "Presenting light",
+      "stand": "Stand up"
+    },
     "room": {
       "title": "Conference room panel",
       "close": "Close",
@@ -654,7 +690,8 @@
       "shareIdea": "Share Idea",
       "shareImage": "Share Image",
       "shareScreen": "Share Screen",
-      "more": "More"
+      "more": "More",
+      "hands": "Hands up"
     }
   },
   "emotes": {

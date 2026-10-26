@@ -13,6 +13,7 @@ import { useVoice } from '@/components/voice/VoiceContext';
 import { allSeats } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 import { emoteEmoji } from './emotes';
+import { useHands } from '@/lib/board/hands';
 import { officeUi, useOfficeUi } from './store';
 import { Nameplate } from './Nameplate';
 import { GroundShadow } from './GroundShadow';
@@ -31,6 +32,7 @@ function Bubble({ profile, messages, emote, talk, labels, onSelect }: {
   profile: Profile; messages: Message[]; emote: string | null; talk: number; labels: AvatarLabels; onSelect: () => void;
 }) {
   const selected = useOfficeUi((s) => s.selectedUserId === profile.id);
+  const hand = useHands().includes(profile.id);
   const [seen, setSeen] = useState(messages.length);
   // Message shown while browsing the history (tap the bubble or the name); null = the newest.
   const [at, setAt] = useState<number | null>(null);
@@ -77,7 +79,7 @@ function Bubble({ profile, messages, emote, talk, labels, onSelect }: {
       )}
       <div ref={plateRef} data-avatar-label>
         <Nameplate name={profile.displayName} characterId={profile.characterId} dot={STATUS_DOT[profile.status] ?? STATUS_DOT.online}
-          level={talk} unread={selected ? 0 : unread} />
+          level={talk} unread={selected ? 0 : unread} hand={hand} />
       </div>
     </div>
   );

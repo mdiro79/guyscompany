@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
@@ -126,6 +126,8 @@ export default function OfficeScene(p: SceneProps) {
   const [ready, setReady] = useState(false);
   const scale = useRenderScale(p.lowQuality);
   const markReady = useCallback(() => setReady(true), []);
+  // Names for the conference screen (who presents, who wrote what, raised hands).
+  const people = useMemo(() => p.profiles.map((x) => ({ id: x.id, name: x.displayName })), [p.profiles]);
   // Teammates' characters download after the office itself, so they don't hold up the first view.
   useEffect(() => { if (ready) new Set(p.profiles.map((x) => x.characterId)).forEach(preloadCharacter); }, [ready, p.profiles]);
   return (
@@ -143,7 +145,7 @@ export default function OfficeScene(p: SceneProps) {
       <fog attach="fog" args={['#e4dbcf', 30, 64]} />
       <Lights low={p.lowQuality} />
       <SoftEnvironment />
-      <ConferenceRoom labels={p.meetingLabels} lowQuality={p.lowQuality} />
+      <ConferenceRoom labels={p.meetingLabels} people={people} lowQuality={p.lowQuality} />
       <Suspense fallback={null}>
         <Building offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} />
         <Furniture />

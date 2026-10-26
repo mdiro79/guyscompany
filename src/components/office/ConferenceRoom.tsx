@@ -8,10 +8,13 @@ import {
   WALL_HEIGHT, type Segment,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
-import { drawBoard } from '@/lib/board/draw';
-import { BOARD_W } from '@/lib/board/model';
-import { boardItems, presenterId, subscribeBoards } from '@/lib/board/sync';
-import { tableWood, oak, slats, carpet, panelWash, floorGlow, tabletScreen, paintScreen, paintRoomPanel, type MeetingLabels } from './textures';
+import { drawBoard, memberColor } from '@/lib/board/draw';
+import { BOARD_H, BOARD_W, onPage } from '@/lib/board/model';
+import { boardOf, lasersOn, presentation, subscribeBoards, writingNow } from '@/lib/board/sync';
+import { handQueue, subscribeHands } from '@/lib/board/hands';
+import { syncedNow } from '@/lib/realtime/room';
+import { tableWood, oak, slats, carpet, panelWash, floorGlow, paintScreen, paintScreenInfo, paintRoomPanel, type MeetingLabels } from './textures';
+import { tablet, tabletHit, paintTablet, buttonAt, buttonRects, pressAt, toNdc, TABLET_PX, type TabletButton } from './tablet';
 import { roomControls, useRoomSettings } from './roomControls';
 import { useConferenceGlass } from './conferenceGlass';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
@@ -54,7 +57,6 @@ const textured = (() => {
     carpet: new THREE.MeshStandardMaterial({ map: carpet(), roughness: 1 }),
     panel: new THREE.MeshStandardMaterial({ map: panelWash(), roughness: 0.95 }),
     glow: new THREE.MeshBasicMaterial({ map: floorGlow(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
-    tablet: new THREE.MeshBasicMaterial({ map: tabletScreen(), toneMapped: false }),
   });
 })();
 
@@ -82,15 +84,101 @@ function Chair() {
   );
 }
 
-// Seat tablet on a small stand, its screen turned up towards the person (local +Z).
-function Tablet({ material }: { material: THREE.Material }) {
+const TABLET_W = 0.56, TABLET_H = 0.35, TABLET_TILT = 0.5;
+
+const tabletCanvas = () => {
+  const cv = document.createElement('canvas');
+  [cv.width, cv.height] = TABLET_PX;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return { cv, tex };
+};
+
+// The screen of the tablets at the other seats: one texture for all, repainted when the language changes.
+const restScreen = (() => {
+  let made: THREE.CanvasTexture | null = null;
+  return () => {
+    if (made) return made;
+    const { cv, tex } = tabletCanvas();
+    let labels: unknown;
+    const paint = () => {
+      const s = tablet.get();
+      if (s.labels === labels) return;
+      labels = s.labels;
+      paintTablet(cv, s, false);
+      tex.needsUpdate = true;
+    };
+    paint();
+    tablet.subscribe(paint);
+    return (made = tex);
+  };
+})();
+
+// Seat tablet on a small stand, its screen turned up towards the person (local +Z). The one at one's own
+// seat is live: its buttons light up under the crosshair or cursor and are pressed right on it (tablet.ts).
+function Tablet({ live }: { live: boolean }) {
+  const screen = useRef<THREE.Mesh>(null);
+  const own = useMemo(() => (live ? tabletCanvas() : null), [live]);
+  useEffect(() => {
+    if (!own) return;
+    const paint = () => { paintTablet(own.cv, tablet.get(), true); own.tex.needsUpdate = true; };
+    paint();
+    const off = tablet.subscribe(paint);
+    // Text in the web fonts once they are ready.
+    document.fonts?.ready.then(paint, () => {});
+    const mesh = screen.current;
+    tabletHit.mesh = mesh;
+    return () => { off(); if (tabletHit.mesh === mesh) tabletHit.mesh = null; own.tex.dispose(); };
+  }, [own]);
   return (
-    <group rotation-x={-0.62} position-y={0.075}>
-      <RoundedBox args={[0.3, 0.19, 0.018]} radius={0.008} smoothness={2} material={mat.dark} />
-      <mesh position-z={0.0095} material={material}><planeGeometry args={[0.272, 0.166]} /></mesh>
-      <mesh position={[0, -0.02, -0.04]} rotation-x={0.9} material={mat.dark}><boxGeometry args={[0.16, 0.12, 0.01]} /></mesh>
+    <group rotation-x={-TABLET_TILT} position={[0, (TABLET_H / 2) * Math.cos(TABLET_TILT) + 0.012, 0]}>
+      <RoundedBox args={[TABLET_W + 0.03, TABLET_H + 0.03, 0.022]} radius={0.012} smoothness={2} material={mat.dark} />
+      <mesh ref={screen} position-z={0.0115}>
+        <planeGeometry args={[TABLET_W, TABLET_H]} />
+        <meshBasicMaterial map={own?.tex ?? restScreen()} toneMapped={false} color={live ? '#ffffff' : '#9aa0aa'} />
+      </mesh>
+      <mesh position={[0, -0.04, -0.09]} rotation-x={0.95} material={mat.dark}><boxGeometry args={[0.26, 0.22, 0.012]} /></mesh>
     </group>
   );
+}
+
+// Clicks and taps on the live tablet. Computers: the crosshair while looking around, the cursor otherwise;
+// phones report taps from the touch layer (TouchControls). The button under the pointer lights up.
+function TabletInput() {
+  const { camera, gl } = useThree();
+  const seated = useOfficeUi((u) => !!u.seatId?.startsWith('conf-'));
+  const mouse = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    tabletHit.camera = camera; tabletHit.dom = gl.domElement;
+    // Test hook used by screenshot scripts: where a button of the live tablet is on the screen.
+    (window as unknown as { __gcTabletAt?: unknown }).__gcTabletAt = (id: TabletButton) => {
+      const mesh = tabletHit.mesh, r = buttonRects(!!tablet.get().labels?.rtl).find((b) => b.id === id);
+      if (!mesh || !r) return null;
+      const p = mesh.localToWorld(new THREE.Vector3(((r.x + r.w / 2) / TABLET_PX[0] - 0.5) * TABLET_W, (0.5 - (r.y + r.h / 2) / TABLET_PX[1]) * TABLET_H, 0)).project(camera);
+      const rect = gl.domElement.getBoundingClientRect();
+      return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+    };
+  }, [camera, gl]);
+  useEffect(() => {
+    if (!seated) { tablet.set({ hover: null }); return; }
+    const el = gl.domElement;
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      pressAt(document.pointerLockElement === el ? { x: 0, y: 0 } : toNdc(e.clientX, e.clientY));
+    };
+    const move = (e: MouseEvent) => { mouse.current = { x: e.clientX, y: e.clientY }; };
+    el.addEventListener('pointerdown', down);
+    window.addEventListener('mousemove', move);
+    return () => { el.removeEventListener('pointerdown', down); window.removeEventListener('mousemove', move); tablet.set({ hover: null }); };
+  }, [seated, gl]);
+  useFrame(() => {
+    if (!seated) return;
+    const locked = document.pointerLockElement === gl.domElement;
+    const ndc = locked ? { x: 0, y: 0 } : mouse.current && toNdc(mouse.current.x, mouse.current.y);
+    tablet.set({ hover: ndc ? buttonAt(ndc) : null });
+  });
+  return null;
 }
 
 // Minimal greenery (owner request: plants should not draw the eye): a few slim upright blades in
@@ -157,7 +245,11 @@ function Table() {
   );
 }
 
-function Screen({ labels }: { labels: MeetingLabels }) {
+export interface Person { id: string; name: string }
+const colorOf = (people: Person[], id: string) => memberColor(people.map((p) => p.id), id);
+const clock = (ms: number) => { const s = Math.ceil(Math.abs(ms) / 1000); return `${ms < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] }) {
   const { tex, cv } = useMemo(() => {
     const cv = document.createElement('canvas');
     [cv.width, cv.height] = SCREEN_PX;
@@ -166,36 +258,91 @@ function Screen({ labels }: { labels: MeetingLabels }) {
     tex.anisotropy = 8;
     return { tex, cv };
   }, []);
-  // The meeting page, or the presenter's drawing board live while someone presents. Painted at most
-  // once a frame, only when what it shows changed, and again once the web fonts are ready.
+  // The meeting page, or the presenter's current page live while someone presents: with the name of whoever
+  // wrote each part next to it, the page number, the countdown and raised hands. Painted at most once a
+  // frame and only when what it shows changed (checked every second too, for the countdown and the
+  // "writing now" tags), and again once the web fonts are ready.
   useEffect(() => {
-    let live = true, raf = 0;
-    let shown: { who: string | null; items: unknown } = { who: '', items: null };
+    let live = true, raf = 0, shown = '';
+    let shownRefs: unknown[] = [];
+    const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? null;
     const paint = (force = false) => {
       raf = 0;
       if (!live) return;
-      const who = presenterId();
-      const items = who ? boardItems(who) : null;
-      if (!force && shown.who === who && shown.items === items) return;
-      shown = { who, items };
-      if (who) drawBoard(cv.getContext('2d')!, boardItems(who), cv.width / BOARD_W, () => schedule(true));
-      else paintScreen(cv, labels);
+      const p = presentation(), who = p.userId;
+      const board = who ? boardOf(who) : null;
+      const hands = handQueue();
+      const left = p.timerEnd ? p.timerEnd - syncedNow() : null;
+      const writers = board ? people.filter((x) => writingNow(x.id)).map((x) => x.id).join() : '';
+      const key = [who, left === null ? '' : clock(left), writers].join('|');
+      const refs = [board, p, hands];
+      if (!force && key === shown && refs.every((r, i) => r === shownRefs[i])) return;
+      shown = key; shownRefs = refs;
+      if (who && board) {
+        drawBoard(cv.getContext('2d')!, onPage(board.items, board.page), cv.width / BOARD_W, () => schedule(true), {
+          tags: { owner: who, name: nameOf, color: (id) => colorOf(people, id), active: writingNow },
+        });
+      } else paintScreen(cv, labels);
+      paintScreenInfo(cv, {
+        presenter: who ? nameOf(who) ?? '' : undefined, page: board && board.pages > 1 ? `${board.page + 1}/${board.pages}` : undefined,
+        timer: who && left !== null ? { text: clock(left), late: left < 0, soon: left >= 0 && left < 60_000 } : undefined,
+        hands: hands.map((id) => nameOf(id) ?? '').filter(Boolean), handsLabel: labels.hands, rtl: labels.rtl,
+      });
       tex.needsUpdate = true;
     };
-    const schedule = (force = false) => { if (force) shown = { who: '', items: null }; if (!raf) raf = requestAnimationFrame(() => paint()); };
-    const off = subscribeBoards(() => schedule());
+    const schedule = (force = false) => { if (force) shown = '\0'; if (!raf) raf = requestAnimationFrame(() => paint()); };
+    const offBoards = subscribeBoards(() => schedule());
+    const offHands = subscribeHands(() => schedule());
+    const tick = setInterval(() => schedule(), 1000);
     paint(true);
     const fam = labels.rtl ? '"Vazirmatn Variable"' : '"Inter Variable"';
     Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(() => schedule(true), () => {});
-    return () => { live = false; off(); cancelAnimationFrame(raf); };
-  }, [cv, tex, labels]);
+    return () => { live = false; offBoards(); offHands(); clearInterval(tick); cancelAnimationFrame(raf); };
+  }, [cv, tex, labels, people]);
   useEffect(() => () => tex.dispose(), [tex]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;
   return (
     <group position={[0, bottom + h / 2, z]}>
       <mesh material={mat.dark}><boxGeometry args={[w + 0.1, h + 0.1, 0.06]} /></mesh>
       <mesh position-z={0.031}><planeGeometry args={[w, h]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
+      <ScreenLasers people={people} />
     </group>
+  );
+}
+
+// Laser pointers on the presented board: a glowing dot per person, in their colour, moved every frame
+// (cheaper than repainting the screen).
+const LASER_DOTS = 4;
+function ScreenLasers({ people }: { people: Person[] }) {
+  const dots = useRef<(THREE.Mesh | null)[]>([]);
+  const mats = useMemo(() => Array.from({ length: LASER_DOTS }, () => new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, toneMapped: false, depthWrite: false })), []);
+  const glowMats = useMemo(() => mats.map(() => new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, opacity: 0.3, toneMapped: false, depthWrite: false })), [mats]);
+  const { width: w, height: h } = CONF_SCREEN;
+  useFrame(() => {
+    const who = presentation().userId;
+    const list = who ? lasersOn(who) : [];
+    dots.current.forEach((d, i) => {
+      if (!d) return;
+      const l = list[i];
+      d.visible = !!l;
+      if (!l) return;
+      d.position.set((l.x / BOARD_W - 0.5) * w, (0.5 - l.y / BOARD_H) * h, 0.036);
+      const c = colorOf(people, l.by);
+      mats[i].color.set(c); glowMats[i].color.set(c);
+      const fade = Math.max(0, 1 - Math.max(0, performance.now() - l.at - 600) / 900);
+      mats[i].opacity = fade; glowMats[i].opacity = 0.3 * fade;
+    });
+  });
+  useEffect(() => () => { mats.forEach((m) => m.dispose()); glowMats.forEach((m) => m.dispose()); }, [mats, glowMats]);
+  return (
+    <>
+      {mats.map((m, i) => (
+        <mesh key={i} ref={(el) => { dots.current[i] = el; }} visible={false} renderOrder={2} material={m}>
+          <circleGeometry args={[0.022, 20]} />
+          <mesh position-z={-0.001} material={glowMats[i]}><circleGeometry args={[0.055, 24]} /></mesh>
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -253,9 +400,10 @@ function Ceiling() {
   );
 }
 
-export function ConferenceRoom({ labels, lowQuality }: { labels: MeetingLabels; lowQuality: boolean }) {
+export function ConferenceRoom({ labels, people, lowQuality }: { labels: MeetingLabels; people: Person[]; lowQuality: boolean }) {
   const m = textured();
   const seats = useMemo(() => conferenceSeats(), []);
+  const mySeat = useOfficeUi((u) => u.seatId);
   return (
     <group>
       <mesh position-y={0.006} rotation-x={-Math.PI / 2} material={m.carpet}><circleGeometry args={[CONF_RADIUS - 0.02, 96]} /></mesh>
@@ -266,13 +414,14 @@ export function ConferenceRoom({ labels, lowQuality }: { labels: MeetingLabels; 
             <GroundShadow size={[0.85, 0.85]} opacity={0.3} />
             <Chair />
           </group>
-          <group position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.33), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.33)]} rotation-y={s.facing}>
-            <Tablet material={m.tablet} />
+          <group position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.3), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.3)]} rotation-y={s.facing}>
+            <Tablet live={s.id === mySeat} />
           </group>
         </group>
       ))}
       <Panels />
-      <Screen labels={labels} />
+      <Screen labels={labels} people={people} />
+      <TabletInput />
       <Credenza />
       {CONF_PLANTS.map((p) => <Plant key={p[0]} pos={p} />)}
       <Ceiling />

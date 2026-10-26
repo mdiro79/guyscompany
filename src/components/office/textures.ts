@@ -124,7 +124,7 @@ export const floorGlow = once(() => {
   return texture(c);
 });
 
-export interface MeetingLabels { title: string; subtitle: string; raiseHand: string; shareIdea: string; shareImage: string; shareScreen: string; more: string; rtl: boolean }
+export interface MeetingLabels { title: string; subtitle: string; raiseHand: string; shareIdea: string; shareImage: string; shareScreen: string; more: string; hands: string; rtl: boolean }
 const BUTTONS: (keyof MeetingLabels & IconName)[] = ['raiseHand', 'shareIdea', 'shareImage', 'shareScreen', 'more'];
 const font = (rtl: boolean, weight: number, px: number) => `${weight} ${px}px ${rtl ? '"Vazirmatn Variable", Tahoma' : '"Inter Variable", system-ui'}, sans-serif`;
 
@@ -166,29 +166,34 @@ export function paintScreen(c: HTMLCanvasElement, l: MeetingLabels) {
   });
 }
 
-// Seat tablet (the meeting "Steam Deck"): four round actions and a row of small toggles.
-export const tabletScreen = once(() => {
-  const [c, g] = canvas(512, 320);
-  const bg = g.createLinearGradient(0, 0, 0, 320);
-  bg.addColorStop(0, '#1d2740'); bg.addColorStop(1, '#121a2e');
-  g.fillStyle = bg; g.fillRect(0, 0, 512, 320);
-  g.fillStyle = 'rgba(255,255,255,0.35)';
-  g.fillRect(24, 22, 60, 6); g.fillRect(430, 22, 58, 6);
-  const big: [IconName, string][] = [['raiseHand', '#5b8def'], ['mic', '#8b6fd6'], ['shareScreen', '#7d8597'], ['smile', '#f08a3c']];
-  big.forEach(([icon, color], i) => {
-    const cx = 92 + i * 110, cy = 128;
-    g.beginPath(); g.arc(cx, cy, 40, 0, Math.PI * 2); g.fillStyle = color; g.fill();
-    drawIcon(g, icon, cx, cy, 42, '#ffffff', 2.2);
-    g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(cx - 26, cy + 54, 52, 6);
-  });
-  const small = ['#3ecf6e', '#e5484d', '#e5484d', '#3ecf6e'];
-  small.forEach((color, i) => {
-    const cx = 150 + i * 70, cy = 262;
-    g.beginPath(); g.arc(cx, cy, 15, 0, Math.PI * 2); g.fillStyle = color; g.fill();
-  });
-  g.fillStyle = '#3ecf6e'; g.beginPath(); g.roundRect(40, 250, 64, 24, 12); g.fill();
-  return texture(c);
-});
+/** What the conference screen shows around a presentation: who presents and the page, the countdown, raised hands. */
+export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; hands: string[]; handsLabel: string; rtl: boolean }
+
+// Small pills in the screen's corners over the board (or the meeting page): presenter and page at the
+// top on the reading side, the countdown on the other, raised hands at the bottom.
+export function paintScreenInfo(c: HTMLCanvasElement, info: ScreenInfo) {
+  const W = c.width, H = c.height, g = c.getContext('2d')!;
+  const u = H / 1152, pad = 36 * u, ph = 64 * u;
+  const pillAt = (text: string, side: 'start' | 'end', y: number, bg: string, icon?: IconName) => {
+    g.font = font(info.rtl, 650, 34 * u);
+    g.direction = info.rtl ? 'rtl' : 'ltr';
+    const iw = icon ? 44 * u : 0;
+    const w = Math.min(W * 0.6, g.measureText(text).width + 48 * u + iw);
+    const left = (side === 'start') !== info.rtl ? pad : W - pad - w;
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.25)'; g.shadowBlur = 16 * u;
+    g.fillStyle = bg; g.beginPath(); g.roundRect(left, y, w, ph, ph / 2); g.fill();
+    g.restore();
+    const textX = info.rtl ? left + (w - iw) / 2 : left + iw + (w - iw) / 2;
+    if (icon) drawIcon(g, icon, info.rtl ? left + w - 22 * u - 14 * u : left + 22 * u + 14 * u, y + ph / 2, 34 * u, '#ffffff', 2.2);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, textX, y + ph / 2 + 2 * u, w - 40 * u - iw);
+  };
+  if (info.presenter) pillAt(info.page ? `${info.presenter} · ${info.page}` : info.presenter, 'start', pad, 'rgba(217,68,60,0.92)', 'cast');
+  if (info.timer) pillAt(info.timer.text, 'end', pad, info.timer.late ? 'rgba(217,68,60,0.95)' : info.timer.soon ? 'rgba(240,138,36,0.95)' : 'rgba(31,35,40,0.82)');
+  if (info.hands.length) pillAt(`${info.handsLabel}: ${info.hands.join(info.rtl ? '، ' : ', ')}`, 'start', H - pad - ph, 'rgba(91,141,239,0.95)', 'raiseHand');
+  g.direction = 'ltr';
+}
 
 // Screen of the conference room's wall panel: light (bulb in the current colour, level and bar) and glass.
 export function paintRoomPanel(c: HTMLCanvasElement, s: { light: number; warmth: number; frost: number }) {

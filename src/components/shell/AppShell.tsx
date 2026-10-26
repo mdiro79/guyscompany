@@ -6,6 +6,7 @@ import { X, MessageCircle } from 'lucide-react';
 import { isEmbedded, useDevice } from '@/lib/device';
 import { getMesh } from '@/lib/realtime/mesh';
 import { connectBoard } from '@/lib/board/sync';
+import { connectHands } from '@/lib/board/hands';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useLive, setLivePaused } from '@/lib/live';
@@ -19,11 +20,12 @@ import { TopBar, type SearchItem } from './TopBar';
 import { MobileNav } from './MobileNav';
 import { NAV, ADMIN_NAV, isActive } from './nav';
 
-// Keeps the drawing boards and the conference presentation in sync on every page (the board can be
-// drawn on from a phone on /board while the computer is in the office).
+// Keeps the drawing boards, the conference presentation and raised hands in sync on every page (the
+// board can be drawn on from a phone on /board while the computer is in the office).
 function BoardSync({ userId }: { userId: string }) {
   const device = useDevice();
   useEffect(() => connectBoard(getMesh(userId, device), userId), [userId, device]);
+  useEffect(() => connectHands(getMesh(userId, device), userId), [userId, device]);
   return null;
 }
 

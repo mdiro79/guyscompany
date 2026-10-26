@@ -1,12 +1,16 @@
 'use client';
 import { useRef, useState } from 'react';
 import { input } from './store';
+import { pressAt, toNdc } from './tablet';
 
-// Virtual joystick (bottom-left) and drag-to-look on the rest of the screen.
+const TAP_PX = 10, TAP_MS = 400;
+
+// Virtual joystick (bottom-left) and drag-to-look on the rest of the screen. A short tap that does not
+// move presses what is under it in the scene (the buttons of the seat tablet).
 export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
   const [knob, setKnob] = useState<{ x: number; y: number } | null>(null);
   const stick = useRef<{ id: number; cx: number; cy: number } | null>(null);
-  const look = useRef<{ id: number; x: number; y: number } | null>(null);
+  const look = useRef<{ id: number; x: number; y: number; x0: number; y0: number; at: number } | null>(null);
   const R = 52;
   return (
     <div className="absolute inset-0 z-10 touch-none select-none" dir="ltr"
@@ -15,7 +19,7 @@ export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         const leftHalf = e.clientX < window.innerWidth * 0.45 && e.clientY > window.innerHeight * 0.45;
         if (leftHalf && !lookOnly && !stick.current) { stick.current = { id: e.pointerId, cx: e.clientX, cy: e.clientY }; setKnob({ x: 0, y: 0 }); }
-        else if (!look.current) look.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        else if (!look.current) look.current = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, at: performance.now() };
       }}
       onPointerMove={(e) => {
         if (stick.current?.id === e.pointerId) {
@@ -34,7 +38,11 @@ export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
       }}
       onPointerUp={(e) => {
         if (stick.current?.id === e.pointerId) { stick.current = null; setKnob(null); input.forward = input.right = 0; input.run = false; }
-        if (look.current?.id === e.pointerId) look.current = null;
+        const l = look.current;
+        if (l?.id === e.pointerId) {
+          look.current = null;
+          if (Math.hypot(e.clientX - l.x0, e.clientY - l.y0) < TAP_PX && performance.now() - l.at < TAP_MS) pressAt(toNdc(e.clientX, e.clientY));
+        }
       }}
       onPointerCancel={() => { stick.current = null; look.current = null; setKnob(null); input.forward = input.right = 0; }}>
       {!lookOnly && <div className="pointer-events-none absolute bottom-8 left-6 flex size-32 short:bottom-4 short:size-28 items-center justify-center rounded-full border-2 border-white/40 bg-black/20"

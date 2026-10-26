@@ -48,5 +48,6 @@ export const input = {
   forward: 0, right: 0, run: false,
   lookDX: 0, lookDY: 0,
   action: false, // edge-triggered by consumers
+  lookAt: null as [number, number, number] | null, // turn the view smoothly towards this point (cancelled by looking around)
   moving: false, // set by the player controller
 };

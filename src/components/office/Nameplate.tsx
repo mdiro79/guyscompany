@@ -16,8 +16,9 @@ const RAYS = [-62, -28, 6, 40]; // degrees of the short rays above the badge
 // Name label above a character: dark green pill with a cream rim, a gold-ringed badge (a crown for the
 // receptionist, the person's portrait otherwise), sparkles, and a status dot with a line under the name.
 // The line is the voice level while someone talks, or moves while the receptionist types.
-export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', level = 0, typing = false, unread = 0 }: {
-  name: string; characterId?: string; crown?: boolean; dot?: string; level?: number; typing?: boolean; unread?: number;
+// A raised hand (conference tablet) shows as a blue hand badge.
+export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', level = 0, typing = false, unread = 0, hand = false }: {
+  name: string; characterId?: string; crown?: boolean; dot?: string; level?: number; typing?: boolean; unread?: number; hand?: boolean;
 }) {
   return (
     <div dir="ltr" className="relative flex items-center gap-2 rounded-full border-2 border-[#f3e7d3] bg-gradient-to-b from-[#2f5d4a] to-[#1c3d31] py-1 ps-1 pe-4 text-white shadow-[0_6px_14px_rgba(20,30,25,0.35),inset_0_1px_0_rgba(255,255,255,0.18)]">
@@ -45,6 +46,7 @@ export function Nameplate({ name, characterId, crown = false, dot = '#3ee07a', l
           </span>
         </span>
       </span>
+      {hand && <span className="gc-glow flex size-7 items-center justify-center rounded-full bg-[#5b8def] text-base leading-none shadow" aria-label="✋">✋</span>}
       {unread > 0 && <span className="rounded-full bg-[#f07a2a] px-1.5 text-[11px] font-bold">{unread}</span>}
       <Sparkle className="gc-twinkle absolute -top-2.5 end-1 size-4 text-[#ffd23f]" />
       <Sparkle className="gc-twinkle absolute -top-1 -end-2.5 size-2.5 text-[#ffe48a] [animation-delay:.7s]" />

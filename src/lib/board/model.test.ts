@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPoint, applyOp, cleanItem, cleanOp, inverseOps, itemAt, moveItem, fitImage, MAX_ITEMS, type BoardItem } from './model';
+import { addPoint, applyOp, cleanItem, cleanOp, inverseOps, itemAt, moveItem, fitImage, mayEdit, nameTags, onPage, MAX_ITEMS, type BoardItem } from './model';
 
 const stroke = (id: string, points: number[]): BoardItem => ({ id, kind: 'stroke', color: '#1f2328', size: 4, points });
 
@@ -59,5 +59,47 @@ describe('board model', () => {
   it('fits a large image into the board keeping its shape', () => {
     expect(fitImage(4000, 2000)).toEqual({ w: 960, h: 480 });
     expect(fitImage(300, 200)).toEqual({ w: 300, h: 200 });
+  });
+
+  it('keeps pages apart: clears one page, removes a page and moves later ones up', () => {
+    const b: BoardItem[] = [stroke('a', [0, 0]), { ...stroke('b', [1, 1]), pg: 1 }, { ...stroke('c', [2, 2]), pg: 2 }];
+    expect(applyOp(b, { t: 'clear', pg: 1 }).map((i) => i.id)).toEqual(['a', 'c']);
+    const after = applyOp(b, { t: 'delpage', pg: 1 });
+    expect(after.map((i) => [i.id, i.pg ?? 0])).toEqual([['a', 0], ['c', 1]]);
+    expect(onPage(b, 0).map((i) => i.id)).toEqual(['a']);
+    const undone = inverseOps(b, { t: 'clear', pg: 2 }).reduce(applyOp, applyOp(b, { t: 'clear', pg: 2 }));
+    expect(undone.map((i) => i.id).sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('carries author, page and highlighter over the network', () => {
+    expect(cleanItem({ id: 'h', kind: 'stroke', color: '#ff0000', size: 4, points: [1, 1], by: 'u2', pg: 3, hl: true }))
+      .toEqual({ id: 'h', kind: 'stroke', color: '#ff0000', size: 4, points: [1, 1], by: 'u2', pg: 3, hl: true });
+    expect(cleanOp({ t: 'clear', pg: 2 })).toEqual({ t: 'clear', pg: 2 });
+    expect(cleanOp({ t: 'delpage' })).toBeNull();
+  });
+
+  it('lets others draw on a shared board but change only their own items', () => {
+    const items: BoardItem[] = [stroke('own', [0, 0]), { ...stroke('theirs', [1, 1]), by: 'guest' }];
+    const put = (id: string, by?: string) => ({ t: 'put' as const, item: { ...stroke(id, [5, 5]), ...(by ? { by } : {}) } });
+    expect(mayEdit(items, { t: 'clear' }, 'owner', 'owner', false)).toBe(true);
+    expect(mayEdit(items, put('new', 'guest'), 'guest', 'owner', false)).toBe(false);
+    expect(mayEdit(items, put('new', 'guest'), 'guest', 'owner', true)).toBe(true);
+    expect(mayEdit(items, put('new'), 'guest', 'owner', true)).toBe(false);
+    expect(mayEdit(items, put('theirs', 'guest'), 'guest', 'owner', true)).toBe(true);
+    expect(mayEdit(items, { t: 'del', id: 'theirs' }, 'guest', 'owner', true)).toBe(true);
+    expect(mayEdit(items, { t: 'del', id: 'own' }, 'guest', 'owner', true)).toBe(false);
+    expect(mayEdit(items, put('own', 'guest'), 'guest', 'owner', true)).toBe(false);
+    expect(mayEdit(items, { t: 'clear', pg: 0 }, 'guest', 'owner', true)).toBe(false);
+  });
+
+  it('puts one name tag per author for each group of nearby writing, at the newest item', () => {
+    const items: BoardItem[] = [
+      stroke('a1', [100, 100, 120, 100]), stroke('a2', [130, 110, 150, 110]),
+      { ...stroke('b1', [140, 120]), by: 'sara' },
+      stroke('a3', [1200, 700, 1250, 700]),
+    ];
+    const tags = nameTags(items, 'mehdi');
+    expect(tags.map((t) => [t.by, t.itemId])).toEqual([['mehdi', 'a3'], ['sara', 'b1'], ['mehdi', 'a2']]);
+    expect(tags[2]).toMatchObject({ x: 150, y: 110 });
   });
 });
