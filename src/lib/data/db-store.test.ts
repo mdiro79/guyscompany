@@ -27,6 +27,32 @@ beforeAll(async () => {
 });
 
 describe('db store', () => {
+  it('meetings, attendance, private notes and shared notes', async () => {
+    const p = await store.createProject({ name: 'Notes', description: '', managerId: A });
+    const m = await store.createMeeting({ title: 'Weekly', purpose: 'Plan the week', projectId: p.id, startedBy: A });
+    expect((await store.getOpenMeeting())?.id).toBe(m.id);
+    const at = new Date().toISOString();
+    await store.setAttendance({ meetingId: m.id, userId: A, firstJoinedAt: at, joinedAt: at, seenAt: at, seconds: 0 });
+    await store.setAttendance({ meetingId: m.id, userId: A, firstJoinedAt: at, joinedAt: null, seenAt: at, seconds: 90 });
+    expect(await store.listAttendance([m.id])).toEqual([{ meetingId: m.id, userId: A, firstJoinedAt: at, joinedAt: null, seenAt: at, seconds: 90 }]);
+    const note = await store.createMeetingNote({ meetingId: m.id, userId: A, kind: 'idea', body: 'raw idea' });
+    await store.updateMeetingNote(note.id, B, { body: 'not mine' });
+    expect((await store.listMeetingNotes(A))[0].body).toBe('raw idea');
+    expect(await store.listMeetingNotes(B)).toEqual([]);
+    const shared = await store.shareNote({ noteId: note.id, meetingId: m.id, projectId: p.id, authorId: A, kind: 'idea', title: 'Idea', body: 'clean' });
+    const again = await store.shareNote({ noteId: note.id, meetingId: m.id, projectId: p.id, authorId: A, kind: 'idea', title: 'Idea v2', body: 'cleaner' });
+    expect(again.id).toBe(shared.id);
+    expect((await store.listSharedNotes({ projectId: p.id })).map((n) => n.title)).toEqual(['Idea v2']);
+    expect(await store.listSharedNotes({ meetingIds: [] })).toEqual([]);
+    await store.deleteSharedNote(shared.id, B);
+    expect(await store.listSharedNotes({ meetingIds: [m.id] })).toHaveLength(1);
+    await store.updateMeeting(m.id, { endedAt: new Date().toISOString() });
+    expect(await store.getOpenMeeting()).toBeNull();
+    await store.deleteProject(p.id);
+    expect(await store.listSharedNotes({ meetingIds: [m.id] })).toEqual([]);
+    expect((await store.getMeeting(m.id))?.projectId).toBeNull();
+  });
+
   it('profiles', async () => {
     expect((await store.listProfiles()).map((p) => p.username)).toEqual(['alice', 'bob']);
     await store.updateProfile(B, { mustChangePassword: false, characterId: 'monsters-b-cat' });

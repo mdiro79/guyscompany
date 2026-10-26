@@ -172,6 +172,49 @@ export interface Todo {
 }
 export type TodoPatch = Partial<Pick<Todo, 'title' | 'done' | 'doneAt' | 'due' | 'priority' | 'starred' | 'category' | 'xp'>>;
 
+// A meeting in the conference room (endedAt null while it runs), the time each member spent in it, a
+// member's private notes from it, and a note rewritten by its author for a project (seen by everyone).
+export interface Meeting {
+  id: string;
+  title: string;
+  purpose: string;
+  projectId: string | null;
+  startedBy: string | null;
+  startedAt: string;
+  endedAt: string | null;
+}
+export interface MeetingAttendance {
+  meetingId: string;
+  userId: string;
+  firstJoinedAt: string;
+  joinedAt: string | null; // start of the current stay in the room, null when out
+  seenAt: string; // the current stay was last confirmed (see lib/meetings)
+  seconds: number; // finished stays
+}
+export type NoteKind = 'note' | 'idea';
+export interface MeetingNote {
+  id: string;
+  meetingId: string;
+  userId: string;
+  kind: NoteKind;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SharedNote {
+  id: string;
+  noteId: string | null;
+  meetingId: string | null;
+  projectId: string;
+  authorId: string | null;
+  kind: NoteKind;
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export type MeetingPatch = Partial<Pick<Meeting, 'title' | 'purpose' | 'projectId' | 'endedAt'>>;
+
 // Conference room light (brightness, warmth) and glass frosting, each 0–100.
 export interface RoomSettings { light: number; warmth: number; frost: number }
 export interface Room extends RoomSettings { id: string; updatedAt: string }
@@ -302,6 +345,23 @@ export interface DataStore {
   createMilestone(m: Pick<Milestone, 'projectId' | 'title' | 'dueDate'>): Promise<Milestone>;
   updateMilestone(id: string, patch: Partial<Pick<Milestone, 'title' | 'dueDate' | 'done'>>): Promise<void>;
   deleteMilestone(id: string): Promise<void>;
+
+  // Meetings (newest first), attendance, one's own notes and the notes shared with projects.
+  listMeetings(limit: number): Promise<Meeting[]>;
+  getMeeting(id: string): Promise<Meeting | null>;
+  getOpenMeeting(): Promise<Meeting | null>; // the newest meeting not ended
+  createMeeting(m: Pick<Meeting, 'title' | 'purpose' | 'projectId' | 'startedBy'>): Promise<Meeting>;
+  updateMeeting(id: string, patch: MeetingPatch): Promise<void>;
+  listAttendance(meetingIds: string[]): Promise<MeetingAttendance[]>;
+  setAttendance(a: MeetingAttendance): Promise<void>;
+  listMeetingNotes(userId: string): Promise<MeetingNote[]>;
+  createMeetingNote(n: Pick<MeetingNote, 'meetingId' | 'userId' | 'kind' | 'body'>): Promise<MeetingNote>;
+  updateMeetingNote(id: string, userId: string, patch: Partial<Pick<MeetingNote, 'kind' | 'body'>>): Promise<void>;
+  deleteMeetingNote(id: string, userId: string): Promise<void>;
+  listSharedNotes(filter: { projectId?: string; meetingIds?: string[] }): Promise<SharedNote[]>;
+  // Creates or replaces the author's shared version of a note (one per note).
+  shareNote(n: Pick<SharedNote, 'noteId' | 'meetingId' | 'projectId' | 'authorId' | 'kind' | 'title' | 'body'>): Promise<SharedNote>;
+  deleteSharedNote(id: string, authorId: string): Promise<void>;
 
   getRoom(id: string): Promise<Room | null>;
   updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;

@@ -29,7 +29,7 @@ function BoardSync({ userId }: { userId: string }) {
   return null;
 }
 
-const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites'];
+const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites', 'meetings', 'meeting_notes', 'shared_notes'];
 
 export function AppShell({ data: server, notifications, messages, files, search, children }: {
   data: ShellData; notifications: Notification[]; messages: Message[]; files: FileMeta[]; search: SearchItem[]; children: ReactNode;

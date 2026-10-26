@@ -4,7 +4,8 @@ import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { Check, Keyboard, GraduationCap } from 'lucide-react';
+import { Check, Keyboard, GraduationCap, NotebookPen, ChevronRight } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 import { SaveButton, useResultStatus, useSave } from '@/components/ui/SaveButton';
@@ -17,7 +18,8 @@ import type { ChatInvite, SwapRequest, UserStatus } from '@/lib/data/types';
 
 const CharacterPreview = dynamic(() => import('@/components/three/CharacterPreview'), { ssr: false, loading: () => <div className="size-full animate-pulse rounded-2xl bg-surface-2" /> });
 
-export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites: ChatInvite[] }) {
+export function SettingsView({ swaps, invites, noteStats }: { swaps: SwapRequest[]; invites: ChatInvite[]; noteStats: { notes: number; meetings: number; shared: number } }) {
+  const tm = useTranslations('meetings');
   const t = useTranslations('settings');
   const tc = useTranslations('common');
   const tAll = useTranslations();
@@ -78,6 +80,16 @@ export function SettingsView({ swaps, invites }: { swaps: SwapRequest[]; invites
           </div>
         </div>
       </section>
+
+      {/* Meeting notes kept in the member's profile */}
+      <Link href="/meetings" className="card flex items-center gap-3 p-4 hover:ring-2 hover:ring-brand/40 xl:col-span-2">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><NotebookPen className="size-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">{tm('profileTitle')}</span>
+          <span className="block text-sm text-muted">{tm('profileSummary', { notes: formatNumber(locale, noteStats.notes), meetings: formatNumber(locale, noteStats.meetings), shared: formatNumber(locale, noteStats.shared) })}</span>
+        </span>
+        <ChevronRight className="size-5 shrink-0 text-muted rtl:-scale-x-100" />
+      </Link>
 
       <section className="card space-y-3 p-4">
         <h2 className="font-semibold">{t('profile')}</h2>

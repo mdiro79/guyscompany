@@ -2,13 +2,14 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowRight, Bug, CalendarClock, ClipboardCopy, Flag, LayoutDashboard, Lightbulb, ListTodo, Map as MapIcon, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Bug, CalendarClock, ClipboardCopy, Flag, LayoutDashboard, Lightbulb, ListTodo, Map as MapIcon, AlertTriangle, CheckCircle2, NotebookPen } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Avatar } from '@/components/ui/Avatar';
 import { useShell } from '@/components/shell/ShellContext';
 import { formatDate, formatNumber } from '@/lib/format';
 import { activityTrend, isOpenIssue, needsAttention, progress, projectHealth, workload, type HealthReason } from '@/lib/project-health';
-import type { Issue, IssueComment, Milestone, Project, ProjectIdea, Task } from '@/lib/data/types';
+import type { Issue, IssueComment, Meeting, Milestone, Project, ProjectIdea, SharedNote, Task } from '@/lib/data/types';
+import { ProjectNotes } from '@/components/meetings/ProjectNotes';
 import { HealthBadge, SeverityBadge } from './badges';
 import { TrendChart, StackBar, MiniBar } from './Charts';
 import { IssuesPanel } from './IssuesPanel';
@@ -16,17 +17,20 @@ import { IdeasPanel } from './IdeasPanel';
 import { Roadmap } from './Roadmap';
 import { ReportIssueDialog } from './ReportIssue';
 
-const TABS = ['overview', 'issues', 'ideas', 'roadmap'] as const;
+const TABS = ['overview', 'issues', 'ideas', 'roadmap', 'notes'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_ICON = { overview: LayoutDashboard, issues: Bug, ideas: Lightbulb, roadmap: MapIcon };
+const TAB_ICON = { overview: LayoutDashboard, issues: Bug, ideas: Lightbulb, roadmap: MapIcon, notes: NotebookPen };
 const STATUS_CLS: Record<Project['status'], string> = {
   planning: 'bg-[#e6eefb] text-[#3567c4] dark:bg-[#1c2636] dark:text-[#8fb3f2]',
   active: 'bg-brand-soft text-brand', paused: 'bg-surface-2 text-muted', done: 'bg-ink text-surface',
 };
 
-export interface CommandData { project: Project; tasks: Task[]; issues: Issue[]; comments: IssueComment[]; ideas: ProjectIdea[]; milestones: Milestone[]; today: string; tab?: string }
+export interface CommandData {
+  project: Project; tasks: Task[]; issues: Issue[]; comments: IssueComment[]; ideas: ProjectIdea[]; milestones: Milestone[];
+  sharedNotes: SharedNote[]; meetings: Meeting[]; today: string; tab?: string;
+}
 
-export function CommandCenter({ project, tasks, issues, comments, ideas, milestones, today, tab: initialTab }: CommandData) {
+export function CommandCenter({ project, tasks, issues, comments, ideas, milestones, sharedNotes, meetings, today, tab: initialTab }: CommandData) {
   const t = useTranslations('command');
   const tt = useTranslations('tasks');
   const locale = useLocale();
@@ -76,7 +80,7 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
     try { await navigator.clipboard.writeText(lines.join('\n')); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ }
   };
 
-  const tabCount: Record<Tab, number | null> = { overview: null, issues: stats.open.length, ideas: stats.newIdeas, roadmap: milestones.filter((m) => !m.done).length };
+  const tabCount: Record<Tab, number | null> = { overview: null, issues: stats.open.length, ideas: stats.newIdeas, roadmap: milestones.filter((m) => !m.done).length, notes: sharedNotes.length };
   const columns = ['idea', 'in_progress', 'review', 'done'] as const;
   const maxLoad = Math.max(1, ...stats.load.flatMap((l) => [l.tasks, l.bugs]));
 
@@ -220,6 +224,7 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
 
       {tab === 'issues' && <IssuesPanel issues={issues} comments={comments} canManage={canManage} onReport={() => setReporting(true)} openId={openIssue} setOpenId={setOpenIssue} />}
       {tab === 'ideas' && <IdeasPanel projectId={project.id} ideas={ideas} canManage={canManage} />}
+      {tab === 'notes' && <ProjectNotes notes={sharedNotes} meetings={meetings} />}
       {tab === 'roadmap' && <Roadmap project={project} tasks={tasks} milestones={milestones} canManage={canManage} today={today} />}
 
       <ReportIssueDialog open={reporting} onClose={() => setReporting(false)} projectId={project.id} />

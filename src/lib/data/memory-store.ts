@@ -1,6 +1,6 @@
 import type {
   DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
-  Issue, IssueComment, ProjectIdea, Milestone,
+  Issue, IssueComment, ProjectIdea, Milestone, Meeting, MeetingAttendance, MeetingNote, SharedNote,
   CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
 } from './types';
 import { OFFICE_DEFAULTS } from './types';
@@ -29,6 +29,10 @@ export function createMemoryStore(): DataStore {
     comments: seed.comments as IssueComment[],
     ideas: seed.ideas as ProjectIdea[],
     milestones: seed.milestones as Milestone[],
+    meetings: [] as Meeting[],
+    attendance: [] as MeetingAttendance[],
+    notes: [] as MeetingNote[],
+    shared: [] as SharedNote[],
     rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
     notifications: seed.notifications as Notification[],
@@ -66,6 +70,8 @@ export function createMemoryStore(): DataStore {
       db.issues = db.issues.filter((r) => r.projectId !== id);
       db.ideas = db.ideas.filter((r) => r.projectId !== id);
       db.milestones = db.milestones.filter((r) => r.projectId !== id);
+      db.shared = db.shared.filter((r) => r.projectId !== id);
+      for (const m of db.meetings) if (m.projectId === id) m.projectId = null;
     },
 
     async listTasks() { return clone(db.tasks); },
@@ -144,6 +150,39 @@ export function createMemoryStore(): DataStore {
     async createMilestone(m) { const x = { ...m, done: false, id: uuid(), createdAt: now() }; db.milestones.push(x); return clone(x); },
     async updateMilestone(id, patch) { patchIn(db.milestones, (m) => m.id === id, patch); },
     async deleteMilestone(id) { db.milestones = db.milestones.filter((m) => m.id !== id); },
+
+    async listMeetings(limit) { return clone([...db.meetings].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, limit)); },
+    async getMeeting(id) { const m = db.meetings.find((x) => x.id === id); return m ? clone(m) : null; },
+    async getOpenMeeting() {
+      const m = db.meetings.filter((x) => !x.endedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+      return m ? clone(m) : null;
+    },
+    async createMeeting(m) { const x: Meeting = { ...m, id: uuid(), startedAt: now(), endedAt: null }; db.meetings.push(x); return clone(x); },
+    async updateMeeting(id, patch) { patchIn(db.meetings, (m) => m.id === id, patch); },
+    async listAttendance(ids) { return clone(db.attendance.filter((a) => ids.includes(a.meetingId))); },
+    async setAttendance(a) {
+      db.attendance = db.attendance.filter((x) => !(x.meetingId === a.meetingId && x.userId === a.userId));
+      db.attendance.push(clone(a));
+    },
+    async listMeetingNotes(userId) { return clone(db.notes.filter((n) => n.userId === userId)); },
+    async createMeetingNote(n) { const x: MeetingNote = { ...n, id: uuid(), createdAt: now(), updatedAt: now() }; db.notes.push(x); return clone(x); },
+    async updateMeetingNote(id, userId, patch) { patchIn(db.notes, (n) => n.id === id && n.userId === userId, { ...patch, updatedAt: now() }); },
+    async deleteMeetingNote(id, userId) {
+      db.notes = db.notes.filter((n) => !(n.id === id && n.userId === userId));
+      for (const x of db.shared) if (x.noteId === id) x.noteId = null;
+    },
+    async listSharedNotes({ projectId, meetingIds }) {
+      return clone(db.shared.filter((n) => (!projectId || n.projectId === projectId) && (!meetingIds || (!!n.meetingId && meetingIds.includes(n.meetingId))))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    },
+    async shareNote(n) {
+      const old = n.noteId ? db.shared.find((x) => x.noteId === n.noteId) : undefined;
+      if (old) { Object.assign(old, { projectId: n.projectId, kind: n.kind, title: n.title, body: n.body, updatedAt: now() }); return clone(old); }
+      const x: SharedNote = { ...n, id: uuid(), createdAt: now(), updatedAt: now() };
+      db.shared.push(x);
+      return clone(x);
+    },
+    async deleteSharedNote(id, authorId) { db.shared = db.shared.filter((n) => !(n.id === id && n.authorId === authorId)); },
 
     async getRoom(id) { const r = db.rooms.find((x) => x.id === id); return r ? clone(r) : null; },
     async updateRoom(id, patch) {

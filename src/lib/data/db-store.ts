@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql }
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
 import { cleanCounters, emptyCounters } from '@/lib/todo-game';
-import { OFFICE_DEFAULTS, type DataStore, type Issue, type IssueComment, type Message, type Milestone, type Notification, type ProjectIdea, type Room, type Todo } from './types';
+import { OFFICE_DEFAULTS, type DataStore, type Issue, type IssueComment, type Meeting, type MeetingAttendance, type MeetingNote, type Message, type Milestone, type Notification, type ProjectIdea, type Room, type SharedNote, type Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -149,6 +149,43 @@ export function createDbStore(injected?: Db): DataStore {
     async createMilestone(m) { const [r] = await db().insert(s.milestones).values(m).returning(); return iso<Milestone>(r); },
     async updateMilestone(id, patch) { await db().update(s.milestones).set(patch).where(eq(s.milestones.id, id)); },
     async deleteMilestone(id) { await db().delete(s.milestones).where(eq(s.milestones.id, id)); },
+
+    async listMeetings(limit) { return isoAll<Meeting>(await db().select().from(s.meetings).orderBy(desc(s.meetings.startedAt)).limit(limit)); },
+    async getMeeting(id) { const [r] = await db().select().from(s.meetings).where(eq(s.meetings.id, id)); return r ? iso<Meeting>(r) : null; },
+    async getOpenMeeting() {
+      const [r] = await db().select().from(s.meetings).where(isNull(s.meetings.endedAt)).orderBy(desc(s.meetings.startedAt)).limit(1);
+      return r ? iso<Meeting>(r) : null;
+    },
+    async createMeeting(m) { const [r] = await db().insert(s.meetings).values(m).returning(); return iso<Meeting>(r); },
+    async updateMeeting(id, patch) { await db().update(s.meetings).set(dates(patch)).where(eq(s.meetings.id, id)); },
+    async listAttendance(ids) {
+      return ids.length ? isoAll<MeetingAttendance>(await db().select().from(s.meetingAttendance).where(inArray(s.meetingAttendance.meetingId, ids))) : [];
+    },
+    async setAttendance(a) {
+      const row = { firstJoinedAt: new Date(a.firstJoinedAt), joinedAt: a.joinedAt ? new Date(a.joinedAt) : null, seenAt: new Date(a.seenAt), seconds: a.seconds };
+      await db().insert(s.meetingAttendance).values({ meetingId: a.meetingId, userId: a.userId, ...row })
+        .onConflictDoUpdate({ target: [s.meetingAttendance.meetingId, s.meetingAttendance.userId], set: row });
+    },
+    async listMeetingNotes(userId) {
+      return isoAll<MeetingNote>(await db().select().from(s.meetingNotes).where(eq(s.meetingNotes.userId, userId)).orderBy(asc(s.meetingNotes.createdAt)));
+    },
+    async createMeetingNote(n) { const [r] = await db().insert(s.meetingNotes).values(n).returning(); return iso<MeetingNote>(r); },
+    async updateMeetingNote(id, userId, patch) {
+      await db().update(s.meetingNotes).set({ ...patch, updatedAt: new Date() }).where(and(eq(s.meetingNotes.id, id), eq(s.meetingNotes.userId, userId)));
+    },
+    async deleteMeetingNote(id, userId) { await db().delete(s.meetingNotes).where(and(eq(s.meetingNotes.id, id), eq(s.meetingNotes.userId, userId))); },
+    async listSharedNotes({ projectId, meetingIds }) {
+      const where = projectId ? eq(s.sharedNotes.projectId, projectId) : meetingIds ? (meetingIds.length ? inArray(s.sharedNotes.meetingId, meetingIds) : sql`false`) : undefined;
+      return isoAll<SharedNote>(await db().select().from(s.sharedNotes).where(where).orderBy(desc(s.sharedNotes.updatedAt)));
+    },
+    async shareNote(n) {
+      const set = { projectId: n.projectId, kind: n.kind, title: n.title, body: n.body, updatedAt: new Date() };
+      const [r] = n.noteId
+        ? await db().insert(s.sharedNotes).values(n).onConflictDoUpdate({ target: s.sharedNotes.noteId, set }).returning()
+        : await db().insert(s.sharedNotes).values(n).returning();
+      return iso<SharedNote>(r);
+    },
+    async deleteSharedNote(id, authorId) { await db().delete(s.sharedNotes).where(and(eq(s.sharedNotes.id, id), eq(s.sharedNotes.authorId, authorId))); },
 
     async getRoom(id) { const [r] = await db().select().from(s.rooms).where(eq(s.rooms.id, id)); return r ? iso<Room>(r) : null; },
     async updateRoom(id, patch) {

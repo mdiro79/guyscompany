@@ -23,6 +23,9 @@ import { officeAt, inConference, areaAt, allSeats, SPAWN, CONF_SCREEN } from './
 import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, type TabletButton } from './tablet';
+import { MeetingPanel, type MeetingPanelMode, type OfficeMeeting } from './MeetingPanel';
+import { meetingPresenceAction } from '@/app/actions/meetings';
+import { clockText, HEARTBEAT_MS, meetingEnd } from '@/lib/meetings';
 import { RoomControls } from './RoomControls';
 import { canLook } from './Player';
 import { startTourFor, useTourStep, tour } from './tour';
@@ -59,7 +62,9 @@ const SPLIT_KEY = 'gc-board-split';
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
 
-export function OfficeView({ messages, privateChats, invitedSlots, files, room }: { messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null }) {
+export function OfficeView({ messages, privateChats, invitedSlots, files, room, meeting: meetingData }: {
+  messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null; meeting: OfficeMeeting;
+}) {
   const t = useTranslations('office');
   const tc = useTranslations('common');
   const tChat = useTranslations('chat');
@@ -85,16 +90,23 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
   }, []);
   // Never run a second office inside the dashboard iframe (it would join the mesh as this user).
   const labelTexts = useMemo(() => ({ locale, older: t('olderMessage'), newer: t('newerMessage'), receptionist: t('receptionist') }), [locale, t]);
+  // The meeting running in the conference room (one left with nobody in it for a while counts as over).
+  const [slowNow, setSlowNow] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setSlowNow(Date.now()), 15000); return () => clearInterval(id); }, []);
+  const running = meetingData.meeting && meetingEnd(meetingData.meeting, meetingData.attendance, slowNow) === null ? meetingData.meeting : null;
+  // The conference screen shows the running meeting's name and purpose instead of the general meeting page.
+  const [runTitle, runPurpose, runStart] = [running?.title, running?.purpose, running?.startedAt];
   const meetingLabels = useMemo(() => ({
-    title: t('meeting.title'), subtitle: t('meeting.subtitle'), raiseHand: t('meeting.raiseHand'), shareIdea: t('meeting.shareIdea'),
+    title: runTitle ?? t('meeting.title'), subtitle: runPurpose ?? t('meeting.subtitle'), raiseHand: t('meeting.raiseHand'), shareIdea: t('meeting.shareIdea'),
     shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), hands: t('meeting.hands'), rtl: locale === 'fa',
-  }), [locale, t]);
+    startedAt: runStart,
+  }), [locale, t, runTitle, runPurpose, runStart]);
   const tabletLabels = useMemo(() => ({
     title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
     raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),
     board: t('tablet.board'), present: t('tablet.present'), stopPresent: t('tablet.stopPresent'), view: t('tablet.view'),
     react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'),
-    stand: t('tablet.stand'), hands: t('meeting.hands'), rtl: locale === 'fa',
+    stand: t('tablet.stand'), hands: t('meeting.hands'), notes: t('tablet.notes'), meeting: t('tablet.meeting'), startMeeting: t('tablet.startMeeting'), rtl: locale === 'fa',
   }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
   const net = useOfficeNet(mesh, user.id);
@@ -222,7 +234,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
       }
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
-      if (e.code === 'Escape') officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false });
+      if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false }); setMeetingPanelState('none'); }
       const n = Number(e.key);
       if (officeUi.get().emoteWheel && n >= 1 && n <= 9) sendEmote(EMOTES[n - 1].id);
     };
@@ -295,6 +307,41 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
     presenting: presenterId ? (presenterId === user.id ? 'me' : 'other') : null,
     presenterName: profiles.find((p) => p.id === presenterId)?.displayName ?? '',
   }), [hands, user.id, voice.micOn, roomNow.light, presenterId, profiles]);
+  // The meeting's name and running time on the tablet's header (updated without re-rendering the office).
+  useEffect(() => {
+    if (!running) { tablet.set({ meeting: null, meetingClock: '' }); return; }
+    const tick = () => tablet.set({ meeting: running.title, meetingClock: clockText(Math.max(0, Math.round((Date.now() - Date.parse(running.startedAt)) / 1000))) });
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  // Attendance: while a meeting runs and I am in the conference room, my tab says so on entering, every
+  // couple of minutes, and on leaving (also when the tab is hidden, e.g. a phone put away).
+  const runningId = running?.id ?? null;
+  useEffect(() => {
+    if (!runningId || !ui.inConference || embedded) return;
+    let here = false;
+    const say = (v: boolean) => { if (v === here && !v) return; here = v; void meetingPresenceAction(runningId, v).catch(() => {}); };
+    const visible = () => document.visibilityState === 'visible';
+    say(visible());
+    const beat = setInterval(() => { if (visible()) say(true); }, HEARTBEAT_MS);
+    const onVis = () => say(visible());
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(beat); document.removeEventListener('visibilitychange', onVis); say(false); };
+  }, [runningId, ui.inConference, embedded]);
+  // The meeting panel (start, details, notes) closes when leaving the room.
+  const [meetingPanel, setMeetingPanelState] = useState<MeetingPanelMode>('none');
+  const setMeetingPanel = useCallback((m: MeetingPanelMode) => {
+    if (m !== 'none' && document.pointerLockElement) document.exitPointerLock();
+    setMeetingPanelState(m);
+  }, []);
+  useEffect(() => { if (!ui.inConference) setMeetingPanelState('none'); }, [ui.inConference]);
+  // Members in the conference room right now (live positions), for the attendance list.
+  const presentNow = useCallback(() => {
+    const ids = [...net.remotes.current.values()].filter((r) => performance.now() - r.receivedAt < 5000 && inConference(r.pose.x, r.pose.z)).map((r) => r.userId);
+    return officeUi.get().inConference ? [user.id, ...ids] : ids;
+  }, [net, user.id]);
 
   if (embedded) {
     return <div className="flex min-h-dvh items-center justify-center p-6 text-center text-muted">{t('embedded')}</div>;
@@ -336,6 +383,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
         break;
       }
       case 'stand': input.action = true; break;
+      case 'notes': setMeetingPanel(running ? 'notes' : 'start'); break;
+      case 'meeting': setMeetingPanel(running ? 'info' : 'start'); break;
     }
   };
   pressRef.current = pressTablet;
@@ -548,8 +597,9 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room }
       )}
 
       {/* Drawing board at the conference table, and the presenter's board on demand */}
-      {!touring && ui.board === 'none' && (atTable || (someoneElsePresents && ui.inConference)) && (
-        <div className="absolute top-[4.25rem] left-1/2 z-30 flex -translate-x-1/2 gap-2 short:top-14">
+      {!touring && ui.board === 'none' && ui.inConference && (
+        <div className="absolute top-[4.25rem] left-1/2 z-30 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap justify-center gap-2 short:top-14">
+          <MeetingPanel data={meetingData} running={running} mode={meetingPanel} onMode={setMeetingPanel} presentNow={presentNow} />
           {atTable && (
             <button type="button" onClick={() => openBoard('mine')}
               className="flex min-h-11 items-center gap-2 rounded-xl bg-[#2f5d45] px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95">

@@ -13,6 +13,7 @@ import { BOARD_H, BOARD_W, onPage } from '@/lib/board/model';
 import { boardOf, lasersOn, presentation, subscribeBoards, writingNow } from '@/lib/board/sync';
 import { handQueue, subscribeHands } from '@/lib/board/hands';
 import { syncedNow } from '@/lib/realtime/room';
+import { clockText } from '@/lib/meetings';
 import { tableWood, oak, slats, carpet, panelWash, floorGlow, paintScreen, paintScreenInfo, paintRoomPanel, type MeetingLabels } from './textures';
 import { tablet, tabletHit, paintTablet, buttonAt, buttonRects, pressAt, toNdc, TABLET_PX, type TabletButton } from './tablet';
 import { roomControls, useRoomSettings } from './roomControls';
@@ -258,8 +259,9 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
     tex.anisotropy = 8;
     return { tex, cv };
   }, []);
-  // The meeting page, or the presenter's current page live while someone presents: with the name of whoever
-  // wrote each part next to it, the page number, the countdown and raised hands. Painted at most once a
+  // The meeting page (the running meeting's name, purpose and time), or the presenter's current page live
+  // while someone presents: with the name of whoever wrote each part next to it, the page number, the
+  // countdown and raised hands. Painted at most once a
   // frame and only when what it shows changed (checked every second too, for the countdown and the
   // "writing now" tags), and again once the web fonts are ready.
   useEffect(() => {
@@ -274,7 +276,8 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
       const hands = handQueue();
       const left = p.timerEnd ? p.timerEnd - syncedNow() : null;
       const writers = board ? people.filter((x) => writingNow(x.id)).map((x) => x.id).join() : '';
-      const key = [who, left === null ? '' : clock(left), writers].join('|');
+      const elapsed = labels.startedAt ? clockText(Math.max(0, Math.round((syncedNow() - Date.parse(labels.startedAt)) / 1000))) : undefined;
+      const key = [who, left === null ? '' : clock(left), writers, elapsed].join('|');
       const refs = [board, p, hands];
       if (!force && key === shown && refs.every((r, i) => r === shownRefs[i])) return;
       shown = key; shownRefs = refs;
@@ -285,7 +288,7 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
       } else paintScreen(cv, labels);
       paintScreenInfo(cv, {
         presenter: who ? nameOf(who) ?? '' : undefined, page: board && board.pages > 1 ? `${board.page + 1}/${board.pages}` : undefined,
-        timer: who && left !== null ? { text: clock(left), late: left < 0, soon: left >= 0 && left < 60_000 } : undefined,
+        timer: who && left !== null ? { text: clock(left), late: left < 0, soon: left >= 0 && left < 60_000 } : undefined, elapsed,
         hands: hands.map((id) => nameOf(id) ?? '').filter(Boolean), handsLabel: labels.hands, rtl: labels.rtl,
       });
       tex.needsUpdate = true;

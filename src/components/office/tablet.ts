@@ -6,21 +6,22 @@ import { drawIcon, type IconName } from './icons';
 // (click with the crosshair or the cursor, tap on phones). Only the tablet at one's own seat is live;
 // the others show the same screen at rest. What the buttons do is wired up by the office view.
 
-export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'react' | 'look' | 'lights' | 'stand';
-export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'react', 'look', 'lights', 'stand'];
+export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'notes' | 'react' | 'look' | 'lights' | 'meeting' | 'stand';
+export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'notes', 'react', 'look', 'lights', 'meeting', 'stand'];
 
 export interface TabletLabels {
   title: string; idle: string; presenting: string; // "{name}" is replaced
   raiseHand: string; lowerHand: string; micOn: string; micOff: string; board: string; present: string; stopPresent: string; view: string;
-  react: string; look: string; lightPresent: string; stand: string; hands: string; rtl: boolean;
+  react: string; look: string; lightPresent: string; stand: string; hands: string; notes: string; meeting: string; startMeeting: string; rtl: boolean;
 }
 
 export interface TabletState {
   hand: boolean; mic: boolean; presenting: 'me' | 'other' | null; presenterName: string; dimmed: boolean; hands: number;
   hover: TabletButton | null; flash: TabletButton | null; labels: TabletLabels | null;
+  meeting: string | null; meetingClock: string; // the running meeting's name and how long it has run
 }
 
-let state: TabletState = { hand: false, mic: false, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null };
+let state: TabletState = { hand: false, mic: false, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null, meeting: null, meetingClock: '' };
 const listeners = new Set<() => void>();
 let onPress: ((b: TabletButton) => void) | null = null;
 
@@ -44,7 +45,7 @@ export const tablet = {
 // ——— Layout and painting (canvas pixels) ———
 
 export const TABLET_PX: [number, number] = [1024, 640];
-const HEADER = 96, PAD = 28, GAP = 20, COLS = 4;
+const HEADER = 96, PAD = 24, GAP = 16, COLS = 5;
 
 /** Where each button sits on the screen; the order follows the reading direction. */
 export function buttonRects(rtl: boolean) {
@@ -79,6 +80,8 @@ function look(s: TabletState, id: TabletButton): { icon: IconName; label: string
     case 'look': return { icon: 'shareScreen', label: l.look, color: '#3fb3ad', on: false };
     case 'lights': return { icon: 'sun', label: l.lightPresent, color: '#e0a526', on: s.dimmed };
     case 'stand': return { icon: 'logOut', label: l.stand, color: '#7d8597', on: false };
+    case 'notes': return { icon: 'notebook', label: l.notes, color: '#0f9d9a', on: false };
+    case 'meeting': return { icon: 'users', label: s.meeting ? l.meeting : l.startMeeting, color: '#c2417c', on: !!s.meeting };
   }
 }
 
@@ -93,13 +96,15 @@ export function paintTablet(c: HTMLCanvasElement, s: TabletState, live: boolean)
   const rtl = l.rtl;
   g.direction = rtl ? 'rtl' : 'ltr';
   g.textBaseline = 'middle';
-  // Header: the room on one side, who is presenting (and raised hands) on the other.
+  // Header: the meeting's name on one side; who is presenting, or how long the meeting has run, (and
+  // raised hands) on the other.
+  const meeting = live && s.meeting;
   g.fillStyle = '#ffffff'; g.font = font(rtl, 700, 34);
   g.textAlign = rtl ? 'right' : 'left';
-  g.fillText(l.title, rtl ? W - PAD : PAD, HEADER / 2);
-  const status = live && s.presenting ? l.presenting.replace('{name}', s.presenterName) : l.idle;
+  g.fillText(meeting || l.title, rtl ? W - PAD : PAD, HEADER / 2, W * 0.4);
+  const status = live && s.presenting ? l.presenting.replace('{name}', s.presenterName) : meeting ? `⏱ ${s.meetingClock}` : l.idle;
   g.font = font(rtl, 500, 26);
-  const sw = Math.min(W * 0.55, g.measureText(status).width + 52);
+  const sw = Math.min(W * 0.4, g.measureText(status).width + 52);
   const sx = rtl ? PAD : W - PAD - sw;
   g.fillStyle = live && s.presenting ? 'rgba(217,68,60,0.9)' : 'rgba(255,255,255,0.12)';
   g.beginPath(); g.roundRect(sx, HEADER / 2 - 24, sw, 48, 24); g.fill();
@@ -120,11 +125,11 @@ export function paintTablet(c: HTMLCanvasElement, s: TabletState, live: boolean)
     g.beginPath(); g.roundRect(r.x, r.y, r.w, r.h, 28); g.fill();
     if (hover || flash) { g.lineWidth = flash ? 10 : 6; g.strokeStyle = flash ? '#ffffff' : 'rgba(255,255,255,0.75)'; g.stroke(); }
     const cx = r.x + r.w / 2, cy = r.y + r.h * 0.4;
-    g.beginPath(); g.arc(cx, cy, 58, 0, Math.PI * 2);
+    g.beginPath(); g.arc(cx, cy, 52, 0, Math.PI * 2);
     g.fillStyle = on ? 'rgba(255,255,255,0.22)' : b.color; g.fill();
-    drawIcon(g, b.icon, cx, cy, 64, '#ffffff', 2.2);
-    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = font(rtl, 600, 28);
-    g.fillText(b.label, cx, r.y + r.h - 40, r.w - 20);
+    drawIcon(g, b.icon, cx, cy, 58, '#ffffff', 2.2);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = font(rtl, 600, 26);
+    g.fillText(b.label, cx, r.y + r.h - 36, r.w - 14);
   }
   g.direction = 'ltr';
 }

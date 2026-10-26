@@ -124,7 +124,7 @@ export const floorGlow = once(() => {
   return texture(c);
 });
 
-export interface MeetingLabels { title: string; subtitle: string; raiseHand: string; shareIdea: string; shareImage: string; shareScreen: string; more: string; hands: string; rtl: boolean }
+export interface MeetingLabels { title: string; subtitle: string; raiseHand: string; shareIdea: string; shareImage: string; shareScreen: string; more: string; hands: string; rtl: boolean; startedAt?: string } // startedAt: the running meeting
 const BUTTONS: (keyof MeetingLabels & IconName)[] = ['raiseHand', 'shareIdea', 'shareImage', 'shareScreen', 'more'];
 const font = (rtl: boolean, weight: number, px: number) => `${weight} ${px}px ${rtl ? '"Vazirmatn Variable", Tahoma' : '"Inter Variable", system-ui'}, sans-serif`;
 
@@ -167,7 +167,7 @@ export function paintScreen(c: HTMLCanvasElement, l: MeetingLabels) {
 }
 
 /** What the conference screen shows around a presentation: who presents and the page, the countdown, raised hands. */
-export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; hands: string[]; handsLabel: string; rtl: boolean }
+export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; elapsed?: string; hands: string[]; handsLabel: string; rtl: boolean }
 
 // Small pills in the screen's corners over the board (or the meeting page): presenter and page at the
 // top on the reading side, the countdown on the other, raised hands at the bottom.
@@ -190,6 +190,8 @@ export function paintScreenInfo(c: HTMLCanvasElement, info: ScreenInfo) {
     g.fillText(text, textX, y + ph / 2 + 2 * u, w - 40 * u - iw);
   };
   if (info.presenter) pillAt(info.page ? `${info.presenter} · ${info.page}` : info.presenter, 'start', pad, 'rgba(217,68,60,0.92)', 'cast');
+  // How long the meeting has run, where the countdown would be.
+  if (info.elapsed && !info.timer) pillAt(`⏱ ${info.elapsed}`, 'end', pad, 'rgba(31,35,40,0.6)');
   if (info.timer) pillAt(info.timer.text, 'end', pad, info.timer.late ? 'rgba(217,68,60,0.95)' : info.timer.soon ? 'rgba(240,138,36,0.95)' : 'rgba(31,35,40,0.82)');
   if (info.hands.length) pillAt(`${info.handsLabel}: ${info.hands.join(info.rtl ? '، ' : ', ')}`, 'start', H - pad - ph, 'rgba(91,141,239,0.95)', 'raiseHand');
   g.direction = 'ltr';

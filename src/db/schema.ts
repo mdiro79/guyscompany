@@ -265,3 +265,51 @@ export const privateChatInvites = pgTable('private_chat_invites', {
   status: requestStatusEnum('status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Meetings in the conference room: a name and what it is for (set when it starts, optionally for a
+// project), when it started and ended, and who attended for how long. One meeting runs at a time.
+export const meetings = pgTable('meetings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  purpose: text('purpose').notNull().default(''),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  startedBy: uuid('started_by').references(() => profiles.id, { onDelete: 'set null' }),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+}, (t) => [index('meetings_started_idx').on(t.startedAt)]);
+
+// Time in the room per member: `seconds` of finished stays, plus the open one from `joinedAt` (null when
+// out of the room), confirmed by `seenAt` every couple of minutes (a closed tab stops counting there).
+export const meetingAttendance = pgTable('meeting_attendance', {
+  meetingId: uuid('meeting_id').notNull().references(() => meetings.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  firstJoinedAt: timestamp('first_joined_at', { withTimezone: true }).notNull().defaultNow(),
+  joinedAt: timestamp('joined_at', { withTimezone: true }),
+  seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+  seconds: integer('seconds').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.meetingId, t.userId] })]);
+
+// A member's own notes and ideas from a meeting (private, kept in their profile).
+export const meetingNotes = pgTable('meeting_notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  meetingId: uuid('meeting_id').notNull().references(() => meetings.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull().default('note'), // note | idea
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('meeting_notes_user_idx').on(t.userId), check('meeting_note_kind', sql`${t.kind} in ('note', 'idea')`)]);
+
+// A note or idea rewritten by its author for a project, for the whole team to see (one per note).
+export const sharedNotes = pgTable('shared_notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  noteId: uuid('note_id').unique().references(() => meetingNotes.id, { onDelete: 'set null' }),
+  meetingId: uuid('meeting_id').references(() => meetings.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull().default('note'), // note | idea
+  title: text('title').notNull(),
+  body: text('body').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('shared_notes_project_idx').on(t.projectId), check('shared_note_kind', sql`${t.kind} in ('note', 'idea')`)]);
