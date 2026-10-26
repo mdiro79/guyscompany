@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHmac, randomUUID } from 'crypto';
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
 import { env, isDemo, serverEnv } from '@/lib/env';
+import { broadcast } from '@/lib/realtime/relay';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -45,14 +46,34 @@ async function probe(topic: string, opts: { token?: string; private?: boolean })
   return { a: a.p, b: b.p, ok: a.p.sawPeers >= 2 && b.p.sawPeers >= 2 && b.p.gotBroadcast };
 }
 
+// The relay's sending path (/api/room POST): a REST broadcast from the server reaches a socket subscriber.
+async function probeRest(topic: string) {
+  const sb = createClient(env.supabaseUrl, env.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  let received = false;
+  const ch = sb.channel(topic, { config: { broadcast: { self: false } } });
+  ch.on('broadcast', { event: 'ping' }, () => { received = true; });
+  const status = await new Promise<string>((resolve) => {
+    ch.subscribe((s, err) => { if (s !== 'SUBSCRIBED') resolve(err ? `${s}: ${err.message}` : s); else resolve(s); });
+    setTimeout(() => resolve('no answer'), 8000);
+  });
+  let sent: string = 'ok';
+  if (status === 'SUBSCRIBED') {
+    try { await broadcast([{ event: 'ping', payload: {} }], topic); } catch (e) { sent = String(e); }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  await sb.removeAllChannels();
+  return { status, sent, received, ok: received };
+}
+
 export async function GET() {
   if (isDemo) return NextResponse.json({ mode: 'demo' });
   const topic = `gc-check-${randomUUID().slice(0, 8)}`;
   const secret = serverEnv().jwtSecret;
-  const [anon, user, userPrivate] = await Promise.all([
+  const [rest, anon, user, userPrivate] = await Promise.all([
+    probeRest(`${topic}-r`).catch((e) => ({ error: String(e) })),
     probe(topic, {}).catch((e) => ({ error: String(e) })),
     secret ? probe(`${topic}-u`, { token: userToken(secret) }).catch((e) => ({ error: String(e) })) : null,
     secret ? probe(`${topic}-p`, { token: userToken(secret), private: true }).catch((e) => ({ error: String(e) })) : null,
   ]);
-  return NextResponse.json({ anon, user, userPrivate, keyKind: env.supabaseAnonKey.startsWith('sb_') ? 'publishable' : 'jwt' }, { headers: { 'cache-control': 'no-store' } });
+  return NextResponse.json({ rest, anon, user, userPrivate, keyKind: env.supabaseAnonKey.startsWith('sb_') ? 'publishable' : 'jwt' }, { headers: { 'cache-control': 'no-store' } });
 }
