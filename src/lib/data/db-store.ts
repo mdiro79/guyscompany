@@ -234,9 +234,14 @@ export function resilient(store: DataStore): DataStore {
         gen = dbGeneration(); // the query has picked its connection set synchronously
         return await p;
       } catch (e) {
-        if (!(read ? isConnectionError(e) : isNotSentError(e))) throw e;
+        // A TypeError while reading means rows of the wrong shape (e.g. "a.map is not a function" on an
+        // array column): the pooler handed back another query's answer after a connection was dropped
+        // under load. The connections are replaced and the read is asked again.
+        if (!(read ? isConnectionError(e) || e instanceof TypeError : isNotSentError(e))) throw e;
         console.warn(`[db] ${name} failed (${describeDbError(e).code}); retrying on a new connection`);
-        resetDb(0, gen);
+        // Fresh connections serve the retry at once; the old ones get a few seconds to finish what is in
+        // flight instead of being cut mid-query, which left the pooler answering later queries with stale rows.
+        resetDb(5, gen);
         await wait(RETRY_DELAY_MS);
         return run(args);
       }

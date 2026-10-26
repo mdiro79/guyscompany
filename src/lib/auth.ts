@@ -53,6 +53,9 @@ async function sessionUserId(): Promise<string | null> {
   }
 }
 
+// The signed-in user's id from the session cookie alone (no database query), for frequent API calls.
+export const currentUserId = cache(sessionUserId);
+
 // Memoised per request: the layout and the page share one session check and one profile query.
 export const currentUser = cache(async (): Promise<Profile | null> => {
   const id = await sessionUserId();
