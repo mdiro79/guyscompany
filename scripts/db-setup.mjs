@@ -61,7 +61,9 @@ for (let attempt = 1; ; attempt++) {
     await setup();
     break;
   } catch (e) {
-    console.error(`[db-setup] Attempt ${attempt} failed: ${e.code ?? ''} ${e.message}`);
+    const cause = e.cause ?? e;
+    console.error(`[db-setup] Attempt ${attempt} failed: ${e.message}`);
+    console.error(`[db-setup] Reason: ${cause.code ?? ''} ${cause.message ?? ''}`);
     if (attempt >= 3) {
       console.error('[db-setup] Could not set up the database. Check that the Supabase project is active (not paused) and redeploy.');
       process.exit(1);
