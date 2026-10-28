@@ -8,6 +8,7 @@ import { Check, Keyboard, GraduationCap, NotebookPen, ChevronRight } from 'lucid
 import { Link } from '@/i18n/navigation';
 import { useShell } from '@/components/shell/ShellContext';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
+import { InstallAppCard } from '@/components/InstallAppCard';
 import { SaveButton, useResultStatus, useSave } from '@/components/ui/SaveButton';
 import { updateProfileAction, setCharacterAction, requestSwapAction, respondSwapAction, setTutorialDoneAction } from '@/app/actions/profile';
 import { setStatusAction } from '@/app/actions/misc';
@@ -157,6 +158,8 @@ export function SettingsView({ swaps, invites, noteStats }: { swaps: SwapRequest
         </ul>
         <button type="button" className="btn-ghost" onClick={() => run(async () => { await setTutorialDoneAction(false); router.push(`/${locale}/office`); })}><GraduationCap className="size-4" />{t('replayTutorial')}</button>
       </section>
+
+      <InstallAppCard />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { NextIntlClientProvider, hasLocale } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { routing, localeDirection } from '@/i18n/routing';
+import { PwaSetup } from '@/components/PwaSetup';
 import '@fontsource-variable/vazirmatn';
 import '@fontsource-variable/inter';
 import '../globals.css';
@@ -12,7 +13,9 @@ import '../globals.css';
 export const metadata: Metadata = {
   title: 'Guyscompany',
   description: 'Better together — dashboard and virtual office',
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/favicon.svg', apple: '/icons/apple-touch-icon.png' },
+  // iOS home-screen app: full screen without Safari's bars.
+  appleWebApp: { capable: true, title: 'Guyscompany', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {
@@ -35,6 +38,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
     <html lang={locale} dir={localeDirection(locale)} className={theme} suppressHydrationWarning>
       {/* data-gc marks our own pages (the office monitor tells them apart from a hosting error page). */}
       <body className="min-h-dvh antialiased" data-gc="app">
+        <PwaSetup />
         <NextIntlClientProvider messages={messages} locale={locale}>{children}</NextIntlClientProvider>
       </body>
     </html>
