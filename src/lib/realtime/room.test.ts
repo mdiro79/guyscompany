@@ -60,6 +60,7 @@ describe('room relay fallback', () => {
     const first = FakeEventSource.all[0];
     expect(first.url).toContain(`tab=${room.tabId}`);
     expect(first.url).toContain('mic=0');
+    expect(first.url).toContain('office=0');
 
     first.fire('status', { status: 'SUBSCRIBED', error: null });
     expect(realtimeStatus.value).toBe('relay SUBSCRIBED');
@@ -73,15 +74,29 @@ describe('room relay fallback', () => {
     room.send('rtc', { n: 2 });
     vi.advanceTimersByTime(50);
     room.track({ userId: 'u1', device: 'computer', micActive: true });
+    // Each caller announces only its part: the office flag keeps the microphone state.
+    room.track({ userId: 'u1', office: true });
     await vi.runAllTimersAsync();
     expect(posts).toContainEqual({ tab: room.tabId, messages: [{ event: 'rtc', payload: { n: 1 } }, { event: 'rtc', payload: { n: 2 } }] });
-    expect(posts).toContainEqual({ tab: room.tabId, track: { device: 'computer', micActive: true } });
+    expect(posts).toContainEqual({ tab: room.tabId, track: { device: 'computer', micActive: true, office: false } });
+    expect(posts).toContainEqual({ tab: room.tabId, track: { device: 'computer', micActive: true, office: true } });
+
+    // A burst larger than the relay accepts in one request leaves in several, nothing dropped.
+    posts.length = 0;
+    const big = 'x'.repeat(20_000);
+    for (let i = 0; i < 5; i++) room.send('mesh', { i, big });
+    room.send('rtc', { n: 9 });
+    await vi.runAllTimersAsync();
+    expect(posts.length).toBeGreaterThan(1);
+    for (const p of posts) expect(JSON.stringify(p).length).toBeLessThan(64_000);
+    expect(posts.flatMap((p) => p.messages as { payload: { i?: number; n?: number } }[]).map((m) => m.payload.i ?? `rtc${m.payload.n}`)).toEqual([0, 1, 2, 3, 4, 'rtc9']);
 
     // Rotation: the new stream takes over only once it is in the room.
     first.fire('rotate', {});
     expect(FakeEventSource.all).toHaveLength(2);
     const second = FakeEventSource.all[1];
     expect(second.url).toContain('mic=1');
+    expect(second.url).toContain('office=1');
     rtc.mockClear();
     second.fire('msg', { event: 'rtc', payload: { n: 3 } });
     expect(rtc).not.toHaveBeenCalled();

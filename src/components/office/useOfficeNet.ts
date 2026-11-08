@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef } from 'react';
-import type { Mesh } from '@/lib/realtime/mesh';
+import { ROOM_STATE_IDLE_MS, type Mesh } from '@/lib/realtime/mesh';
 import { syncedNow } from '@/lib/realtime/room';
 import type { Pose } from './Player';
 import { officeUi } from './store';
@@ -12,6 +12,9 @@ export interface RemoteAvatar { userId: string; pose: Pose; receivedAt: number; 
 
 export const TYPING_MS = 4000; // a "typing" signal lasts this long unless renewed
 const TYPING_RENEW_MS = 2500;
+// A position through the room fallback counts as received this much later, so a character standing
+// still (resent every ROOM_STATE_IDLE_MS) stays shown like one on a direct link (5 s).
+const ROOM_POSE_GRACE_MS = ROOM_STATE_IDLE_MS;
 
 // Position/orientation travel over WebRTC data channels only (never the database).
 // Each user's character follows the newest command across their devices ("last command wins").
@@ -23,7 +26,8 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
 
   useEffect(() => {
     if (!mesh) return;
-    const offState = mesh.onState((from, msg) => {
+    mesh.setInOffice(true);
+    const offState = mesh.onState((from, msg, viaRoom) => {
       if (msg.k !== 'pose') return;
       const pose = msg as unknown as Pose;
       if (from.userId === userId) {
@@ -32,7 +36,8 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
       }
       const cur = remotes.current.get(from.userId);
       if (cur && cur.pose.t > pose.t && performance.now() - cur.receivedAt < 3000) return;
-      remotes.current.set(from.userId, { userId: from.userId, pose, receivedAt: performance.now(), emote: cur?.emote ?? null, typing: cur?.typing ?? 0 });
+      const receivedAt = performance.now() + (viaRoom ? ROOM_POSE_GRACE_MS : 0);
+      remotes.current.set(from.userId, { userId: from.userId, pose, receivedAt, emote: cur?.emote ?? null, typing: cur?.typing ?? 0 });
     });
     const offEvent = mesh.onEvent((from, msg) => {
       if (msg.type === 'typing' && from.userId !== userId) {
@@ -46,7 +51,7 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
       const cur = remotes.current.get(from.userId);
       if (cur) { cur.emote = { id: msg.id, until }; labelsChanged(); }
     });
-    return () => { offState(); offEvent(); };
+    return () => { offState(); offEvent(); mesh.setInOffice(false); };
   }, [mesh, userId]);
 
   const sendPose = useCallback((pose: Pose) => mesh?.sendState({ k: 'pose', ...pose }), [mesh]);

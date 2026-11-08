@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const tabId = q.get('tab') ?? '';
   if (!TAB_ID_PATTERN.test(tabId)) return NextResponse.json({ error: 'tab' }, { status: 400 });
   // The user id always comes from the session, never from the request.
-  let meta = { userId, device: device(q.get('device')), micActive: q.get('mic') === '1', tabId, since: Number(q.get('since')) || Date.now() };
+  let meta = { userId, device: device(q.get('device')), micActive: q.get('mic') === '1', office: q.get('office') === '1', tabId, since: Number(q.get('since')) || Date.now() };
 
   const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const encoder = new TextEncoder();
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       channel.on('broadcast', { event: '*' }, ({ event, payload }) => {
         const p = (payload ?? {}) as Record<string, unknown>;
         if (event === '__track') {
-          if (p.tabId === tabId && p.userId === meta.userId) { meta = { ...meta, device: device(p.device), micActive: !!p.micActive }; void channel.track(meta); }
+          if (p.tabId === tabId && p.userId === meta.userId) { meta = { ...meta, device: device(p.device), micActive: !!p.micActive, office: !!p.office }; void channel.track(meta); }
           return;
         }
         if (p.__tab === tabId) return; // this tab's own message coming back
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   const text = await req.text();
   if (text.length > MAX_BODY) return NextResponse.json({ error: 'too large' }, { status: 413 });
-  let body: { tab?: unknown; messages?: unknown; track?: { device?: unknown; micActive?: unknown } };
+  let body: { tab?: unknown; messages?: unknown; track?: { device?: unknown; micActive?: unknown; office?: unknown } };
   try { body = JSON.parse(text); } catch { return NextResponse.json({ error: 'json' }, { status: 400 }); }
   const tabId = typeof body.tab === 'string' ? body.tab : '';
   if (!TAB_ID_PATTERN.test(tabId)) return NextResponse.json({ error: 'tab' }, { status: 400 });
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       out.push({ event: m.event, payload: { ...(m.payload as Record<string, unknown>), __tab: tabId } });
     }
   }
-  if (body.track) out.push({ event: '__track', payload: { tabId, userId, device: device(body.track.device), micActive: !!body.track.micActive } });
+  if (body.track) out.push({ event: '__track', payload: { tabId, userId, device: device(body.track.device), micActive: !!body.track.micActive, office: !!body.track.office } });
   if (!out.length) return new NextResponse(null, { status: 204 });
   try {
     await broadcast(out);

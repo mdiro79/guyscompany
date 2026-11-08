@@ -3,7 +3,12 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { ROOM_TOPIC } from './topic';
 
-export interface PresenceMeta { userId: string; device: 'phone' | 'computer'; tabId: string; micActive: boolean; since: number }
+// office: the tab shows the 3D office (only those get positions through the room fallback, see mesh.ts).
+export interface PresenceMeta { userId: string; device: 'phone' | 'computer'; tabId: string; micActive: boolean; office?: boolean; since: number }
+// track() merges: each caller announces only what it knows (the office its flag, the voice panel its mic).
+export type TrackMeta = Pick<PresenceMeta, 'userId'> & Partial<Omit<PresenceMeta, 'tabId' | 'since' | 'userId'>>;
+const merge = (prev: PresenceMeta | null, m: TrackMeta): PresenceMeta =>
+  ({ device: 'computer', micActive: false, office: false, ...prev, ...m, tabId, since: prev?.since ?? Date.now() });
 type Handler = (payload: Record<string, unknown>) => void;
 
 // Low-volume room channel: presence + WebRTC signaling. Supabase Realtime when configured,
@@ -12,7 +17,7 @@ export interface Room {
   tabId: string;
   on(event: string, cb: Handler): () => void;
   send(event: string, payload: Record<string, unknown>): void;
-  track(meta: Omit<PresenceMeta, 'tabId' | 'since'>): void;
+  track(meta: TrackMeta): void;
   onPresence(cb: (peers: PresenceMeta[]) => void): () => void;
   serverOffsetMs(): number;
 }
@@ -56,6 +61,9 @@ interface Transport { send(event: string, payload: Record<string, unknown>): voi
 const DIRECT_TIMEOUT_MS = 8000;
 const RELAY_KEY = 'gc-room-relay';
 const RELAY_REMEMBER_MS = 24 * 60 * 60 * 1000;
+// Must stay under MAX_BODY and the 50-message cap in /api/room.
+const RELAY_POST_BYTES = 48_000;
+const RELAY_POST_MESSAGES = 50;
 const relayRemembered = () => { try { return Date.now() - Number(localStorage.getItem(RELAY_KEY) ?? 0) < RELAY_REMEMBER_MS; } catch { return false; } };
 const rememberRelay = () => { try { localStorage.setItem(RELAY_KEY, String(Date.now())); } catch {} };
 
@@ -81,7 +89,7 @@ function supabaseRoom(): Room {
     tabId,
     on: ev.on,
     send(event, payload) { transport.send(event, payload); },
-    track(m) { meta = { ...m, tabId, since: meta?.since ?? Date.now() }; transport.track(meta); },
+    track(m) { meta = merge(meta, m); transport.track(meta); },
     onPresence: ev.onPresence,
     serverOffsetMs: () => offset,
   };
@@ -139,11 +147,23 @@ function relayTransport(ev: Emitter): Transport {
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   const post = (body: Record<string, unknown>) =>
     fetch('/api/room', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tab: tabId, ...body }), keepalive: true }).catch(() => {});
-  // Signaling comes in bursts (ICE candidates); they leave together a moment later.
-  const flush = () => { flushTimer = null; const messages = outbox.splice(0); if (messages.length) void post({ messages }); };
+  // Signaling comes in bursts (ICE candidates); they leave together a moment later, in requests that
+  // stay under the relay's size limit (a large one used to be refused whole, signals included).
+  const flush = () => {
+    flushTimer = null;
+    let batch: typeof outbox = [];
+    let size = 0;
+    for (const m of outbox.splice(0)) {
+      const n = JSON.stringify(m).length;
+      if (batch.length && (size + n > RELAY_POST_BYTES || batch.length >= RELAY_POST_MESSAGES)) { void post({ messages: batch }); batch = []; size = 0; }
+      batch.push(m); size += n;
+    }
+    if (batch.length) void post({ messages: batch });
+  };
+  const trackBody = (m: PresenceMeta) => ({ device: m.device, micActive: m.micActive, office: !!m.office });
   const open = () => {
     const m = meta!;
-    const q = new URLSearchParams({ tab: tabId, device: m.device, mic: m.micActive ? '1' : '0', since: String(m.since) });
+    const q = new URLSearchParams({ tab: tabId, device: m.device, mic: m.micActive ? '1' : '0', office: m.office ? '1' : '0', since: String(m.since) });
     const es = new EventSource(`/api/room?${q}`);
     const parse = (e: Event) => JSON.parse((e as MessageEvent<string>).data);
     es.addEventListener('status', (e) => {
@@ -153,7 +173,7 @@ function relayTransport(ev: Emitter): Transport {
       if (source !== es) return;
       setStatus(`relay ${error ? `${status}: ${error}` : status}`);
       // After an automatic reconnect the server only knows the meta from the stream's address.
-      if (status === 'SUBSCRIBED' && meta) void post({ track: { device: meta.device, micActive: meta.micActive } });
+      if (status === 'SUBSCRIBED' && meta) void post({ track: trackBody(meta) });
     });
     es.addEventListener('msg', (e) => { if (source === es) { const { event, payload } = parse(e); ev.emit(event, payload); } });
     es.addEventListener('presence', (e) => { if (source === es) ev.emitPresence(parse(e)); });
@@ -172,7 +192,7 @@ function relayTransport(ev: Emitter): Transport {
       const first = !meta;
       meta = m;
       if (first) source = open();
-      else void post({ track: { device: m.device, micActive: m.micActive } });
+      else void post({ track: trackBody(m) });
     },
     close() {
       source?.close(); source = null;
@@ -194,9 +214,11 @@ function localRoom(): Room {
     const { event, payload } = e.data;
     if (event === '__presence') {
       const m = payload as unknown as PresenceMeta;
-      const isNew = !peers.has(m.tabId);
+      const prev = peers.get(m.tabId);
       peers.set(m.tabId, { meta: m, seen: Date.now() });
-      if (isNew) { publish(); if (meta) bc.postMessage({ event: '__presence', payload: meta }); }
+      // A changed announcement (microphone, office open) is passed on like Supabase's presence sync.
+      if (!prev || JSON.stringify(prev.meta) !== JSON.stringify(m)) publish();
+      if (!prev && meta) bc.postMessage({ event: '__presence', payload: meta });
       return;
     }
     if (event === '__leave') { peers.delete(String(payload.tabId)); publish(); return; }
@@ -213,7 +235,7 @@ function localRoom(): Room {
     tabId,
     on: ev.on,
     send(event, payload) { bc?.postMessage({ event, payload }); },
-    track(m) { meta = { ...m, tabId, since: meta?.since ?? Date.now() }; bc?.postMessage({ event: '__presence', payload: meta }); publish(); },
+    track(m) { meta = merge(meta, m); bc?.postMessage({ event: '__presence', payload: meta }); publish(); },
     onPresence: ev.onPresence,
     serverOffsetMs: () => 0,
   };

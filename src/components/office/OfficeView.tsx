@@ -191,6 +191,9 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       const r = net.remotes.current.get(userId);
       if (r) r.typing = on ? Date.now() + 6e7 : 0;
     };
+    // Who this office shows and how fresh their position is (ms since received; negative while in grace).
+    (window as unknown as { __gcRemotes?: unknown }).__gcRemotes = () =>
+      [...net.remotes.current.values()].map((r) => ({ userId: r.userId, x: r.pose.x, z: r.pose.z, age: Math.round(performance.now() - r.receivedAt) }));
   }, [net]);
   useEffect(() => {
     if (!ui.myEmote) return;

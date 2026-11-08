@@ -20,11 +20,13 @@ export function DebugBadge({ userId, online }: { userId: string; online: number 
     return () => clearInterval(id);
   }, [on]);
   if (!on) return null;
-  const links = getMesh(userId, detectDevice())?.debugLinks() ?? [];
+  const mesh = getMesh(userId, detectDevice());
+  const links = mesh?.debugLinks() ?? [];
   return (
     <div dir="ltr" className="pointer-events-none fixed bottom-2 left-2 z-[9999] max-w-[90vw] rounded-lg bg-black/80 px-2 py-1 font-mono text-[11px] leading-tight text-white">
       <div>realtime: {realtimeStatus.value}</div>
       <div>online users: {online}</div>
+      <div>ice: {mesh?.debugIce() ?? '-'}</div>
       <div>links: {links.length ? links.join(' ') : 'none'}</div>
     </div>
   );

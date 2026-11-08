@@ -18,4 +18,4 @@ All stages of `BUILD-INSTRUCTIONS.md` are implemented on branch `claude/vibrant-
 ## Not verified here
 - Real Supabase/Vercel run: no keys in this environment. Setup steps are in `README.md` (`supabase-setup.sql` adds RLS, Realtime, office slots and the storage bucket).
 - Voice between different people and multiplayer between different users across networks (demo mode connects tabs of one browser only).
-- TURN quota: not checked live (provider sites are blocked here). Free options to evaluate: Cloudflare Realtime TURN and Metered Open Relay; set `NEXT_PUBLIC_TURN_*`.
+- TURN: Cloudflare Realtime TURN (generated credentials) or fixed credentials are supported (`docs/DEPLOY.md`); not checked against the live Cloudflare API from here. Without TURN, the room fallback keeps people visible to each other (no voice); checked with two tabs whose links cannot open.
