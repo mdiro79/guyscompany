@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { RoundedBox } from '@react-three/drei';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import * as THREE from 'three';
 import {
   buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS, CONF_WALL_PANEL,
-  WALL_HEIGHT, type Segment,
+  WALL_HEIGHT,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
 import { drawBoard, memberColor } from '@/lib/board/draw';
@@ -14,7 +14,8 @@ import { boardOf, lasersOn, presentation, subscribeBoards, writingNow } from '@/
 import { handQueue, subscribeHands } from '@/lib/board/hands';
 import { syncedNow } from '@/lib/realtime/room';
 import { clockText } from '@/lib/meetings';
-import { tableWood, oak, slats, carpet, panelWash, floorGlow, paintScreen, paintScreenInfo, paintRoomPanel, type MeetingLabels } from './textures';
+import { Batch, batchMaterials } from './batch';
+import { tableWood, oak, slats, carpet, panelWash, floorGlow, softShadow, paintScreen, paintScreenInfo, paintRoomPanel, type MeetingLabels } from './textures';
 import { tablet, tabletHit, paintTablet, buttonAt, buttonRects, pressAt, toNdc, TABLET_PX, type TabletButton } from './tablet';
 import { roomControls, useRoomSettings } from './roomControls';
 import { useConferenceGlass } from './conferenceGlass';
@@ -61,30 +62,6 @@ const textured = (() => {
   });
 })();
 
-// Armchair facing local -Z (the table), so rotation-y = seat.facing turns it towards the table.
-function Chair() {
-  return (
-    <group>
-      {/* seat and back cushions */}
-      <RoundedBox args={[0.54, 0.11, 0.5]} radius={0.04} smoothness={3} position={[0, 0.43, -0.02]} material={mat.cushion} />
-      <group position={[0, 0.79, 0.25]} rotation-x={0.14}>
-        <RoundedBox args={[0.52, 0.5, 0.1]} radius={0.04} smoothness={3} material={mat.cushion} />
-        <RoundedBox args={[0.6, 0.6, 0.05]} radius={0.02} smoothness={2} position={[0, 0.02, 0.07]} material={mat.frame} />
-      </group>
-      {/* white frame: seat base, two side frames with armrests and runners */}
-      <RoundedBox args={[0.6, 0.06, 0.54]} radius={0.02} smoothness={2} position={[0, 0.35, -0.02]} material={mat.frame} />
-      {[-1, 1].map((s) => (
-        <group key={s} position-x={s * 0.32}>
-          <RoundedBox args={[0.07, 0.05, 0.56]} radius={0.02} smoothness={2} position={[0, 0.65, -0.02]} material={mat.frame} />
-          <mesh position={[0, 0.33, -0.26]} material={mat.frame}><boxGeometry args={[0.05, 0.66, 0.05]} /></mesh>
-          <mesh position={[0, 0.48, 0.24]} material={mat.frame}><boxGeometry args={[0.05, 0.96, 0.05]} /></mesh>
-          <mesh position={[0, 0.02, -0.01]} material={mat.frame}><boxGeometry args={[0.05, 0.04, 0.62]} /></mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
 const TABLET_W = 0.56, TABLET_H = 0.35, TABLET_TILT = 0.5;
 
 const tabletCanvas = () => {
@@ -116,13 +93,13 @@ const restScreen = (() => {
   };
 })();
 
-// Seat tablet on a small stand, its screen turned up towards the person (local +Z). The one at one's own
-// seat is live: its buttons light up under the crosshair or cursor and are pressed right on it (tablet.ts).
-function Tablet({ live }: { live: boolean }) {
+// The tablet at one's own seat is live: its buttons light up under the crosshair or cursor and are pressed
+// right on it (tablet.ts). Its body, stand and the resting screens of all seats are part of the room's
+// merged meshes (StaticParts); this draws just the live screen over the resting one.
+function LiveTablet() {
   const screen = useRef<THREE.Mesh>(null);
-  const own = useMemo(() => (live ? tabletCanvas() : null), [live]);
+  const own = useMemo(() => tabletCanvas(), []);
   useEffect(() => {
-    if (!own) return;
     const paint = () => { paintTablet(own.cv, tablet.get(), true); own.tex.needsUpdate = true; };
     paint();
     const off = tablet.subscribe(paint);
@@ -134,13 +111,119 @@ function Tablet({ live }: { live: boolean }) {
   }, [own]);
   return (
     <group rotation-x={-TABLET_TILT} position={[0, (TABLET_H / 2) * Math.cos(TABLET_TILT) + 0.012, 0]}>
-      <RoundedBox args={[TABLET_W + 0.03, TABLET_H + 0.03, 0.022]} radius={0.012} smoothness={2} material={mat.dark} />
-      <mesh ref={screen} position-z={0.0115}>
+      <mesh ref={screen} position-z={0.0135}>
         <planeGeometry args={[TABLET_W, TABLET_H]} />
-        <meshBasicMaterial map={own?.tex ?? restScreen()} toneMapped={false} color={live ? '#ffffff' : '#9aa0aa'} />
+        <meshBasicMaterial map={own.tex} toneMapped={false} />
       </mesh>
-      <mesh position={[0, -0.04, -0.09]} rotation-x={0.95} material={mat.dark}><boxGeometry args={[0.26, 0.22, 0.012]} /></mesh>
     </group>
+  );
+}
+
+// Everything in the room that never moves, merged into a handful of meshes: the eight armchairs, the
+// tablets' bodies and stands, the plant pots, the camera and the trims in one; the tablets' resting
+// screens in another (one texture); the leaves, the wall panels, the contact shadows and the ceiling's
+// lit ring and spots one each. Before, every box of every chair was drawn on its own.
+function buildStatic() {
+  const matte = new Batch(), leaves = new Batch(), panels = new Batch(true), shadows = new Batch(true), screens = new Batch(true), lights = new Batch();
+  const rounded = (w: number, h: number, d: number, r: number) => new RoundedBoxGeometry(w, h, d, 2, r);
+  const cushionSeat = rounded(0.54, 0.11, 0.5, 0.04), cushionBack = rounded(0.52, 0.5, 0.1, 0.04), frameBack = rounded(0.6, 0.6, 0.05, 0.02);
+  const frameBase = rounded(0.6, 0.06, 0.54, 0.02), arm = rounded(0.07, 0.05, 0.56, 0.02), body = rounded(TABLET_W + 0.03, TABLET_H + 0.03, 0.022, 0.011);
+  const plane = new THREE.PlaneGeometry(1, 1), flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), unit = new THREE.BoxGeometry(1, 1, 1);
+  // Places `geo` under a chain of [position, rotation] steps (outermost first), like nested groups.
+  const at = (...steps: [[number, number, number], [number, number, number]?, [number, number, number]?][]) => {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+    for (const [pos, rot = [0, 0, 0], scale = [1, 1, 1]] of steps) m.multiply(new THREE.Matrix4().compose(new THREE.Vector3(...pos), q.setFromEuler(new THREE.Euler(...rot)), new THREE.Vector3(...scale)));
+    return m;
+  };
+  for (const s of conferenceSeats()) {
+    const seat: [[number, number, number], [number, number, number]] = [[s.pos[0], 0, s.pos[1]], [0, s.facing, 0]];
+    shadows.addMatrix('matte', flat, '#ffffff', at([[s.pos[0], 0.009, s.pos[1]], [0, 0, 0], [0.85, 1, 0.85]]));
+    // Armchair facing the table: cushions, then the white frame with armrests and runners.
+    matte.addMatrix('matte', cushionSeat, CUSHION, at(seat, [[0, 0.43, -0.02]]));
+    matte.addMatrix('matte', cushionBack, CUSHION, at(seat, [[0, 0.79, 0.25], [0.14, 0, 0]]));
+    matte.addMatrix('matte', frameBack, FRAME, at(seat, [[0, 0.79, 0.25], [0.14, 0, 0]], [[0, 0.02, 0.07]]));
+    matte.addMatrix('matte', frameBase, FRAME, at(seat, [[0, 0.35, -0.02]]));
+    for (const side of [-1, 1]) {
+      matte.addMatrix('matte', arm, FRAME, at(seat, [[side * 0.32, 0.65, -0.02]]));
+      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.33, -0.26], [0, 0, 0], [0.05, 0.66, 0.05]]));
+      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.48, 0.24], [0, 0, 0], [0.05, 0.96, 0.05]]));
+      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.02, -0.01], [0, 0, 0], [0.05, 0.04, 0.62]]));
+    }
+    // The tablet on its stand, screen turned up towards the person.
+    const r = CONF_TABLE_RADIUS - 0.3;
+    const tab: [[number, number, number], [number, number, number]][] = [[[Math.sin(s.facing) * r, CONF_TABLE_HEIGHT, Math.cos(s.facing) * r], [0, s.facing, 0]], [[0, (TABLET_H / 2) * Math.cos(TABLET_TILT) + 0.012, 0], [-TABLET_TILT, 0, 0]]];
+    matte.addMatrix('matte', body, '#16181d', at(...tab));
+    matte.addMatrix('matte', unit, '#16181d', at(...tab, [[0, -0.04, -0.09], [0.95, 0, 0], [0.26, 0.22, 0.012]]));
+    screens.addMatrix('matte', plane, '#ffffff', at(...tab, [[0, 0, 0.0115], [0, 0, 0], [TABLET_W, TABLET_H, 1]]));
+  }
+  // Slim plants in white pots on both sides of the screen, and the low bed in the table.
+  const blade = (height: number, width: number) => {
+    const g = new THREE.PlaneGeometry(width, height, 1, 6).translate(0, height / 2, 0);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const t = p.getY(i) / height; p.setX(i, p.getX(i) * (1 - t * 0.85)); p.setZ(i, 0.12 * height * t * t); }
+    g.computeVertexNormals();
+    return g;
+  };
+  const blades = (base: [number, number, number], count: number, height: number, width: number, lean: number, seed: number) => {
+    const g = blade(height, width);
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + seed, k = 0.8 + ((i * 5 + seed) % 4) * 0.08;
+      leaves.addMatrix('matte', g, '#8fa889', at([base, [0, a, 0]], [[0, 0, 0], [lean * (0.6 + (i % 3) * 0.25), 0, 0], [1, k, 1]]));
+    }
+  };
+  for (const p of CONF_PLANTS) {
+    shadows.addMatrix('matte', flat, '#ffffff', at([[p[0], 0.009, p[1]], [0, 0, 0], [0.55, 1, 0.55]]));
+    matte.cyl(0.15, 0.13, 0.4, [p[0], 0.2, p[1]], '#f1eee8', 24).cyl(0.135, 0.135, 0.01, [p[0], 0.395, p[1]], '#4a3526', 20);
+    blades([p[0], 0.39, p[1]], 7, 0.62, 0.07, 0.16, p[0] > 0 ? 2 : 1);
+  }
+  const ico = new THREE.IcosahedronGeometry(0.11, 1);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2, d = i ? 0.17 : 0;
+    leaves.addMatrix('matte', ico, '#8fa889', at([[Math.sin(a) * d, CONF_TABLE_HEIGHT - 0.01, Math.cos(a) * d], [0, 0, 0], [1, 0.35, 1]]));
+  }
+  blades([0, CONF_TABLE_HEIGHT - 0.02, 0], 6, 0.2, 0.05, 0.35, 4);
+  // Solid panels behind the screen: cream, washed with light from the top, dark posts and skirting.
+  for (const w of buildWalls().filter((x) => x.kind === 'solid' && Math.abs(Math.hypot((x.a[0] + x.b[0]) / 2, (x.a[1] + x.b[1]) / 2) - CONF_RADIUS) < 0.2)) {
+    const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), rot = -Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
+    const base: [number, number, number] = [(w.a[0] + w.b[0]) / 2, 0, (w.a[1] + w.b[1]) / 2];
+    panels.push(base, rot).box([len + 0.01, WALL_HEIGHT, 0.12], [0, WALL_HEIGHT / 2, 0], '#ffffff').pop();
+    matte.push(base, rot).box([0.07, WALL_HEIGHT, 0.16], [len / 2, WALL_HEIGHT / 2, 0], '#2f2925').box([len, 0.1, 0.14], [0, 0.05, 0], '#2f2925').pop();
+  }
+  // Media cabinet's plinth and the conference camera on it.
+  const cz = CONF_CREDENZA.z, ch = CONF_CREDENZA.height, hd = CONF_CREDENZA.halfDepth;
+  matte.box([CONF_CREDENZA.halfWidth * 2 - 0.1, 0.04, hd * 2 - 0.06], [0, 0.02, cz], '#2f2925');
+  matte.addMatrix('matte', rounded(0.2, 0.07, 0.08, 0.02), '#16181d', at([[0, ch + 0.06, cz + hd - 0.1]]));
+  matte.cyl(0.022, 0.022, 0.004, [0, ch + 0.06, cz + hd - 0.058], '#0b0c10', 16, 'matte', 1, [Math.PI / 2, 0, 0]);
+  shadows.addMatrix('matte', flat, '#ffffff', at([[0, 0.009, cz], [0, 0, 0], [CONF_CREDENZA.halfWidth * 2 + 0.4, 1, hd * 2 + 0.4]]));
+  // The ceiling's ring of light and its ten small spots (one material, dimmed from the wall panel).
+  lights.add('matte', new THREE.TorusGeometry(2.45, 0.045, 8, 96), '#ffffff', [0, WALL_HEIGHT - 0.02, 0], [Math.PI / 2, 0, 0]);
+  const spot = new THREE.CircleGeometry(0.06, 14);
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; lights.add('matte', spot, '#ffffff', [Math.sin(a) * 3.6, WALL_HEIGHT - 0.018, Math.cos(a) * 3.6], [Math.PI / 2, 0, 0]); }
+  return { matte: matte.build().matte!, leaves: leaves.build().matte!, panels: panels.build().matte!, shadows: shadows.build().matte!, screens: screens.build().matte!, lights: lights.build().matte! };
+}
+
+const staticMaterials = (() => {
+  let made: { leaves: THREE.Material; shadow: THREE.Material; rest: THREE.Material } | null = null;
+  return () => (made ??= {
+    leaves: new THREE.MeshStandardMaterial({ color: '#8fa889', roughness: 0.85, side: THREE.DoubleSide }),
+    shadow: new THREE.MeshBasicMaterial({ map: softShadow(), color: '#2b1d12', transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    rest: new THREE.MeshBasicMaterial({ map: restScreen(), toneMapped: false, color: '#9aa0aa' }),
+  });
+})();
+
+function StaticParts() {
+  const g = useMemo(() => buildStatic(), []);
+  const m = textured(), sm = staticMaterials();
+  useEffect(() => () => Object.values(g).forEach((x) => x.dispose()), [g]);
+  return (
+    <>
+      <mesh geometry={g.matte} material={batchMaterials.matte} />
+      <mesh geometry={g.leaves} material={sm.leaves} />
+      <mesh geometry={g.panels} material={m.panel} />
+      <mesh geometry={g.shadows} material={sm.shadow} renderOrder={1} />
+      <mesh geometry={g.screens} material={sm.rest} />
+      <mesh geometry={g.lights} material={lit.ring} />
+    </>
   );
 }
 
@@ -183,42 +266,6 @@ function TabletInput() {
 }
 
 // Minimal greenery (owner request: plants should not draw the eye): a few slim upright blades in
-// a muted sage, tapering to a point, in a small matte pot. Shared by the corner pots and the table.
-const BLADE = new THREE.MeshStandardMaterial({ color: '#8fa889', roughness: 0.85, side: THREE.DoubleSide });
-function Blades({ count, height, width, lean, seed = 1 }: { count: number; height: number; width: number; lean: number; seed?: number }) {
-  const geom = useMemo(() => {
-    const g = new THREE.PlaneGeometry(width, height, 1, 6).translate(0, height / 2, 0);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const t = p.getY(i) / height;
-      p.setX(i, p.getX(i) * (1 - t * 0.85));
-      p.setZ(i, 0.12 * height * t * t);
-    }
-    g.computeVertexNormals();
-    return g;
-  }, [width, height]);
-  return (
-    <group>
-      {Array.from({ length: count }, (_, i) => {
-        const a = (i / count) * Math.PI * 2 + seed;
-        const k = 0.8 + ((i * 5 + seed) % 4) * 0.08;
-        return <group key={i} rotation-y={a}><mesh geometry={geom} material={BLADE} rotation-x={lean * (0.6 + (i % 3) * 0.25)} scale={[1, k, 1]} /></group>;
-      })}
-    </group>
-  );
-}
-
-function Plant({ pos }: { pos: [number, number] }) {
-  return (
-    <group position={[pos[0], 0, pos[1]]}>
-      <GroundShadow size={[0.55, 0.55]} opacity={0.25} />
-      <mesh position-y={0.2} material={mat.pot}><cylinderGeometry args={[0.15, 0.13, 0.4, 32]} /></mesh>
-      <mesh position-y={0.395} material={mat.soil}><cylinderGeometry args={[0.135, 0.135, 0.01, 24]} /></mesh>
-      <group position-y={0.39}><Blades count={7} height={0.62} width={0.07} lean={0.16} seed={pos[0] > 0 ? 2 : 1} /></group>
-    </group>
-  );
-}
-
 function Table() {
   const m = textured();
   const H = CONF_TABLE_HEIGHT, R = CONF_TABLE_RADIUS, hole = CONF_TABLE_HOLE;
@@ -231,12 +278,6 @@ function Table() {
       {/* planter in the middle */}
       <mesh position-y={H - 0.05}><cylinderGeometry args={[hole, hole, 0.1, 64, 1, true]} /><meshStandardMaterial color="#c9a273" side={THREE.DoubleSide} /></mesh>
       <mesh position-y={H - 0.03} material={mat.soil}><cylinderGeometry args={[hole - 0.01, hole - 0.01, 0.02, 48]} /></mesh>
-      {/* a low bed of moss with a few short blades, kept under eye level across the table */}
-      {Array.from({ length: 6 }, (_, i) => {
-        const a = (i / 6) * Math.PI * 2, d = i ? 0.17 : 0;
-        return <mesh key={i} position={[Math.sin(a) * d, H - 0.01, Math.cos(a) * d]} scale={[1, 0.35, 1]} material={BLADE}><icosahedronGeometry args={[0.11, 1]} /></mesh>;
-      })}
-      <group position-y={H - 0.02}><Blades count={6} height={0.2} width={0.05} lean={0.35} seed={4} /></group>
       {/* pedestal, its plinth and the glowing ring on the carpet */}
       <mesh position-y={(H - 0.07) / 2} material={m.oak}><cylinderGeometry args={[0.58, 0.88, H - 0.07, 64, 1, true]} /></mesh>
       <mesh position-y={0.025} material={lit.plinth}><cylinderGeometry args={[0.9, 0.92, 0.05, 64]} /></mesh>
@@ -354,37 +395,9 @@ function Credenza() {
   const { z, halfWidth: hw, halfDepth: hd, height: h } = CONF_CREDENZA;
   return (
     <group position={[0, 0, z]}>
-      <GroundShadow size={[hw * 2 + 0.4, hd * 2 + 0.4]} opacity={0.3} />
       <mesh position-y={h / 2 + 0.04} material={m.oak}><boxGeometry args={[hw * 2, h - 0.04, hd * 2]} /></mesh>
       <mesh position={[0, h / 2 + 0.04, hd + 0.002]} material={m.slats}><planeGeometry args={[hw * 2 - 0.12, h - 0.16]} /></mesh>
       <mesh position-y={h + 0.012} material={m.oak}><boxGeometry args={[hw * 2 + 0.06, 0.025, hd * 2 + 0.04]} /></mesh>
-      <mesh position-y={0.02} material={mat.trim}><boxGeometry args={[hw * 2 - 0.1, 0.04, hd * 2 - 0.06]} /></mesh>
-      {/* conference camera */}
-      <group position={[0, h + 0.06, hd - 0.1]}>
-        <RoundedBox args={[0.2, 0.07, 0.08]} radius={0.02} smoothness={2} material={mat.dark} />
-        <mesh position-z={0.041}><circleGeometry args={[0.022, 20]} /><meshStandardMaterial color="#0b0c10" metalness={0.6} roughness={0.15} /></mesh>
-      </group>
-    </group>
-  );
-}
-
-// Solid conference panels (the arc behind the screen): cream, washed with light from the top, dark posts.
-function Panels() {
-  const m = textured();
-  const segs = useMemo(() => buildWalls().filter((w) => w.kind === 'solid' && Math.abs(Math.hypot((w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2) - CONF_RADIUS) < 0.2), []);
-  return (
-    <group>
-      {segs.map((w: Segment, i) => {
-        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
-        const angle = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
-        return (
-          <group key={i} position={[(w.a[0] + w.b[0]) / 2, 0, (w.a[1] + w.b[1]) / 2]} rotation-y={-angle}>
-            <mesh position-y={WALL_HEIGHT / 2} material={m.panel}><boxGeometry args={[len + 0.01, WALL_HEIGHT, 0.12]} /></mesh>
-            <mesh position={[len / 2, WALL_HEIGHT / 2, 0]} material={mat.trim}><boxGeometry args={[0.07, WALL_HEIGHT, 0.16]} /></mesh>
-            <mesh position-y={0.05} material={mat.trim}><boxGeometry args={[len, 0.1, 0.14]} /></mesh>
-          </group>
-        );
-      })}
     </group>
   );
 }
@@ -393,12 +406,7 @@ function Ceiling() {
   return (
     <group position-y={WALL_HEIGHT}>
       <mesh position-y={-0.012} rotation-x={Math.PI / 2}><circleGeometry args={[CONF_RADIUS - 0.08, 96]} /><meshStandardMaterial color="#f5ede1" roughness={1} /></mesh>
-      <mesh position-y={-0.02} rotation-x={Math.PI / 2} material={lit.ring}><torusGeometry args={[2.45, 0.045, 10, 128]} /></mesh>
       <mesh position-y={-0.016} rotation-x={Math.PI / 2} material={lit.disc}><circleGeometry args={[2.4, 96]} /></mesh>
-      {Array.from({ length: 10 }, (_, i) => {
-        const a = (i / 10) * Math.PI * 2;
-        return <mesh key={i} position={[Math.sin(a) * 3.6, -0.018, Math.cos(a) * 3.6]} rotation-x={Math.PI / 2} material={lit.ring}><circleGeometry args={[0.06, 16]} /></mesh>;
-      })}
     </group>
   );
 }
@@ -411,22 +419,15 @@ export function ConferenceRoom({ labels, people, lowQuality }: { labels: Meeting
     <group>
       <mesh position-y={0.006} rotation-x={-Math.PI / 2} material={m.carpet}><circleGeometry args={[CONF_RADIUS - 0.02, 96]} /></mesh>
       <Table />
-      {seats.map((s) => (
-        <group key={s.id}>
-          <group position={[s.pos[0], 0, s.pos[1]]} rotation-y={s.facing}>
-            <GroundShadow size={[0.85, 0.85]} opacity={0.3} />
-            <Chair />
-          </group>
-          <group position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.3), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.3)]} rotation-y={s.facing}>
-            <Tablet live={s.id === mySeat} />
-          </group>
+      <StaticParts />
+      {seats.filter((s) => s.id === mySeat).map((s) => (
+        <group key={s.id} position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.3), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.3)]} rotation-y={s.facing}>
+          <LiveTablet />
         </group>
       ))}
-      <Panels />
       <Screen labels={labels} people={people} />
       <TabletInput />
       <Credenza />
-      {CONF_PLANTS.map((p) => <Plant key={p[0]} pos={p} />)}
       <Ceiling />
       <WallPanel />
       <RoomLights low={lowQuality} />
@@ -495,7 +496,7 @@ function WallPanel() {
   return (
     <group position={[x, CONF_WALL_PANEL.y, z]} rotation-y={CONF_WALL_PANEL.facing}>
       {active && <mesh position-z={-0.004}><planeGeometry args={[0.25, 0.35]} /><meshBasicMaterial color="#5fe0cf" toneMapped={false} transparent opacity={0.85} /></mesh>}
-      <RoundedBox args={[0.21, 0.31, 0.022]} radius={0.01} smoothness={2} material={mat.frame} />
+      <mesh material={mat.frame}><boxGeometry args={[0.21, 0.31, 0.022]} /></mesh>
       <mesh position-z={0.0115}><planeGeometry args={[0.18, 0.27]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
     </group>
   );
