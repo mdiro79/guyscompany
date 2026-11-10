@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { invalidate, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
-import { buildWalls, doorSegments, propColliders, allSeats, officeAt, inConference, doorCenter, CONF_WALL_PANEL, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
+import { buildWalls, doorSegments, propColliders, allSeats, stations, officeAt, inConference, areaAt, doorCenter, CONF_WALL_PANEL, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
 import { resolveCollisions } from './collision';
 import { input, officeUi, type Interact } from './store';
 import { DOORS, doorLeaves, isDoorOpen, toggleDoor, setDoor } from './doors';
@@ -18,6 +18,8 @@ const WALK = 2.6, RUN = 4.6, LOOK = 0.0024, TOUCH_LOOK = 0.006;
 const SIT_EYE = 1.18;
 const SIT_LEAN = 0.4;
 const REMOTE_FRESH_MS = 5000;
+export const POSE_MS = 66, HEARTBEAT_MS = 1000;
+const round = (v: number) => Math.round(v * 1000) / 1000; // millimetres are plenty; shorter messages
 
 // Office access for visitors (owners always pass): a locked door or frosted glass keeps them out;
 // a private office lets in only members with an accepted invite; a public one is open (view only).
@@ -57,6 +59,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
   const walls = useMemo(() => buildWalls(), []);
   const props = useMemo(() => propColliders(), []);
   const seats = useMemo(() => allSeats(), []);
+  const stationList = useMemo(() => stations(), []);
+  const sent = useRef({ x: 0, z: 0, yaw: 0, pitch: 0, moving: 0, seatId: null as string | null });
   const noAccess = useMemo(() => blockingDoors(offices, viewerId, invitedSlots), [offices, viewerId, invitedSlots]);
   const pos = useRef<Vec2>([...SPAWN.pos]);
   const yaw = useRef(SPAWN.yaw), pitch = useRef(-0.05);
@@ -76,9 +80,9 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     const el = gl.domElement;
     const down = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input,textarea,select,[contenteditable]')) return;
-      if (officeUi.get().board !== 'none') return;
+      if (officeUi.get().board !== 'none' || officeUi.get().overlay !== 'none') return;
       keys.current.add(e.code);
-      if (e.code === 'KeyE' && !e.repeat) input.action = true;
+      if (e.code === 'KeyE' && !e.repeat) { input.action = true; invalidate(); }
       if (e.code === 'KeyF' && !e.repeat) {
         const ui = officeUi.get();
         if (ui.seatId && ui.panel !== 'none') officeUi.set({ panel: ui.panel === 'fullscreen' ? 'monitor' : 'fullscreen' });
@@ -170,6 +174,17 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     }
     tourWas.current = false;
 
+    // The map can move the player anywhere (standing up first).
+    if (input.teleport) {
+      const tp = input.teleport;
+      input.teleport = null;
+      if (ui.seatId) officeUi.set({ seatId: null, panel: 'none' });
+      pos.current = resolveCollisions([tp.x, tp.z], PLAYER_RADIUS, solid, circles);
+      yaw.current = tp.yaw; pitch.current = -0.05;
+      lastLocalInput.current = now;
+    }
+    if (ui.overlay !== 'none') k.clear();
+
     const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + input.forward;
     const strafe = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.right;
     const run = k.has('ShiftLeft') || k.has('ShiftRight') || input.run;
@@ -205,6 +220,10 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         const facing = ((CONF_WALL_PANEL.pos[0] - pos.current[0]) * fx + (CONF_WALL_PANEL.pos[1] - pos.current[1]) * fz) / (pd || 1);
         cand.push({ i: { kind: 'panel' }, d: facing > 0.8 ? pd * 0.4 : pd + 0.1 });
       }
+      for (const st of stationList) {
+        const d = Math.hypot(st.pos[0] - pos.current[0], st.pos[1] - pos.current[1]);
+        if (d < 1.7 && ahead(st.pos, d)) cand.push({ i: { kind: 'station', id: st.id, station: st.kind }, d: d - 0.15 });
+      }
       const gd = Math.hypot(guide.pos[0] - pos.current[0], guide.pos[1] - pos.current[1]);
       if (guide.seated && gd < 2.4 && ahead(guide.pos, gd)) cand.push({ i: { kind: 'guide' }, d: gd });
       interact = cand.sort((a, b) => a.d - b.d)[0]?.i ?? null;
@@ -218,8 +237,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       if (ui.seatId) {
         const seat = seats.find((s) => s.id === ui.seatId);
         if (seat) {
-          // Stand up a step behind the chair.
-          const back: Vec2 = [seat.pos[0] + Math.sin(seat.facing) * 0.75, seat.pos[1] + Math.cos(seat.facing) * 0.75];
+          // Stand up a step behind the chair (in front of sofas and benches, which stand against a wall).
+          const back: Vec2 = seat.exit ?? [seat.pos[0] + Math.sin(seat.facing) * 0.75, seat.pos[1] + Math.cos(seat.facing) * 0.75];
           pos.current = resolveCollisions(back, PLAYER_RADIUS, solid, circles);
         }
         officeUi.set({ seatId: null, panel: 'none' });
@@ -234,6 +253,9 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       } else if (interact?.kind === 'panel') {
         document.exitPointerLock?.();
         officeUi.set({ roomPanel: true });
+      } else if (interact?.kind === 'station') {
+        if (interact.station !== 'coffee') { document.exitPointerLock?.(); officeUi.set({ overlay: interact.station, emoteWheel: false }); }
+        officeUi.set({ used: { station: interact.station, at: Date.now() } });
       } else if (interact?.kind === 'guide') {
         startTourFor(offRef.current.offices, offRef.current.viewerId);
       }
@@ -309,10 +331,16 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     me.pos = [...pos.current];
     (window as unknown as { __gcPos?: unknown }).__gcPos = { x: pos.current[0], z: pos.current[1], yaw: yaw.current, seat: seatId };
     const slot = officeAt(pos.current[0], pos.current[1])?.slot ?? null;
-    officeUi.set({ currentSlot: slot, inConference: inConference(pos.current[0], pos.current[1]) });
-    if (now - lastSent.current > 66) {
+    officeUi.set({ currentSlot: slot, inConference: inConference(pos.current[0], pos.current[1]), area: slot ? 'office' : areaAt(pos.current[0], pos.current[1]) });
+    // Poses go out 15 times a second while something changes, and once a second as a heartbeat while
+    // standing still (others keep showing us; nothing is wasted on an idle character).
+    const l = sent.current;
+    const changed = moving !== l.moving || seatId !== l.seatId || Math.abs(pos.current[0] - l.x) + Math.abs(pos.current[1] - l.z) > 0.004
+      || Math.abs(yaw.current - l.yaw) > 0.008 || Math.abs(pitch.current - l.pitch) > 0.02;
+    if (now - lastSent.current > (changed ? POSE_MS : HEARTBEAT_MS)) {
       lastSent.current = now;
-      onPose({ x: pos.current[0], z: pos.current[1], yaw: yaw.current, pitch: pitch.current, moving, seatId, t: lastLocalInput.current });
+      l.x = pos.current[0]; l.z = pos.current[1]; l.yaw = yaw.current; l.pitch = pitch.current; l.moving = moving; l.seatId = seatId;
+      onPose({ x: round(l.x), z: round(l.z), yaw: round(l.yaw), pitch: round(l.pitch), moving, seatId, t: lastLocalInput.current });
     }
   }
   return null;
@@ -321,7 +349,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
 // Mouse look is available while walking and on chairs without a monitor (not at a desk or during the tour).
 export function canLook() {
   const ui = officeUi.get();
-  if (tour.get().step !== null || ui.board !== 'none') return false;
+  if (tour.get().step !== null || ui.board !== 'none' || ui.overlay !== 'none') return false;
   if (!ui.seatId) return true;
   return !allSeats().find((s) => s.id === ui.seatId)?.monitor;
 }

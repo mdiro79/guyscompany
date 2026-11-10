@@ -687,7 +687,7 @@
     "noVisitors": "No visits",
     "invite": "Invite to private chat",
     "myOffice": "My office",
-    "controlsDesktop": "WASD move · mouse look · E interact · Q emotes · M mic · Tab cursor",
+    "controlsDesktop": "WASD move · mouse look · E interact · Q emotes · M mic · N map · Tab cursor",
     "controlsMobile": "Joystick to move · drag to look",
     "viewOnly": "Public office: view only",
     "action": "Action",
@@ -771,6 +771,83 @@
       "shareScreen": "Share Screen",
       "more": "More",
       "hands": "Hands up"
+    },
+    "cafe": "Café",
+    "library": "Library",
+    "game": "Game room",
+    "garden": "Garden",
+    "quiet": "Quiet zone",
+    "officeN": "Office {slot}",
+    "coffeeReady": "☕ Your coffee is ready!",
+    "use": {
+      "arcade": "Press E to play",
+      "jukebox": "Press E to pick the music",
+      "coffee": "Press E for a coffee"
+    },
+    "useShort": {
+      "arcade": "Play",
+      "jukebox": "Music",
+      "coffee": "Coffee"
+    },
+    "map": {
+      "title": "Office map",
+      "close": "Close the map",
+      "hint": "Tap a room to go there.",
+      "goTo": "Go to",
+      "alone": "You are the only one in the office right now."
+    },
+    "link": {
+      "connected": "Connected",
+      "connecting": "Connecting…",
+      "lost": "Link lost"
+    },
+    "arcade": {
+      "title": "Bug Squash",
+      "press": "PRESS E",
+      "tap": "TAP PLAY",
+      "scores": "Best scores",
+      "noScores": "Nobody has played yet. Be the first!",
+      "close": "Close the game",
+      "score": "Score",
+      "start": "Start",
+      "again": "Play again",
+      "how": "Squash every bug you see in 30 seconds. The golden beetle is worth 5 and every 5 hits in a row give a bonus. Leave ✨ alone: that is not a bug, it is a feature! (−3)",
+      "result": "Your score: {score}",
+      "record": "🎉 Your new best: {score}"
+    },
+    "juke": {
+      "title": "Jukebox",
+      "close": "Close",
+      "stop": "Stop",
+      "mute": "Mute for me",
+      "muted": "Muted",
+      "shared": "The chosen style plays for everyone and gets quieter the farther you are from the game room.",
+      "track": {
+        "lofi": "Lo-fi",
+        "synth": "Synthwave",
+        "calm": "Calm",
+        "party": "Party"
+      }
+    },
+    "xo": {
+      "title": "Noughts & crosses",
+      "again": "Next round",
+      "draw": "It's a draw",
+      "youWin": "You win! 🎉",
+      "youLose": "You lost this one",
+      "wins": "{mark} wins",
+      "yourTurn": "Your turn",
+      "theirTurn": "{name}'s turn",
+      "solo": "Solo practice · {mark} to play"
+    },
+    "focusTimer": {
+      "title": "Focus timer",
+      "start": "Start",
+      "pause": "Pause",
+      "reset": "Reset",
+      "hint": "Pick a length and press start.",
+      "running": "Stay focused; standing up does not stop the timer.",
+      "done": "Done! Take a short break ☕"
     }
   },
   "emotes": {
@@ -785,7 +862,9 @@
     "love": "Love",
     "cool": "Cool",
     "shy": "Shy",
-    "party": "Party"
+    "party": "Party",
+    "coffee": "Coffee",
+    "dance": "Dancing"
   },
   "tutorial": {
     "title": "Receptionist's tour",
@@ -794,7 +873,7 @@
     "conference": "This is the conference room. Doors open and close with E. Press E next to a chair to sit; you can still look around freely while seated. Everyone in the room hears each other clearly.",
     "office": "Every member has an office. In your own office you can frost the glass, lock the door, turn on focus or public mode, see visitors and invite someone to a private chat.",
     "desk": "At your desk press E to sit and open the dashboard on the monitor: tasks (kanban), team chat, ideas and polls, projects, calendar, files and team. The fullscreen and exit buttons are at the top.",
-    "lounge": "This is the lounge. Send emotes with Q, toggle your mic with M, and chat messages show above each person's head.",
+    "lounge": "There is more around the office: the café and the garden to the west, the library with its focus pod to the east and the game room to the north. The map button (N) takes you anywhere at once. Send emotes with Q, toggle your mic with M, and chat messages show above each person's head.",
     "end": "I'll head back to my desk. Press E at the reception desk any time to take the tour again.",
     "walking": "Walking…",
     "next": "Next",

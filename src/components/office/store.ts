@@ -4,7 +4,10 @@ import type { EmoteId } from './emotes';
 
 export type PanelMode = 'none' | 'monitor' | 'fullscreen';
 // What E (or the phone action button) would do right now.
-export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' };
+export type StationKind = 'arcade' | 'jukebox' | 'coffee';
+export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' } | { kind: 'station'; id: string; station: StationKind };
+// A panel over the office that takes the pointer: the arcade game, the jukebox or the map.
+export type Overlay = 'none' | 'arcade' | 'jukebox' | 'map';
 
 export interface OfficeUiState {
   locked: boolean; // pointer lock active
@@ -21,20 +24,25 @@ export interface OfficeUiState {
   tutorialStep: number | null;
   selectedUserId: string | null; // avatar whose message history is open
   chat: boolean; // the team chat panel is open
+  overlay: Overlay;
+  used: { station: StationKind; at: number } | null; // the station last used with E (the coffee machine reacts to it)
+  area: string; // where the player is (reception, cafe, …)
 }
 
 let state: OfficeUiState = {
   locked: false, seatId: null, panel: 'none', emoteWheel: false, interact: null, currentSlot: null, inConference: false, roomPanel: false, board: 'none',
-  lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null, chat: false,
+  lowQuality: false, myEmote: null, tutorialStep: null, selectedUserId: null, chat: false, overlay: 'none', used: null, area: 'reception',
 };
 const listeners = new Set<() => void>();
 
 export const officeUi = {
   get: () => state,
   set(patch: Partial<OfficeUiState>) {
-    const next = { ...state, ...patch };
-    if (Object.keys(patch).every((k) => Object.is(state[k as keyof OfficeUiState], next[k as keyof OfficeUiState]))) return;
-    state = next;
+    // Called every frame by the player: nothing is allocated when nothing changed.
+    let changed = false;
+    for (const k in patch) if (!Object.is(state[k as keyof OfficeUiState], patch[k as keyof OfficeUiState])) { changed = true; break; }
+    if (!changed) return;
+    state = { ...state, ...patch };
     listeners.forEach((l) => l());
   },
   subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
@@ -51,4 +59,5 @@ export const input = {
   action: false, // edge-triggered by consumers
   lookAt: null as [number, number, number] | null, // turn the view smoothly towards this point (cancelled by looking around)
   moving: false, // set by the player controller
+  teleport: null as { x: number; z: number; yaw: number } | null, // jump there on the next frame (the map)
 };

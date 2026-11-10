@@ -5,7 +5,7 @@ const { chromium } = require('playwright-core');
 const [base, out] = process.argv.slice(2);
 const views = [
   ['spawn', 0, 14.9, 0], ['reception', 0.6, 13.4, 0.1], ['corridor', 0, 8.6, 0], ['conference', 0, 3.6, 0], ['office1', -11, -8.2, 0],
-  ['office1-door', -11, -4.4, 0], ['west', -8.5, 0.5, 1.57], ['east', 8.5, -0.5, -1.57], ['office4', 11, 8.2, Math.PI], ['entrance', 0, 9.5, Math.PI], ['desk-side', 1.7, 11.0, 1.39], ['recept-front', 0.7, 12.3, 0.5], ['top-conf', 0, 6.4, 0],
+  ['office1-door', -11, -4.4, 0], ['west', -8.5, 0.5, 1.57], ['east', 8.5, -0.5, -1.57], ['office4', 11, 8.2, Math.PI], ['entrance', 0, 9.5, Math.PI], ['game', 0, -7.6, 0], ['game-in', 3.2, -9.0, 0.9], ['game-east', -2, -12.5, -1.6], ['cafe', -7.6, 0, 1.57], ['cafe-bar', -11.5, -1.2, 1.2], ['library', 7.6, 0, -1.57], ['library-pod', 11.8, 2.6, -1.9], ['garden', -15.8, 0, 1.57], ['garden-back', -23, -4.5, -1.9], ['desk-side', 1.7, 11.0, 1.39], ['recept-front', 0.7, 12.3, 0.5], ['top-conf', 0, 6.4, 0],
 ];
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

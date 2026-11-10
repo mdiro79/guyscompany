@@ -1,58 +1,69 @@
 'use client';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { props, type Prop } from './layout';
-import { GroundShadow } from './GroundShadow';
+import { props, areaAt, officeAt } from './layout';
+import { Batch, batchMaterials } from './batch';
+import { softShadow } from './textures';
 
-// Kenney models ship with unlit materials; convert them to lit ones so the warm lighting applies.
-// One material per colour is shared by every prop (the office has ~100 meshes but only a few colours).
-const litMaterials = new Map<string, THREE.MeshStandardMaterial>();
-function litMaterial(color: THREE.Color) {
-  const key = color.getHexString();
-  let m = litMaterials.get(key);
-  if (!m) { m = new THREE.MeshStandardMaterial({ color: color.clone(), roughness: 0.5, metalness: 0.02 }); litMaterials.set(key, m); }
-  return m;
-}
+// Furniture from the Kenney kit (CC0). The models ship with unlit flat colours; every piece is baked
+// into one lit mesh per room (the colour becomes a vertex colour), and the soft contact shadows under
+// them into another. A room full of furniture is two draw calls instead of a few hundred.
 
-function prepare(scene: THREE.Object3D) {
-  scene.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    const src = m.material as THREE.MeshBasicMaterial;
-    m.material = litMaterial(src.color ?? new THREE.Color('#ccc'));
-  });
-}
+const LIST = props();
+export const FURNITURE_MODELS = [...new Set(LIST.map((p) => p.model))];
+const URLS = FURNITURE_MODELS.map((m) => `/models/furniture/${m}.glb`);
+URLS.forEach((u) => useGLTF.preload(u));
 
-function Item({ prop }: { prop: Prop }) {
-  const gltf = useGLTF(`/models/furniture/${prop.model}.glb`);
-  const { object, scale, offset, footprint } = useMemo(() => {
-    const object = gltf.scene.clone(true);
-    prepare(object);
-    const box = new THREE.Box3().setFromObject(object);
-    const size = box.getSize(new THREE.Vector3());
+const shadowMaterial = (() => {
+  let m: THREE.Material | null = null;
+  return () => (m ??= new THREE.MeshBasicMaterial({ map: softShadow(), color: '#2b1d12', transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+})();
+const SHADOW_PLANE = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const zoneOf = (x: number, z: number) => { const o = officeAt(x, z); return o ? `office-${o.slot}` : areaAt(x, z); };
+
+function bake(scenes: THREE.Object3D[]) {
+  const zones = new Map<string, { solid: Batch; shadow: Batch }>();
+  const box = new THREE.Box3(), size = new THREE.Vector3(), center = new THREE.Vector3();
+  const white = new THREE.Color('#cccccc');
+  for (const prop of LIST) {
+    const scene = scenes[FURNITURE_MODELS.indexOf(prop.model)];
+    scene.updateMatrixWorld(true);
+    box.setFromObject(scene); box.getSize(size); box.getCenter(center);
     const s = prop.size / Math.max(size.x, size.z, 0.001);
-    const scale: [number, number, number] = [s, prop.h ? prop.h / Math.max(size.y, 0.001) : s, s];
-    const center = box.getCenter(new THREE.Vector3());
-    const footprint: [number, number] = [size.x * s, size.z * s];
-    return { object, scale, offset: new THREE.Vector3(-center.x, -box.min.y, -center.z), footprint };
-  }, [gltf.scene, prop.size, prop.h]);
-  // Floor-standing pieces get a soft contact shadow (not rugs, nor things standing on a table).
-  const grounded = prop.y === undefined && !prop.model.startsWith('rug');
-  return (
-    <>
-      {grounded && <GroundShadow pos={prop.pos} size={[footprint[0] * 1.25 + 0.15, footprint[1] * 1.25 + 0.15]} rotation={prop.rot} opacity={0.3} />}
-      <group position={[prop.pos[0], prop.y ?? 0, prop.pos[1]]} rotation-y={prop.rot} scale={scale}>
-        <primitive object={object} position={offset} />
-      </group>
-    </>
-  );
+    const sy = prop.h ? prop.h / Math.max(size.y, 0.001) : s;
+    const key = zoneOf(prop.pos[0], prop.pos[1]);
+    if (!zones.has(key)) zones.set(key, { solid: new Batch(), shadow: new Batch(true) });
+    const zone = zones.get(key)!;
+    // Centre the model on its footprint, stand it on the floor (or the table at prop.y), scale and turn it.
+    const place = new THREE.Matrix4().compose(new THREE.Vector3(prop.pos[0], prop.y ?? 0, prop.pos[1]), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, prop.rot, 0)), new THREE.Vector3(s, sy, s))
+      .multiply(new THREE.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z));
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const color = (m.material as THREE.MeshBasicMaterial).color ?? white;
+      zone.solid.addMatrix('matte', m.geometry, color, place.clone().multiply(m.matrixWorld));
+    });
+    // Floor-standing pieces get a soft contact shadow (not rugs, nor things standing on a table).
+    if (prop.y === undefined && !prop.model.startsWith('rug')) {
+      zone.shadow.add('matte', SHADOW_PLANE, '#ffffff', [prop.pos[0], 0.009, prop.pos[1]], [0, prop.rot, 0], [size.x * s * 1.25 + 0.15, 1, size.z * s * 1.25 + 0.15]);
+    }
+  }
+  return [...zones].map(([key, z]) => ({ key, solid: z.solid.build().matte, shadow: z.shadow.build().matte }));
 }
 
 export function Furniture() {
-  const list = useMemo(() => props(), []);
-  return <group>{list.map((p, i) => <Item key={i} prop={p} />)}</group>;
+  const gltfs = useGLTF(URLS);
+  const zones = useMemo(() => bake(gltfs.map((g) => g.scene)), [gltfs]);
+  useEffect(() => () => zones.forEach((z) => { z.solid?.dispose(); z.shadow?.dispose(); }), [zones]);
+  return (
+    <group>
+      {zones.map((z) => (
+        <group key={z.key}>
+          {z.solid && <mesh geometry={z.solid} material={batchMaterials.matte} />}
+          {z.shadow && <mesh geometry={z.shadow} material={shadowMaterial()} renderOrder={1} />}
+        </group>
+      ))}
+    </group>
+  );
 }
-
-export const FURNITURE_MODELS = [...new Set(props().map((p) => p.model))];
-FURNITURE_MODELS.forEach((m) => useGLTF.preload(`/models/furniture/${m}.glb`));

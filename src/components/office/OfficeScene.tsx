@@ -1,6 +1,5 @@
 'use client';
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -16,15 +15,19 @@ import { preloadCharacter } from '@/components/three/CharacterModel';
 import { MonitorFrame } from './MonitorFrame';
 import { TourBubbleAnchor } from './TourBubbleAnchor';
 import { ConferenceRoom } from './ConferenceRoom';
+import { Rooms, type RoomLabels } from './rooms/Rooms';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
+import { LightPool } from './LightPool';
 import type { MeetingLabels } from './textures';
-import { OFFICES, RECEPTION_Z, SPAWN, WALL_HEIGHT } from './layout';
+import { SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 import { officeUi } from './store';
+import { SceneStats } from './SceneStats';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; invitedSlots: number[];
-  lowQuality: boolean; isPhone: boolean; loadingLabel: string; meetingLabels: MeetingLabels;
+  lowQuality: boolean; isPhone: boolean; loadingLabel: string; meetingLabels: MeetingLabels; roomLabels: RoomLabels;
+  paused: boolean; // nothing of the 3D view is visible (a full-screen panel covers it): stop drawing
   remotes: React.RefObject<Map<string, RemoteAvatar>>; external: React.RefObject<Pose | null>;
   onPose: (p: Pose) => void; voiceDistance: (pos: [number, number], userId: string) => void;
 }
@@ -47,32 +50,12 @@ function SoftEnvironment() {
   );
 }
 
-// A ceiling downlight: a wide soft cone pointing at the floor. Unlike the point lights it replaces,
-// it does not burn a bright spot into the ceiling right above it.
-function Downlight({ pos, intensity, color }: { pos: [number, number]; intensity: number; color: string }) {
-  const ref = useRef<THREE.SpotLight>(null);
-  useLayoutEffect(() => {
-    const l = ref.current;
-    if (!l) return;
-    l.target.position.set(pos[0], 0, pos[1]);
-    l.target.updateMatrixWorld();
-  }, [pos]);
-  return <spotLight ref={ref} position={[pos[0], WALL_HEIGHT - 0.05, pos[1]]} angle={1.2} penumbra={1} intensity={intensity} distance={11} decay={2} color={color} />;
-}
-
-const DOWNLIGHTS: { pos: [number, number]; intensity: number; color: string }[] = [
-  { pos: [0, RECEPTION_Z], intensity: 22, color: '#ffe2bd' },
-  { pos: [-11, 0], intensity: 18, color: '#ffe2bd' },
-  { pos: [11, 0], intensity: 18, color: '#ffe2bd' },
-  ...OFFICES.map((o) => ({ pos: [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2] as [number, number], intensity: 24, color: o.wallColor === 'orange' ? '#ffd2a3' : '#ffe8cc' })),
-];
-
 function Lights({ low }: { low: boolean }) {
   return (
     <>
       <hemisphereLight name={HEMI_NAME} args={['#fff6ea', '#8f7760', hemiIntensity(low)]} />
       <ambientLight intensity={0.1} color="#ffe6c4" />
-      {!low && DOWNLIGHTS.map((d) => <Downlight key={d.pos.join()} {...d} />)}
+      {!low && <LightPool />}
       {/* Low quality: one soft key light from above instead of the downlights, so shapes still read. */}
       {low && <directionalLight position={[4, 9, 6]} intensity={1.1} color="#fff0dc" />}
     </>
@@ -136,9 +119,10 @@ export default function OfficeScene(p: SceneProps) {
     <LoadingOverlay label={p.loadingLabel} ready={ready} />
     <Canvas
       dpr={scale.dpr}
+      frameloop={p.paused ? 'demand' : 'always'}
       // Fixed when the canvas is created, so it cannot follow the quality toggle; edges stay smooth on phones too.
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 90, position: [SPAWN.pos[0], 1.6, SPAWN.pos[1]] }}
+      camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 120, position: [SPAWN.pos[0], 1.6, SPAWN.pos[1]] }}
       style={{ touchAction: 'none' }}
     >
       <PerformanceMonitor bounds={FPS_BOUNDS} onDecline={scale.decline} onIncline={scale.incline} flipflops={4} />
@@ -147,6 +131,7 @@ export default function OfficeScene(p: SceneProps) {
       <Lights low={p.lowQuality} />
       <SoftEnvironment />
       <ConferenceRoom labels={p.meetingLabels} people={people} lowQuality={p.lowQuality} />
+      <Rooms labels={p.roomLabels} people={people} />
       <Suspense fallback={null}>
         <Building offices={p.offices} />
         <Furniture />
@@ -159,6 +144,7 @@ export default function OfficeScene(p: SceneProps) {
       <MonitorFrame />
       <TourBubbleAnchor />
       <LabelProjector offices={p.offices} />
+      <SceneStats />
       {!p.lowQuality && ready && <Suspense fallback={null}><Effects phone={p.isPhone} /></Suspense>}
     </Canvas>
     </>

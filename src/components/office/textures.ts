@@ -222,3 +222,29 @@ export function paintRoomPanel(c: HTMLCanvasElement, s: { light: number; warmth:
   g.fillText(`${s.frost}%`, W / 2, 330);
   bar(346, s.frost, '#bfe9e1');
 }
+
+const hasArabic = (s: string) => /[؀-ۿ]/.test(s);
+export const signFont = (text: string, weight: number, px: number) => font(hasArabic(text), weight, px);
+
+// A glowing sign: bright text with a soft halo of its colour on a transparent background.
+export function neonSign(text: string, color: string, opts: { w?: number; h?: number; sub?: string } = {}) {
+  const W = opts.w ?? 768, Hh = opts.h ?? 192;
+  const [c, g] = canvas(W, Hh);
+  const paint = () => {
+    g.clearRect(0, 0, W, Hh);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const size = Hh * (opts.sub ? 0.42 : 0.5);
+    g.font = signFont(text, 800, size);
+    const y = opts.sub ? Hh * 0.38 : Hh * 0.52;
+    g.shadowColor = color; g.shadowBlur = Hh * 0.16; g.fillStyle = color;
+    g.fillText(text, W / 2, y, W * 0.94); g.fillText(text, W / 2, y, W * 0.94);
+    g.shadowBlur = 0; g.fillStyle = 'rgba(255,255,255,0.92)';
+    g.fillText(text, W / 2, y, W * 0.94);
+    if (opts.sub) { g.font = signFont(opts.sub, 600, Hh * 0.2); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillText(opts.sub, W / 2, Hh * 0.78, W * 0.9); }
+  };
+  paint();
+  const t = texture(c);
+  // Once the web fonts are in, paint again with them.
+  document.fonts?.ready.then(() => { paint(); t.needsUpdate = true; }, () => {});
+  return t;
+}

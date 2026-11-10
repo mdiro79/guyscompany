@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTr
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, MessageCircle, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast, KeyRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, MessageCircle, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast, KeyRound, Map as MapIcon, MoreHorizontal, Gamepad2, Music, Coffee, Timer } from 'lucide-react';
+import { invalidate } from '@react-three/fiber';
 import { present, usePresenter } from '@/lib/board/sync';
 import { raiseHand, useHands } from '@/lib/board/hands';
 import { saveRoomAction } from '@/app/actions/rooms';
@@ -19,7 +20,16 @@ import { OFFICE_DEFAULTS, type FileMeta, type Message, type Office, type Room } 
 import { useOfficeNet } from './useOfficeNet';
 import { officeUi, input, useOfficeUi } from './store';
 import { EMOTES } from './emotes';
-import { officeAt, inConference, areaAt, allSeats, SPAWN, CONF_SCREEN } from './layout';
+import { officeAt, inConference, allSeats, onDanceFloor, SPAWN, CONF_SCREEN } from './layout';
+import { MiniMap } from './MiniMap';
+import { ArcadeGame } from './play/ArcadeGame';
+import { JukeboxPanel } from './play/JukeboxPanel';
+import { XoPanel } from './play/XoPanel';
+import { FocusTimer, useFocusTimer, clock } from './play/FocusTimer';
+import { connectJukebox, jukebox } from './play/jukebox';
+import { connectXo } from './play/xo';
+import { connectScores } from './play/scores';
+import { music } from './play/music';
 import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, type TabletButton } from './tablet';
@@ -59,8 +69,11 @@ const SCREEN_CENTER: [number, number, number] = [0, CONF_SCREEN.bottom + CONF_SC
 // Light scenes the tablet switches between (same as the wall panel's Meeting and Present).
 const MEETING_LIGHT = { light: 100, warmth: 45 }, PRESENT_LIGHT = { light: 25, warmth: 55 };
 const SPLIT_KEY = 'gc-board-split';
+const onDance = (p: [number, number]) => onDanceFloor(p[0], p[1]);
 
 const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canvas');
+// E (or its buttons): also wakes the 3D view when it is paused behind a full-screen panel.
+const act = () => { input.action = true; invalidate(); };
 
 export function OfficeView({ messages, privateChats, invitedSlots, files, room, meeting: meetingData }: {
   messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null; meeting: OfficeMeeting;
@@ -84,7 +97,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   useEffect(() => {
     // "Enter office" clicked on the dashboard shown on the monitor: we are already there, so just stand up.
     if (isEmbedded()) { setEmbedded(true); window.parent.postMessage({ type: 'gc-leave-monitor' }, window.location.origin); return; }
-    const h = (e: MessageEvent) => { if (e.origin === window.location.origin && e.data?.type === 'gc-leave-monitor' && officeUi.get().seatId) input.action = true; };
+    const h = (e: MessageEvent) => { if (e.origin === window.location.origin && e.data?.type === 'gc-leave-monitor' && officeUi.get().seatId) act(); };
     window.addEventListener('message', h);
     return () => window.removeEventListener('message', h);
   }, []);
@@ -101,6 +114,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     shareImage: t('meeting.shareImage'), shareScreen: t('meeting.shareScreen'), more: t('meeting.more'), hands: t('meeting.hands'), rtl: locale === 'fa',
     startedAt: runStart,
   }), [locale, t, runTitle, runPurpose, runStart]);
+  const roomLabels = useMemo(() => ({
+    cafe: t('cafe'), library: t('library'), game: t('game'), garden: t('garden'), quiet: t('quiet'),
+    arcadeTitle: t('arcade.title'), arcadePress: isPhone ? t('arcade.tap') : t('arcade.press'), scores: t('arcade.scores'), noScores: t('arcade.noScores'), xoTitle: t('xo.title'), rtl: locale === 'fa',
+  }), [locale, t, isPhone]);
   const tabletLabels = useMemo(() => ({
     title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
     raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),
@@ -162,6 +179,13 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   const [preloadMonitor, setPreloadMonitor] = useState(false);
   useEffect(() => { const id = setTimeout(() => setPreloadMonitor(true), MONITOR_PRELOAD_MS); return () => clearTimeout(id); }, []);
   useEffect(() => connectDoors(mesh), [mesh]);
+  // Game room: the jukebox's style, the game table and the arcade's best scores are shared live.
+  useEffect(() => connectJukebox(mesh), [mesh]);
+  useEffect(() => connectXo(mesh), [mesh]);
+  useEffect(() => connectScores(mesh, user.id), [mesh, user.id]);
+  // The music follows where I stand (louder in the game room, silent far away).
+  useEffect(() => { jukebox.listen(myPos); }, [myPos]);
+  useEffect(() => () => jukebox.listen(null), []);
   // Conference room light and glass: live from the others over WebRTC, the saved value from the page data.
   useEffect(() => connectRoomControls(mesh), [mesh]);
   useEffect(() => { if (room) roomControls.load(room); }, [room]);
@@ -197,7 +221,38 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     const id = setTimeout(() => officeUi.set({ myEmote: null }), Math.max(0, ui.myEmote.until - Date.now()));
     return () => clearTimeout(id);
   }, [ui.myEmote]);
-  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false, board: 'none', chat: false }), []);
+  useEffect(() => () => officeUi.set({ seatId: null, panel: 'none', emoteWheel: false, interact: null, roomPanel: false, board: 'none', chat: false, overlay: 'none', used: null }), []);
+  // The coffee machine: a cup, its sound and a short note for everyone around.
+  const [toast, setToast] = useState<string | null>(null);
+  const { sendEmote: sendEmoteNow, sendPose: sendPoseNow } = net; // stable callbacks (the `net` object itself is new on every render)
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 3200); return () => clearTimeout(id); }, [toast]);
+  const usedAt = ui.used?.at;
+  useEffect(() => {
+    if (!usedAt || officeUi.get().used?.station !== 'coffee') return;
+    music().blip([55, 57, 59, 72], 'triangle', 0.12, 0.16);
+    sendEmoteNow('coffee');
+    setToast(t('coffeeReady'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usedAt]);
+  // Dancing: stepping onto the lit floor while music plays.
+  const dancing = ui.area === 'game' && !ui.seatId && onDance(myPos) && jukebox.playing();
+  useEffect(() => {
+    if (!dancing) return;
+    sendEmoteNow('dance');
+    const id = setInterval(() => sendEmoteNow('dance'), 3800);
+    return () => clearInterval(id);
+  }, [dancing, sendEmoteNow]);
+  const [more, setMore] = useState(false);
+  const focusTimer = useFocusTimer();
+  const closeOverlay = useCallback(() => {
+    officeUi.set({ overlay: 'none' });
+    if (!isPhone && canLook()) canvas()?.requestPointerLock?.();
+  }, [isPhone]);
+  const openMap = useCallback(() => {
+    if (document.pointerLockElement) document.exitPointerLock();
+    officeUi.set({ overlay: officeUi.get().overlay === 'map' ? 'none' : 'map', emoteWheel: false, roomPanel: false });
+    setMore(false);
+  }, []);
   // Leaving the office restores full volume for everyone (proximity only applies in 3D).
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -218,7 +273,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input,textarea,select')) return;
-      if (officeUi.get().board !== 'none') return;
+      if (officeUi.get().board !== 'none' || officeUi.get().overlay === 'arcade') return;
       // Tab switches between mouse look and the on-screen cursor (computers).
       if (e.code === 'Tab' && !isPhone) {
         e.preventDefault();
@@ -234,13 +289,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       }
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
-      if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false }); setMeetingPanelState('none'); }
+      if (e.code === 'KeyN' && !e.repeat && !working && officeUi.get().overlay === 'none') { openMap(); return; }
+      if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false, overlay: 'none' }); setMeetingPanelState('none'); setMore(false); }
       const n = Number(e.key);
       if (officeUi.get().emoteWheel && n >= 1 && n <= 9) sendEmote(EMOTES[n - 1].id);
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [voice, isPhone, working, openWheel, sendEmote, openChat]);
+  }, [voice, isPhone, working, openWheel, sendEmote, openChat, openMap]);
 
   // Record a visit when entering someone else's office.
   useEffect(() => {
@@ -249,8 +305,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     if (o?.ownerId && o.ownerId !== user.id) void recordVisitAction(ui.currentSlot);
   }, [ui.currentSlot, offices, user.id]);
 
-  const onPose = useCallback((p: { x: number; z: number }) => {
-    net.sendPose(p as never);
+  const lastPose = useRef<Parameters<typeof net.sendPose>[0] | null>(null);
+  const onPose = useCallback((p: Parameters<typeof net.sendPose>[0]) => {
+    lastPose.current = p;
+    net.sendPose(p);
     setMyPos((prev) => (Math.abs(prev[0] - p.x) + Math.abs(prev[1] - p.z) > 0.25 ? [p.x, p.z] : prev));
   }, [net]);
 
@@ -343,14 +401,22 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     return officeUi.get().inConference ? [user.id, ...ids] : ids;
   }, [net, user.id]);
 
+  // Nothing of the 3D view is visible behind the full-screen dashboard, the full-screen board or the
+  // arcade game: stop drawing it (the phone stays cool) and only keep telling the others we are here.
+  const paused = ui.panel === 'fullscreen' || (ui.board !== 'none' && !split) || ui.overlay === 'arcade';
+  useEffect(() => {
+    if (!paused) return;
+    const id = setInterval(() => { if (lastPose.current) sendPoseNow(lastPose.current); }, 1000);
+    return () => clearInterval(id);
+  }, [paused, sendPoseNow]);
+
   if (embedded) {
     return <div className="flex min-h-dvh items-center justify-center p-6 text-center text-muted">{t('embedded')}</div>;
   }
 
   const current = offices.find((o) => o.slot === ui.currentSlot) ?? null;
   const owner = current ? profiles.find((p) => p.id === current.ownerId) : null;
-  const area = areaAt(...myPos);
-  const place = current ? (owner ? t('officeOf', { name: owner.displayName }) : t('emptyOffice', { slot: current.slot })) : t(area === 'office' ? 'corridor' : area);
+  const place = current ? (owner ? t('officeOf', { name: owner.displayName }) : t('emptyOffice', { slot: current.slot })) : t(ui.area === 'office' ? 'corridor' : ui.area);
   const myOffice = offices.find((o) => o.ownerId === user.id);
   const inMyOffice = !!current && current.ownerId === user.id;
   const Back = locale === 'fa' ? ArrowRight : ArrowLeft;
@@ -382,12 +448,15 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
         void saveRoomAction('conference', roomControls.get());
         break;
       }
-      case 'stand': input.action = true; break;
+      case 'stand': act(); break;
       case 'notes': setMeetingPanel(running ? 'notes' : 'start'); break;
       case 'meeting': setMeetingPanel(running ? 'info' : 'start'); break;
     }
   };
   pressRef.current = pressTablet;
+  // Who sits on the other chair of the game table (live positions).
+  const otherXoSeat = ui.seatId === 'xo-a' ? 'xo-b' : 'xo-a';
+  const xoOpponent = ui.seatId?.startsWith('xo-') ? [...net.remotes.current.values()].find((r) => performance.now() - r.receivedAt < 5000 && r.pose.seatId === otherXoSeat)?.userId ?? null : null;
   const officeControls = inMyOffice && !!myOffice && !ui.seatId && !touring;
   const showCursor = !isPhone && !ui.locked && !(working && ui.panel !== 'none');
   const it = ui.interact;
@@ -396,12 +465,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       : it.kind === 'seat' ? t('pressE')
         : it.kind === 'guide' ? t('pressTalk')
           : it.kind === 'panel' ? t('pressPanel')
+          : it.kind === 'station' ? t(`use.${it.station}`)
           : !it.allowed ? t('noAccess') : it.open ? t('pressClose') : t('pressOpen');
   const action = ui.seatId ? { icon: Hand, label: t('stand') }
     : !it ? null
       : it.kind === 'seat' ? { icon: Armchair, label: t('sit') }
         : it.kind === 'guide' ? { icon: MessageSquare, label: t('talk') }
           : it.kind === 'panel' ? { icon: SlidersHorizontal, label: t('roomControls') }
+          : it.kind === 'station' ? { icon: it.station === 'arcade' ? Gamepad2 : it.station === 'jukebox' ? Music : Coffee, label: t(`useShort.${it.station}`) }
           : !it.allowed ? { icon: Lock, label: t('noAccess'), disabled: true }
             : { icon: it.open ? DoorClosed : DoorOpen, label: it.open ? t('closeDoor') : t('openDoor') };
 
@@ -411,7 +482,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
         onClick={() => officeUi.set({ panel: ui.panel === 'fullscreen' ? 'monitor' : 'fullscreen' })} disabled={ui.panel === 'none'}>
         {ui.panel === 'fullscreen' ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}{ui.panel === 'fullscreen' ? t('monitor') : t('fullscreen')}
       </button>
-      <button type="button" className="flex min-h-10 items-center gap-2 rounded-xl bg-[#d9443c] px-3 text-sm font-semibold hover:opacity-90" onClick={() => { input.action = true; }}>
+      <button type="button" className="flex min-h-10 items-center gap-2 rounded-xl bg-[#d9443c] px-3 text-sm font-semibold hover:opacity-90" onClick={act}>
         <LogOut className="size-4 rtl:-scale-x-100" />{t('exit')}
       </button>
     </>
@@ -424,11 +495,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
         ? 'inset-x-0 top-0 h-[42dvh] landscape:inset-y-0 landscape:start-auto landscape:end-0 landscape:h-auto landscape:w-[42vw]'
         : 'inset-0')}>
         <OfficeScene user={user} profiles={profiles} offices={offices} invitedSlots={invitedSlots} lowQuality={ui.lowQuality} isPhone={isPhone}
-          loadingLabel={t('loadingModels')} meetingLabels={meetingLabels} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
+          loadingLabel={t('loadingModels')} meetingLabels={meetingLabels} roomLabels={roomLabels} paused={paused} remotes={net.remotes} external={net.external} onPose={onPose} voiceDistance={voiceDistance} />
         {/* Names, messages and emotes above the heads, placed in the 3D world by LabelProjector */}
         <OfficeLabels profiles={profiles} messages={team.messages} remotes={net.remotes} seenAt={chatSeenAt} texts={labelTexts} />
       </div>
-      {isPhone && !touring && !working && !ui.chat && <TouchControls lookOnly={!!ui.seatId} />}
+      {isPhone && !touring && !working && !ui.chat && ui.overlay === 'none' && <TouchControls lookOnly={!!ui.seatId} />}
 
       {/* Dashboard on the monitor / fullscreen (single iframe keeps state) */}
       <div id="gc-monitor-frame" className="absolute z-20 hidden overflow-hidden bg-white shadow-2xl">
@@ -470,19 +541,30 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
               {current && current.ownerId !== user.id && current.isPublic && <div className="text-xs text-white/70">{t('viewOnly')}</div>}
             </div>
           )}
-          <div className="pointer-events-auto ms-auto flex gap-2">
-            <LocaleSwitch dark className="max-sm:px-3 max-sm:[&>svg]:hidden" />
+          <div className="pointer-events-auto relative ms-auto flex gap-2">
+            <LocaleSwitch dark className="max-sm:hidden" />
             <button type="button" onClick={voice.toggleMic} aria-label={t('mic')} className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', voice.micOn ? 'bg-[#22a559]' : 'bg-black/55')}>
               {voice.micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
             </button>
-            <button type="button" onClick={() => openWheel(!ui.emoteWheel)} aria-label={t('emotes')} className="flex size-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur"><Smile className="size-5" /></button>
+            <button type="button" onClick={() => openWheel(!ui.emoteWheel)} aria-label={t('emotes')} className="flex size-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur max-sm:hidden"><Smile className="size-5" /></button>
             <button type="button" onClick={() => (ui.chat ? closeChat() : openChat())} aria-label={tChat('title')} aria-pressed={ui.chat} title={tChat('title')}
               className={clsx('relative flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.chat ? 'bg-[#2f8f7a]' : 'bg-black/55')}>
               <MessageCircle className="size-5" />
               {unreadChat > 0 && <span className="absolute -top-1 -end-1 min-w-5 rounded-full bg-[#f07a2a] px-1 text-center text-[11px] leading-5 font-bold shadow">{unreadChat > 9 ? '9+' : unreadChat}</span>}
             </button>
+            <button type="button" onClick={openMap} aria-label={t('map.title')} aria-pressed={ui.overlay === 'map'} title={`${t('map.title')} (N)`}
+              className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.overlay === 'map' ? 'bg-[#2f8f7a]' : 'bg-black/55')}><MapIcon className="size-5" /></button>
             <button type="button" onClick={() => officeUi.set({ lowQuality: !ui.lowQuality })} aria-label={ui.lowQuality ? t('highQuality') : t('lowQuality')} title={ui.lowQuality ? t('highQuality') : t('lowQuality')}
-              className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.lowQuality ? 'bg-[#f07a2a]' : 'bg-black/55')}><Gauge className="size-5" /></button>
+              className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur max-sm:hidden', ui.lowQuality ? 'bg-[#f07a2a]' : 'bg-black/55')}><Gauge className="size-5" /></button>
+            {/* Phones: the less used buttons fold into one menu so the bar fits a narrow screen. */}
+            <button type="button" onClick={() => setMore((x) => !x)} aria-label={tc('more')} aria-expanded={more} className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur sm:hidden', more ? 'bg-[#2f8f7a]' : 'bg-black/55')}><MoreHorizontal className="size-5" /></button>
+            {more && (
+              <div className="gc-pop absolute end-0 top-[3.25rem] z-40 flex w-56 flex-col gap-1 rounded-2xl bg-black/80 p-2 text-sm shadow-xl backdrop-blur sm:hidden">
+                <button type="button" onClick={() => { setMore(false); openWheel(true); }} className="flex min-h-11 items-center gap-3 rounded-xl px-3 hover:bg-white/15"><Smile className="size-5" />{t('emotes')}</button>
+                <button type="button" onClick={() => { officeUi.set({ lowQuality: !ui.lowQuality }); setMore(false); }} className="flex min-h-11 items-center gap-3 rounded-xl px-3 hover:bg-white/15"><Gauge className={clsx('size-5', ui.lowQuality && 'text-[#f07a2a]')} />{ui.lowQuality ? t('highQuality') : t('lowQuality')}</button>
+                <div className="flex min-h-11 items-center px-1"><LocaleSwitch dark /></div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -502,7 +584,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {isPhone && !working && !touring && action && !ui.roomPanel && !ui.chat && (
         <div className="absolute end-4 bottom-6 z-40 pb-[env(safe-area-inset-bottom)] short:bottom-3">
           <button type="button" disabled={'disabled' in action} className="flex min-h-14 items-center gap-2 rounded-2xl bg-[#2f5d45] px-5 text-base font-semibold shadow-lg disabled:bg-[#d9443c]/90 short:min-h-12"
-            onClick={() => { input.action = true; }}>
+            onClick={act}>
             <action.icon className="size-5" />{action.label}
           </button>
         </div>
@@ -615,6 +697,28 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
         </div>
       )}
       {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} split={split} onSplit={setSplit} onClose={() => officeUi.set({ board: 'none' })} />}
+
+      {/* Game room, library pod and the map */}
+      {ui.overlay === 'arcade' && <ArcadeGame people={profiles.map((p) => ({ id: p.id, name: p.displayName }))} meId={user.id} onClose={closeOverlay} />}
+      {ui.overlay === 'jukebox' && !ui.seatId && (
+        <div className="absolute top-[4.25rem] end-3 z-30 short:top-14"><JukeboxPanel onClose={closeOverlay} /></div>
+      )}
+      {ui.overlay === 'map' && (
+        <MiniMap profiles={profiles} offices={offices} meId={user.id} myPos={myPos} remotes={net.remotes} mesh={mesh} onClose={closeOverlay}
+          onGo={(p) => { input.teleport = p; invalidate(); }} />
+      )}
+      {!touring && ui.board === 'none' && ui.overlay === 'none' && !ui.chat && (ui.seatId?.startsWith('xo-') || ui.seatId?.startsWith('pod-')) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-3 short:bottom-12 short:justify-end">
+          {ui.seatId.startsWith('xo-')
+            ? <XoPanel mark={ui.seatId === 'xo-a' ? 1 : 2} alone={!xoOpponent} opponent={profiles.find((p) => p.id === xoOpponent)?.displayName ?? null} />
+            : <FocusTimer />}
+        </div>
+      )}
+      {/* A running focus timer stays in sight after leaving the pod */}
+      {focusTimer.running && !ui.seatId?.startsWith('pod-') && !working && (
+        <div className="pointer-events-none absolute start-3 top-[4.25rem] z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs tabular-nums backdrop-blur short:top-14" dir="ltr"><Timer className="size-3.5 text-[#8fe0c8]" />{clock(focusTimer.leftMs)}</div>
+      )}
+      {toast && <div className="gc-pop pointer-events-none absolute top-24 left-1/2 z-40 -translate-x-1/2 rounded-2xl bg-[#2f5d45] px-4 py-2 text-sm font-semibold shadow-lg short:top-16">{toast}</div>}
 
       <Tutorial markDone={!user.tutorialDone} />
       {showCursor && <TabCursor />}
