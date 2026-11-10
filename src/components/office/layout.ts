@@ -259,7 +259,7 @@ export function gardenSeats(): Seat[] {
 export const allSeats = () => [...officeSeats(), ...conferenceSeats(), ...cafeSeats(), ...librarySeats(), ...gameSeats(), ...gardenSeats()];
 
 // Notice kiosk in the reception, turned towards the entrance.
-export const NOTICE_KIOSK = { pos: [4.6, SOUTH - 2.7] as Vec2, rot: Math.atan2(-4.6, 1.5) };
+export const NOTICE_KIOSK = { pos: [3.9, SOUTH - 5] as Vec2, rot: -Math.PI / 4 };
 
 // Things used with E: arcade cabinets, the jukebox and the coffee machine.
 export function stations(): Station[] {
