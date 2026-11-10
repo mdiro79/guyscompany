@@ -36,7 +36,7 @@ export const GARDEN = { min: [-OUT - GARDEN_DEPTH, -H] as Vec2, max: [-OUT, H] a
 export const GAME = { min: [-H, -OUT] as Vec2, max: [H, -H] as Vec2 };
 export const CAFE = { min: [-OUT, -H] as Vec2, max: [-H, H] as Vec2 };
 export const LIBRARY = { min: [H, -H] as Vec2, max: [OUT, H] as Vec2 };
-export const GAME_WALL = '#34365f'; // deep indigo, so the neon and the screens stand out
+export const GAME_WALL = '#3f4178'; // deep indigo, so the neon and the screens stand out
 
 const officeCx = (slot: number) => (slot % 2 === 1 ? -1 : 1) * (H + OUT) / 2;
 
@@ -194,8 +194,8 @@ export const CAFE_TABLE_RADIUS = 0.55;
 export const CAFE_TABLE_HEIGHT = 0.76;
 export const CAFE_BAR = { x: -OUT + 0.45, z: -3.9, halfDepth: 0.33, halfLength: 2.1, height: 0.95 }; // along the glass wall, north of the garden door
 export const CAFE_SOFA: { pos: Vec2; facing: number } = { pos: [-OUT + 0.75, 4.2], facing: -Math.PI / 2 }; // looks east into the room
-export const COFFEE_MACHINE: Vec2 = [CAFE_BAR.x, CAFE_BAR.z - 1.3];
-export const CAFE_STOOLS: Vec2[] = [-0.35, 0.55, 1.45].map((d) => [CAFE_BAR.x + 0.82, CAFE_BAR.z + d]);
+export const COFFEE_MACHINE: Vec2 = [CAFE_BAR.x, CAFE_BAR.z + 1.45]; // at the bar's end by the garden door
+export const CAFE_STOOLS: Vec2[] = [-1.5, -0.7].map((d) => [CAFE_BAR.x + 0.82, CAFE_BAR.z + d]);
 export const WATER_COOLER: Vec2 = [-OUT + 0.4, 1.35];
 export function cafeSeats(): Seat[] {
   const s: Seat[] = [];

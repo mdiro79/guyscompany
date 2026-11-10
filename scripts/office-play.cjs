@@ -39,7 +39,7 @@ const [base, out] = process.argv.slice(2);
   // Pod
   await pose(14, 0, 0, 'pod-0'); await page.waitForTimeout(1500); await shot('pod');
   // Coffee
-  await pose(-13.4, -5.2, Math.PI / 2); await act(); await shot('coffee');
+  await pose(-13.4, -2.45, Math.PI / 2); await act(); await shot('coffee');
   // Map
   if (phone) await page.locator('#gc-office button[aria-pressed][title*="N"]').tap().catch(() => {}); else await page.keyboard.press('KeyN');
   await page.waitForTimeout(900); await shot('map');

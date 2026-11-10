@@ -90,10 +90,10 @@ export function buildCafe(b: Batch) {
   b.box([bar.halfDepth * 2 + 0.02, 0.1, bar.halfLength * 2 + 0.02], [bar.x, 0.05, bar.z], '#1f3d39');
   b.box([bar.halfDepth * 2 + 0.12, 0.05, bar.halfLength * 2 + 0.1], [bar.x + 0.03, bar.height - 0.025, bar.z], OAK);
   // On the bar: cups, a cake under a dome, a jar and a small plant pot.
-  [0, 0.09, 0.18].forEach((d) => b.cyl(0.035, 0.028, 0.075, [bar.x + 0.12, bar.height + 0.038, bar.z - 0.85 + d], '#f7f4ee', 10));
+  [0, 0.09, 0.18].forEach((d) => b.cyl(0.035, 0.028, 0.075, [bar.x + 0.12, bar.height + 0.038, bar.z + 0.75 + d], '#f7f4ee', 10));
   b.cyl(0.17, 0.17, 0.015, [bar.x, bar.height + 0.008, bar.z + 0.1], '#f7f4ee', 18).cyl(0.11, 0.11, 0.07, [bar.x, bar.height + 0.05, bar.z + 0.1], '#c98a5a', 14).cyl(0.112, 0.112, 0.02, [bar.x, bar.height + 0.09, bar.z + 0.1], '#f4d7dc', 14);
-  b.cyl(0.07, 0.07, 0.16, [bar.x - 0.05, bar.height + 0.08, bar.z + 0.9], '#e9b96e', 12).cyl(0.072, 0.072, 0.02, [bar.x - 0.05, bar.height + 0.17, bar.z + 0.9], TRIM, 12);
-  b.slab([0.02, 0.26, 0.2], [bar.x + 0.14, bar.height + 0.13, bar.z + 1.6], [0, 0, -0.25], '#26332f');
+  b.cyl(0.07, 0.07, 0.16, [bar.x - 0.05, bar.height + 0.08, bar.z - 1.75], '#e9b96e', 12).cyl(0.072, 0.072, 0.02, [bar.x - 0.05, bar.height + 0.17, bar.z - 1.75], TRIM, 12);
+  b.slab([0.02, 0.26, 0.2], [bar.x + 0.14, bar.height + 0.13, bar.z - 0.75], [0, 0, -0.25], '#26332f');
   for (const p of CAFE_STOOLS) {
     b.cyl(0.2, 0.2, 0.03, [p[0], 0.015, p[1]], TRIM, 14).cyl(0.025, 0.025, 0.62, [p[0], 0.33, p[1]], '#8a8f98', 8).cyl(0.19, 0.17, 0.07, [p[0], 0.675, p[1]], ORANGE, 16);
   }

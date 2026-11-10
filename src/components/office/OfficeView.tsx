@@ -708,7 +708,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
           onGo={(p) => { input.teleport = p; invalidate(); }} />
       )}
       {!touring && ui.board === 'none' && ui.overlay === 'none' && !ui.chat && (ui.seatId?.startsWith('xo-') || ui.seatId?.startsWith('pod-')) && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-3 short:bottom-12 short:justify-end">
+        <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-3 short:bottom-3 short:justify-start">
           {ui.seatId.startsWith('xo-')
             ? <XoPanel mark={ui.seatId === 'xo-a' ? 1 : 2} alone={!xoOpponent} opponent={profiles.find((p) => p.id === xoOpponent)?.displayName ?? null} />
             : <FocusTimer />}

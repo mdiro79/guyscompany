@@ -174,11 +174,13 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     }
     tourWas.current = false;
 
+    // The seat as it is right now: a command from another device, the map or E can change it within this frame.
+    let seatId = ui.seatId;
     // The map can move the player anywhere (standing up first).
     if (input.teleport) {
       const tp = input.teleport;
       input.teleport = null;
-      if (ui.seatId) officeUi.set({ seatId: null, panel: 'none' });
+      if (seatId) { officeUi.set({ seatId: null, panel: 'none' }); seatId = null; }
       pos.current = resolveCollisions([tp.x, tp.z], PLAYER_RADIUS, solid, circles);
       yaw.current = tp.yaw; pitch.current = -0.05;
       lastLocalInput.current = now;
@@ -195,13 +197,13 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     if (ext && ext.t > lastLocalInput.current + 50) {
       pos.current = [ext.x, ext.z];
       yaw.current = ext.yaw;
-      if (ext.seatId !== ui.seatId) officeUi.set({ seatId: ext.seatId, panel: ext.seatId ? officeUi.get().panel : 'none' });
+      if (ext.seatId !== seatId) { officeUi.set({ seatId: ext.seatId, panel: ext.seatId ? officeUi.get().panel : 'none' }); seatId = ext.seatId; sitT.current = 0; }
       external.current = null;
     }
 
     // What E would do: the closest seat, door or the receptionist in front of the player.
     let interact: Interact | null = null;
-    if (!ui.seatId) {
+    if (!seatId) {
       const fx = -Math.sin(yaw.current), fz = -Math.cos(yaw.current);
       const ahead = (p: Vec2, d: number) => d < 0.9 || ((p[0] - pos.current[0]) * fx + (p[1] - pos.current[1]) * fz) / (d || 1) > 0.35;
       const cand: { i: Interact; d: number }[] = [];
@@ -222,7 +224,10 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       }
       for (const st of stationList) {
         const d = Math.hypot(st.pos[0] - pos.current[0], st.pos[1] - pos.current[1]);
-        if (d < 1.7 && ahead(st.pos, d)) cand.push({ i: { kind: 'station', id: st.id, station: st.kind }, d: d - 0.15 });
+        if (d >= 1.7 || !ahead(st.pos, d)) continue;
+        // Looking straight at it wins over a chair that happens to be nearer.
+        const facing = ((st.pos[0] - pos.current[0]) * fx + (st.pos[1] - pos.current[1]) * fz) / (d || 1);
+        cand.push({ i: { kind: 'station', id: st.id, station: st.kind }, d: facing > 0.75 ? d * 0.45 : d });
       }
       const gd = Math.hypot(guide.pos[0] - pos.current[0], guide.pos[1] - pos.current[1]);
       if (guide.seated && gd < 2.4 && ahead(guide.pos, gd)) cand.push({ i: { kind: 'guide' }, d: gd });
@@ -234,8 +239,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     if (input.action) {
       input.action = false;
       lastLocalInput.current = now;
-      if (ui.seatId) {
-        const seat = seats.find((s) => s.id === ui.seatId);
+      if (seatId) {
+        const seat = seats.find((s) => s.id === seatId);
         if (seat) {
           // Stand up a step behind the chair (in front of sofas and benches, which stand against a wall).
           const back: Vec2 = seat.exit ?? [seat.pos[0] + Math.sin(seat.facing) * 0.75, seat.pos[1] + Math.cos(seat.facing) * 0.75];
@@ -261,7 +266,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       }
     }
 
-    const seat = ui.seatId ? seats.find((s) => s.id === ui.seatId) ?? null : null;
+    seatId = officeUi.get().seatId; // E may just have changed it
+    const seat = seatId ? seats.find((s) => s.id === seatId) ?? null : null;
     // Asked to look at something (e.g. the conference screen): turn there smoothly.
     if (input.lookAt && !seat?.monitor) {
       const [lx, ly, lz] = input.lookAt;
@@ -323,7 +329,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       camera.position.copy(camTarget.current);
       camera.rotation.set(pitch.current, yaw.current, 0, 'YXZ');
     }
-    finish(moving, ui.seatId, now);
+    finish(moving, seatId, now);
   });
 
   function finish(moving: number, seatId: string | null, now: number) {
