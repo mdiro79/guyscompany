@@ -45,6 +45,7 @@ alter table meetings enable row level security;
 alter table meeting_attendance enable row level security;
 alter table meeting_notes enable row level security;
 alter table shared_notes enable row level security;
+alter table posts enable row level security;
 
 create policy "read" on profiles for select to authenticated using (public.is_member());
 create policy "read" on projects for select to authenticated using (public.is_member());
@@ -85,6 +86,8 @@ create policy "read" on meetings for select to authenticated using (public.is_me
 create policy "read" on meeting_attendance for select to authenticated using (public.is_member());
 create policy "read own" on meeting_notes for select to authenticated using (user_id = auth.uid());
 create policy "read" on shared_notes for select to authenticated using (public.is_member());
+-- Team pulse (announcements, kudos, standups): open to the whole team.
+create policy "read" on posts for select to authenticated using (public.is_member());
 
 -- Realtime change events for live refresh (not meeting_attendance: its regular "still here" updates
 -- would refresh every page; the office shows who is in the room from the live connections instead).
@@ -94,7 +97,7 @@ begin
   if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
   foreach t in array array['tasks','messages','reactions','notifications','polls','poll_votes','profiles','offices','files',
     'focus_items','todos','todo_stats','rooms','issues','issue_comments','project_ideas','idea_votes','milestones','calendar_events','projects','project_roles','office_swap_requests','private_chat_invites',
-    'meetings','meeting_notes','shared_notes'] loop
+    'meetings','meeting_notes','shared_notes','posts'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
     end if;

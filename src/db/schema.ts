@@ -214,6 +214,24 @@ export const rooms = pgTable('rooms', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [check('room_ranges', sql`${t.light} between 0 and 100 and ${t.warmth} between 0 and 100 and ${t.frost} between 0 and 100`)]);
 
+// Team pulse: announcements, kudos and daily standups in one small table.
+export const posts = pgTable('posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: text('kind').notNull(),
+  authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'cascade' }),
+  targetId: uuid('target_id').references(() => profiles.id, { onDelete: 'cascade' }),
+  body: text('body').notNull().default(''),
+  did: text('did').notNull().default(''),
+  blockers: text('blockers').notNull().default(''),
+  badge: text('badge').notNull().default(''),
+  pinned: boolean('pinned').notNull().default(false),
+  day: date('day'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('posts_created_idx').on(t.createdAt),
+  check('post_kind', sql`${t.kind} in ('announcement', 'kudos', 'standup')`),
+]);
+
 export const calendarEvents = pgTable('calendar_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),

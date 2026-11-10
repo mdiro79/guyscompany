@@ -110,7 +110,9 @@
     "menu": "Menu",
     "ideas": "Ideas & votes",
     "board": "Drawing board",
-    "meetings": "Meetings & notes"
+    "meetings": "Meetings & notes",
+    "pulse": "Team pulse",
+    "insights": "Insights"
   },
   "meetings": {
     "title": "Meetings & notes",
@@ -381,7 +383,8 @@
     "swap_request": "{name} wants to swap offices with you",
     "chat_invite": "{name} invited you to a private office chat",
     "role_volunteer": "{name} volunteered for “{title}”",
-    "mention": "{name} mentioned you in chat"
+    "mention": "{name} mentioned you in chat",
+    "kudos": "{name} sent you kudos 🙏"
   },
   "voice": {
     "micPhone": "Mic (Phone)",
@@ -895,5 +898,88 @@
     "next": "Next",
     "done": "Let's go",
     "skip": "Skip"
+  },
+  "pulse": {
+    "title": "Team pulse",
+    "subtitle": "The daily standup, kudos for teammates and announcements, all in one place.",
+    "tab": {
+      "standup": "Today's standup",
+      "kudos": "Kudos",
+      "news": "Announcements"
+    },
+    "remove": "Remove",
+    "emptyError": "Write at least one of the parts.",
+    "standup": {
+      "write": "My standup",
+      "edit": "Edit today's standup",
+      "post": "Post standup",
+      "update": "Update",
+      "did": "What I did",
+      "plan": "What I will do today",
+      "blockers": "Blockers",
+      "didHint": "Since the last standup…",
+      "planHint": "The most important things today…",
+      "blockersHint": "Is anything in your way? (optional)",
+      "today": "{done} of {all} have posted today",
+      "blockedCount": "{n} blocked",
+      "notYet": "Not posted yet",
+      "streak": "{n} days in a row"
+    },
+    "kudos": {
+      "send": "Send kudos to a teammate",
+      "who": "Who is it for?",
+      "for": "What for?",
+      "note": "Note",
+      "noteHint": "What did they do that stood out? (optional)",
+      "submit": "Send kudos",
+      "to": "to",
+      "board": "Most appreciated (last 60 days)",
+      "received": "{n} kudos",
+      "empty": "No kudos yet. Be the first to send one."
+    },
+    "badge": {
+      "thanks": "Thanks",
+      "teamwork": "Teamwork",
+      "idea": "Great idea",
+      "quality": "Quality",
+      "speed": "Speed",
+      "help": "Timely help"
+    },
+    "news": {
+      "write": "New announcement",
+      "hint": "Something the whole team should know…",
+      "post": "Publish",
+      "pinIt": "Pin it (top of the list and the home page)",
+      "pinned": "Pinned",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "empty": "No announcements."
+    },
+    "home": {
+      "title": "Team pulse",
+      "standups": "{done} of {all} standups today",
+      "writeMine": "My standup",
+      "done": "Posted ✓",
+      "open": "Open",
+      "latestKudos": "Latest kudos"
+    }
+  },
+  "insights": {
+    "title": "Team insights",
+    "subtitle": "The big picture of tasks, projects and people, worked out from the app's own data.",
+    "openTasks": "Open tasks",
+    "doneWeek": "Done in 7 days",
+    "overdue": "Overdue",
+    "openBugs": "Open bugs",
+    "meetingHours": "Meeting hours (30 days)",
+    "kudosMonth": "Kudos (30 days)",
+    "trend": "Trend of the last 4 weeks",
+    "whereWork": "Where the work sits",
+    "projects": "Projects",
+    "noProjects": "No projects.",
+    "people": "People",
+    "doneMonth": "{n} done in 30 days",
+    "kudosGot": "{n} kudos",
+    "streak": "{n}-day standup streak"
   }
 }

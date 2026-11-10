@@ -43,6 +43,13 @@
       "when": 1793048906612,
       "tag": "0005_meeting_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794314663503,
+      "tag": "0006_team_pulse",
+      "breakpoints": true
     }
   ]
 }

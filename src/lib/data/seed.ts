@@ -1,4 +1,4 @@
-import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
+import type { Post, Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
 import { todayIso } from '@/lib/format';
 import { addDays } from '@/lib/todos';
 
@@ -155,5 +155,15 @@ export function createSeed() {
     xp: 420, counters: { done: 23, urgent: 5, early: 2, bestStreak: 5, questDays: 2, lastQuestDay: null, cat: { personal: 12, work: 6, learning: 4, health: 1 } },
   }]];
 
-  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, todoStats, events, notifications, issues, comments, ideas, milestones };
+  const post = (n: number, kind: Post['kind'], authorId: string, minutes: number, o: Partial<Post>): Post => ({
+    id: `b0000000-0000-4000-8000-${String(n).padStart(12, '0')}`, kind, authorId, targetId: null, body: '', did: '', blockers: '', badge: '', pinned: false, day: null, createdAt: ago(minutes), ...o,
+  });
+  const posts: Post[] = [
+    post(1, 'announcement', ids.mehdi, 60 * 20, { body: 'نسخه‌ی جدید دفتر سه‌بعدی آماده است: کافه، کتابخانه، اتاق سرگرمی و حیاط اضافه شده. سر بزنید!', pinned: true }),
+    post(2, 'kudos', ids.sara, 60 * 5, { targetId: ids.nima, badge: 'speed', body: 'صفحه‌ی ورود را یک‌روزه بازنویسی کرد و سرعتش دو برابر شد.' }),
+    post(3, 'kudos', ids.mehdi, 60 * 30, { targetId: ids.reza, badge: 'help', body: 'Thanks for staying late to help with the release.' }),
+    post(4, 'standup', ids.sara, 90, { day: day(0), did: 'طرح صفحه‌ی پروژه‌ها را تمام کردم.', body: 'آیکن‌های جدید و بازبینی رنگ‌ها.', blockers: '' }),
+    post(5, 'standup', ids.nima, 150, { day: day(0), did: 'Fixed the login redirect bug.', body: 'Performance pass on the dashboard.', blockers: 'Need the new logo files from design.' }),
+  ];
+  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, todoStats, events, notifications, issues, comments, ideas, milestones, posts };
 }

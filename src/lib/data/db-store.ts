@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql }
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
 import { cleanCounters, emptyCounters } from '@/lib/todo-game';
-import { OFFICE_DEFAULTS, type DataStore, type Issue, type IssueComment, type Meeting, type MeetingAttendance, type MeetingNote, type Message, type Milestone, type Notification, type ProjectIdea, type Room, type SharedNote, type Todo } from './types';
+import { OFFICE_DEFAULTS, type DataStore, type Issue, type IssueComment, type Meeting, type MeetingAttendance, type MeetingNote, type Message, type Milestone, type Notification, type Post, type ProjectIdea, type Room, type SharedNote, type Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -186,6 +186,21 @@ export function createDbStore(injected?: Db): DataStore {
       return iso<SharedNote>(r);
     },
     async deleteSharedNote(id, authorId) { await db().delete(s.sharedNotes).where(and(eq(s.sharedNotes.id, id), eq(s.sharedNotes.authorId, authorId))); },
+
+    async listPosts(since, limit) {
+      return isoAll<Post>(await db().select().from(s.posts).where(gte(s.posts.createdAt, new Date(since))).orderBy(desc(s.posts.createdAt)).limit(limit));
+    },
+    async getPost(id) { const [r] = await db().select().from(s.posts).where(eq(s.posts.id, id)); return r ? iso<Post>(r) : null; },
+    async createPost(p) { const [r] = await db().insert(s.posts).values(p).returning(); return iso<Post>(r); },
+    async saveStandup(authorId, day, text) {
+      const [old] = await db().select({ id: s.posts.id }).from(s.posts).where(and(eq(s.posts.kind, 'standup'), eq(s.posts.authorId, authorId), eq(s.posts.day, day)));
+      const [r] = old
+        ? await db().update(s.posts).set(text).where(eq(s.posts.id, old.id)).returning()
+        : await db().insert(s.posts).values({ kind: 'standup', authorId, day, ...text }).returning();
+      return iso<Post>(r);
+    },
+    async updatePost(id, patch) { await db().update(s.posts).set(patch).where(eq(s.posts.id, id)); },
+    async deletePost(id) { await db().delete(s.posts).where(eq(s.posts.id, id)); },
 
     async getRoom(id) { const [r] = await db().select().from(s.rooms).where(eq(s.rooms.id, id)); return r ? iso<Room>(r) : null; },
     async updateRoom(id, patch) {

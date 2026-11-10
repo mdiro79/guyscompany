@@ -1,7 +1,7 @@
 import type {
   DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
   Issue, IssueComment, ProjectIdea, Milestone, Meeting, MeetingAttendance, MeetingNote, SharedNote,
-  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask,
+  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post,
 } from './types';
 import { OFFICE_DEFAULTS } from './types';
 import { createSeed } from './seed';
@@ -35,6 +35,7 @@ export function createMemoryStore(): DataStore {
     shared: [] as SharedNote[],
     rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
+    posts: seed.posts as Post[],
     notifications: seed.notifications as Notification[],
     offices: seed.offices as Office[],
     visits: [] as OfficeVisit[],
@@ -191,6 +192,21 @@ export function createMemoryStore(): DataStore {
       Object.assign(r, patch, { updatedAt: now() });
       return clone(r);
     },
+
+    async listPosts(since, limit) { return clone(db.posts.filter((p) => p.createdAt >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit)); },
+    async getPost(id) { return clone(db.posts.find((p) => p.id === id) ?? null); },
+    async createPost(p) {
+      const x: Post = { targetId: null, did: '', blockers: '', badge: '', pinned: false, day: null, ...p, id: uuid(), createdAt: now() };
+      db.posts.push(x);
+      return clone(x);
+    },
+    async saveStandup(authorId, day, text) {
+      const old = db.posts.find((p) => p.kind === 'standup' && p.authorId === authorId && p.day === day);
+      if (old) { Object.assign(old, text); return clone(old); }
+      return this.createPost({ kind: 'standup', authorId, day, ...text });
+    },
+    async updatePost(id, patch) { patchIn(db.posts, (p) => p.id === id, patch); },
+    async deletePost(id) { db.posts = db.posts.filter((p) => p.id !== id); },
 
     async listEvents(from, to) { return clone(db.events.filter((e) => e.endsAt >= from && e.startsAt <= to)); },
     async createEvent(e) { const x = { ...e, id: uuid() }; db.events.push(x); return clone(x); },

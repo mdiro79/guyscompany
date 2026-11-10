@@ -157,6 +157,25 @@ describe('db store', () => {
     expect(await store.listIssues(p.id)).toEqual([]);
     expect(await store.listIdeas(p.id)).toEqual([]);
   });
+  it('team pulse: posts newest first, one standup per member and day, pin and delete', async () => {
+    const since = new Date(Date.now() - 60000).toISOString();
+    const a = await store.createPost({ kind: 'announcement', authorId: A, body: 'Release on Friday' });
+    expect(a).toMatchObject({ kind: 'announcement', pinned: false, targetId: null, day: null, did: '', badge: '' });
+    await store.createPost({ kind: 'kudos', authorId: A, targetId: B, badge: 'help', body: 'Thanks!' });
+    const s1 = await store.saveStandup(A, '2026-11-10', { did: 'x', body: 'y', blockers: '' });
+    const s2 = await store.saveStandup(A, '2026-11-10', { did: 'x2', body: 'y2', blockers: 'z' });
+    expect(s2.id).toBe(s1.id);
+    await store.saveStandup(B, '2026-11-10', { did: '', body: 'b', blockers: '' });
+    const all = await store.listPosts(since, 50);
+    expect(all.filter((p) => p.kind === 'standup').map((p) => p.body).sort()).toEqual(['b', 'y2']);
+    expect(all).toHaveLength(4);
+    await store.updatePost(a.id, { pinned: true });
+    expect((await store.getPost(a.id))?.pinned).toBe(true);
+    await store.deletePost(a.id);
+    expect(await store.getPost(a.id)).toBeNull();
+    await expect(store.createPost({ kind: 'nope' as never, authorId: A, body: '' })).rejects.toThrow();
+    expect(await store.listPosts(new Date(Date.now() + 60000).toISOString(), 50)).toEqual([]);
+  });
   it('room settings: upsert, partial update and range check', async () => {
     expect(await store.getRoom('conference')).toBeNull();
     expect(await store.updateRoom('conference', { light: 30 })).toMatchObject({ id: 'conference', light: 30, warmth: 40, frost: 0 });
