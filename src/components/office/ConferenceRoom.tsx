@@ -12,6 +12,8 @@ import { drawBoard, memberColor } from '@/lib/board/draw';
 import { BOARD_H, BOARD_W, onPage } from '@/lib/board/model';
 import { boardOf, lasersOn, presentation, subscribeBoards, writingNow } from '@/lib/board/sync';
 import { handQueue, subscribeHands } from '@/lib/board/hands';
+import { quickVote, subscribeQuickVote, tally } from '@/lib/board/vote';
+import { useVoice } from '@/components/voice/VoiceContext';
 import { syncedNow } from '@/lib/realtime/room';
 import { clockText } from '@/lib/meetings';
 import { Batch, batchMaterials } from './batch';
@@ -292,6 +294,9 @@ const colorOf = (people: Person[], id: string) => memberColor(people.map((p) => 
 const clock = (ms: number) => { const s = Math.ceil(Math.abs(ms) / 1000); return `${ms < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] }) {
+  const voice = useVoice();
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
   const { tex, cv } = useMemo(() => {
     const cv = document.createElement('canvas');
     [cv.width, cv.height] = SCREEN_PX;
@@ -318,7 +323,11 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
       const left = p.timerEnd ? p.timerEnd - syncedNow() : null;
       const writers = board ? people.filter((x) => writingNow(x.id)).map((x) => x.id).join() : '';
       const elapsed = labels.startedAt ? clockText(Math.max(0, Math.round((syncedNow() - Date.parse(labels.startedAt)) / 1000))) : undefined;
-      const key = [who, left === null ? '' : clock(left), writers, elapsed].join('|');
+      // Whoever is talking loudest right now (their voice level), if anyone.
+      let speaking: string | undefined, loudest = 0.12;
+      for (const x of people) { const lv = voiceRef.current.getLevel(x.id); if (lv > loudest) { loudest = lv; speaking = x.name; } }
+      const qv = quickVote.get();
+      const key = [who, left === null ? '' : clock(left), writers, elapsed, speaking, qv ? JSON.stringify(qv) : ''].join('|');
       const refs = [board, p, hands];
       if (!force && key === shown && refs.every((r, i) => r === shownRefs[i])) return;
       shown = key; shownRefs = refs;
@@ -331,17 +340,19 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
         presenter: who ? nameOf(who) ?? '' : undefined, page: board && board.pages > 1 ? `${board.page + 1}/${board.pages}` : undefined,
         timer: who && left !== null ? { text: clock(left), late: left < 0, soon: left >= 0 && left < 60_000 } : undefined, elapsed,
         hands: hands.map((id) => nameOf(id) ?? '').filter(Boolean), handsLabel: labels.hands, rtl: labels.rtl,
+        speaking, vote: qv ? { question: qv.question, open: qv.open, ...tally(qv) } : undefined,
       });
       tex.needsUpdate = true;
     };
     const schedule = (force = false) => { if (force) shown = '\0'; if (!raf) raf = requestAnimationFrame(() => paint()); };
     const offBoards = subscribeBoards(() => schedule());
     const offHands = subscribeHands(() => schedule());
-    const tick = setInterval(() => schedule(), 1000);
+    const offVote = subscribeQuickVote(() => schedule());
+    const tick = setInterval(() => schedule(), 500);
     paint(true);
     const fam = labels.rtl ? '"Vazirmatn Variable"' : '"Inter Variable"';
     Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(() => schedule(true), () => {});
-    return () => { live = false; offBoards(); offHands(); clearInterval(tick); cancelAnimationFrame(raf); };
+    return () => { live = false; offBoards(); offHands(); offVote(); clearInterval(tick); cancelAnimationFrame(raf); };
   }, [cv, tex, labels, people]);
   useEffect(() => () => tex.dispose(), [tex]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;

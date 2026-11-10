@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
 import { buildWalls, doorSegments, propColliders, allSeats, stations, officeAt, inConference, areaAt, doorCenter, CONF_WALL_PANEL, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
 import { resolveCollisions } from './collision';
-import { input, officeUi, type Interact } from './store';
+import { input, officeUi, lockPointer, type Interact } from './store';
 import { DOORS, doorLeaves, isDoorOpen, toggleDoor, setDoor } from './doors';
 import { tour, guide, me, pointAt, startTourFor, GUIDE_SPEED, PLAYER_DELAY } from './tour';
 import type { RemoteAvatar } from './useOfficeNet';
@@ -98,7 +98,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       lastLocalInput.current = syncedNow();
     };
     // A click that pressed a button on the seat tablet does not start mouse look.
-    const click = () => { if (!isPhone && canLook() && performance.now() - tabletHit.pressedAt > 500) el.requestPointerLock?.(); };
+    const click = () => { if (!isPhone && canLook() && performance.now() - tabletHit.pressedAt > 500) lockPointer(el); };
     const lock = () => officeUi.set({ locked: document.pointerLockElement === el });
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);

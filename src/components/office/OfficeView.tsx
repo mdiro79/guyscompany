@@ -18,10 +18,11 @@ import { useDevice, isEmbedded } from '@/lib/device';
 import { recordVisitAction, updateMyOfficeAction, claimOfficeAction } from '@/app/actions/offices';
 import { OFFICE_DEFAULTS, type FileMeta, type Message, type Office, type Room } from '@/lib/data/types';
 import { useOfficeNet } from './useOfficeNet';
-import { officeUi, input, useOfficeUi } from './store';
+import { officeUi, input, useOfficeUi, lockPointer } from './store';
 import { EMOTES } from './emotes';
 import { officeAt, inConference, allSeats, onDanceFloor, SPAWN, CONF_SCREEN } from './layout';
 import { MiniMap } from './MiniMap';
+import { QuickVotePanel } from './QuickVotePanel';
 import { ArcadeGame } from './play/ArcadeGame';
 import { JukeboxPanel } from './play/JukeboxPanel';
 import { XoPanel } from './play/XoPanel';
@@ -158,7 +159,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   }, []);
   const closeChat = useCallback(() => {
     officeUi.set({ chat: false });
-    if (chatRelock.current && !isPhone && canLook()) canvas()?.requestPointerLock?.();
+    if (chatRelock.current && !isPhone && canLook()) lockPointer(canvas());
     chatRelock.current = false;
   }, [isPhone]);
   const seat = ui.seatId ? SEATS.find((s) => s.id === ui.seatId) ?? null : null;
@@ -243,10 +244,12 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     return () => clearInterval(id);
   }, [dancing, sendEmoteNow]);
   const [more, setMore] = useState(false);
+  const [voteOpen, setVoteOpen] = useState(false);
+  useEffect(() => { if (!ui.inConference) setVoteOpen(false); }, [ui.inConference]);
   const focusTimer = useFocusTimer();
   const closeOverlay = useCallback(() => {
     officeUi.set({ overlay: 'none' });
-    if (!isPhone && canLook()) canvas()?.requestPointerLock?.();
+    if (!isPhone && canLook()) lockPointer(canvas());
   }, [isPhone]);
   const openMap = useCallback(() => {
     if (document.pointerLockElement) document.exitPointerLock();
@@ -265,7 +268,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   const sendEmote = useCallback((id: (typeof EMOTES)[number]['id']) => {
     net.sendEmote(id);
     officeUi.set({ emoteWheel: false });
-    if (relock.current && canLook()) canvas()?.requestPointerLock?.();
+    if (relock.current && canLook()) lockPointer(canvas());
     relock.current = false;
   }, [net]);
 
@@ -278,7 +281,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       if (e.code === 'Tab' && !isPhone) {
         e.preventDefault();
         if (document.pointerLockElement) document.exitPointerLock();
-        else if (canLook()) canvas()?.requestPointerLock?.();
+        else if (canLook()) lockPointer(canvas());
         return;
       }
       // Enter or T opens the team chat (Enter belongs to the tour while it runs).
@@ -290,7 +293,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
       if (e.code === 'KeyN' && !e.repeat && !working && officeUi.get().overlay === 'none') { openMap(); return; }
-      if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false, overlay: 'none' }); setMeetingPanelState('none'); setMore(false); }
+      if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false, overlay: 'none' }); setMeetingPanelState('none'); setMore(false); setVoteOpen(false); }
       const n = Number(e.key);
       if (officeUi.get().emoteWheel && n >= 1 && n <= 9) sendEmote(EMOTES[n - 1].id);
     };
@@ -682,6 +685,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {!touring && ui.board === 'none' && ui.inConference && (
         <div className="absolute top-[4.25rem] left-1/2 z-30 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap justify-center gap-2 short:top-14">
           <MeetingPanel data={meetingData} running={running} mode={meetingPanel} onMode={setMeetingPanel} presentNow={presentNow} />
+          <QuickVotePanel meId={user.id} names={(id) => profiles.find((p) => p.id === id)?.displayName ?? '—'} open={voteOpen} onOpen={(o) => { if (o && document.pointerLockElement) document.exitPointerLock(); setVoteOpen(o); }} />
           {atTable && (
             <button type="button" onClick={() => openBoard('mine')}
               className="flex min-h-11 items-center gap-2 rounded-xl bg-[#2f5d45] px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95">

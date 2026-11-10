@@ -256,6 +256,7 @@ let mesh: Mesh | null = null;
 export function getMesh(userId: string, device: 'phone' | 'computer'): Mesh | null {
   if (typeof window === 'undefined') return null;
   mesh ??= new Mesh(userId, device);
+  (window as unknown as { __gcMesh?: Mesh }).__gcMesh = mesh; // for the test scripts and the debug badge
   mesh.self.device = device;
   return mesh;
 }

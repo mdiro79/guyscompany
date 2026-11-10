@@ -61,3 +61,9 @@ export const input = {
   moving: false, // set by the player controller
   teleport: null as { x: number; z: number; yaw: number } | null, // jump there on the next frame (the map)
 };
+
+// Asks for mouse look. Browsers refuse without a fresh click or key press (and after Esc for a moment);
+// that is fine and must not surface as an error.
+export function lockPointer(el: HTMLElement | null | undefined) {
+  try { void (el?.requestPointerLock?.() as unknown as Promise<void> | undefined)?.catch?.(() => {}); } catch { /* refused */ }
+}

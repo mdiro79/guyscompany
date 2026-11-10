@@ -167,7 +167,9 @@ export function paintScreen(c: HTMLCanvasElement, l: MeetingLabels) {
 }
 
 /** What the conference screen shows around a presentation: who presents and the page, the countdown, raised hands. */
-export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; elapsed?: string; hands: string[]; handsLabel: string; rtl: boolean }
+export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; elapsed?: string; hands: string[]; handsLabel: string; rtl: boolean;
+  speaking?: string; // who is talking right now
+  vote?: { question: string; yes: number; no: number; unsure: number; open: boolean } }
 
 // Small pills in the screen's corners over the board (or the meeting page): presenter and page at the
 // top on the reading side, the countdown on the other, raised hands at the bottom.
@@ -194,6 +196,12 @@ export function paintScreenInfo(c: HTMLCanvasElement, info: ScreenInfo) {
   if (info.elapsed && !info.timer) pillAt(`⏱ ${info.elapsed}`, 'end', pad, 'rgba(31,35,40,0.6)');
   if (info.timer) pillAt(info.timer.text, 'end', pad, info.timer.late ? 'rgba(217,68,60,0.95)' : info.timer.soon ? 'rgba(240,138,36,0.95)' : 'rgba(31,35,40,0.82)');
   if (info.hands.length) pillAt(`${info.handsLabel}: ${info.hands.join(info.rtl ? '، ' : ', ')}`, 'start', H - pad - ph, 'rgba(91,141,239,0.95)', 'raiseHand');
+  if (info.speaking) pillAt(`🎙 ${info.speaking}`, 'end', H - pad - ph, 'rgba(34,165,89,0.95)');
+  // The quick vote: its question and the count so far, above the bottom row.
+  if (info.vote) {
+    const v = info.vote;
+    pillAt(`${v.open ? '🗳' : '✅'} ${v.question ? `${v.question}  ` : ''}👍 ${v.yes}   👎 ${v.no}   🤔 ${v.unsure}`, 'start', H - pad - ph * 2 - 14 * u, v.open ? 'rgba(31,35,40,0.86)' : 'rgba(47,93,69,0.95)');
+  }
   g.direction = 'ltr';
 }
 

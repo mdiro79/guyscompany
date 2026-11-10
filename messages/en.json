@@ -848,6 +848,22 @@
       "hint": "Pick a length and press start.",
       "running": "Stay focused; standing up does not stop the timer.",
       "done": "Done! Take a short break ☕"
+    },
+    "vote": {
+      "title": "Quick vote",
+      "close": "Close",
+      "defaultQuestion": "Do you agree?",
+      "hint": "Ask a question; everyone answers with 👍 👎 🤔 and the count shows live on the big screen.",
+      "placeholder": "Question (optional)",
+      "start": "Start the vote",
+      "end": "End the vote",
+      "clear": "Take it off the screen",
+      "yes": "Yes",
+      "no": "No",
+      "unsure": "Not sure",
+      "askedBy": "Asked by {name}",
+      "votes": "{n} votes so far",
+      "closed": "Closed · {n} votes"
     }
   },
   "emotes": {
