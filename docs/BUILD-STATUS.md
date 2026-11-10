@@ -19,3 +19,14 @@ All stages of `BUILD-INSTRUCTIONS.md` are implemented on branch `claude/vibrant-
 - Real Supabase/Vercel run: no keys in this environment. Setup steps are in `README.md` (`supabase-setup.sql` adds RLS, Realtime, office slots and the storage bucket).
 - Voice between different people and multiplayer between different users across networks (demo mode connects tabs of one browser only).
 - TURN quota: not checked live (provider sites are blocked here). Free options to evaluate: Cloudflare Realtime TURN and Metered Open Relay; set `NEXT_PUBLIC_TURN_*`.
+
+## After the build stages (see `docs/DECISIONS.md` for the details)
+| Addition | How it was checked |
+|---|---|
+| Game room, café, library, garden, notice kiosk, office map | `scripts/office-play.cjs` on desktop, phone portrait and landscape; layout tests (every seat has room to stand up, tour paths stay clear) |
+| Merged scenery, light pool, paused drawing | `scripts/office-stats.cjs` before and after (760 → about 215 draw calls from the entrance) |
+| Mesh: heartbeat, round trip, rebuild | `scripts/multi-test.cjs` (two browser profiles linked, events both ways) |
+| Quick vote, game table | unit tests with two module copies on a pretend mesh |
+| Team pulse, insights, task priority and steps | store tests on PGlite (migrations 0006, 0007), screenshots on phone and desktop |
+
+Still not verified here: a real Supabase/Vercel run of the new migrations, sound of the jukebox by ear, and the office on a real phone's GPU (this environment renders in software).

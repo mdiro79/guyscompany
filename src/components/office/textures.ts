@@ -167,7 +167,9 @@ export function paintScreen(c: HTMLCanvasElement, l: MeetingLabels) {
 }
 
 /** What the conference screen shows around a presentation: who presents and the page, the countdown, raised hands. */
-export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; elapsed?: string; hands: string[]; handsLabel: string; rtl: boolean }
+export interface ScreenInfo { presenter?: string; page?: string; timer?: { text: string; late: boolean; soon: boolean }; elapsed?: string; hands: string[]; handsLabel: string; rtl: boolean;
+  speaking?: string; // who is talking right now
+  vote?: { question: string; yes: number; no: number; unsure: number; open: boolean } }
 
 // Small pills in the screen's corners over the board (or the meeting page): presenter and page at the
 // top on the reading side, the countdown on the other, raised hands at the bottom.
@@ -194,6 +196,12 @@ export function paintScreenInfo(c: HTMLCanvasElement, info: ScreenInfo) {
   if (info.elapsed && !info.timer) pillAt(`⏱ ${info.elapsed}`, 'end', pad, 'rgba(31,35,40,0.6)');
   if (info.timer) pillAt(info.timer.text, 'end', pad, info.timer.late ? 'rgba(217,68,60,0.95)' : info.timer.soon ? 'rgba(240,138,36,0.95)' : 'rgba(31,35,40,0.82)');
   if (info.hands.length) pillAt(`${info.handsLabel}: ${info.hands.join(info.rtl ? '، ' : ', ')}`, 'start', H - pad - ph, 'rgba(91,141,239,0.95)', 'raiseHand');
+  if (info.speaking) pillAt(`🎙 ${info.speaking}`, 'end', H - pad - ph, 'rgba(34,165,89,0.95)');
+  // The quick vote: its question and the count so far, above the bottom row.
+  if (info.vote) {
+    const v = info.vote;
+    pillAt(`${v.open ? '🗳' : '✅'} ${v.question ? `${v.question}  ` : ''}👍 ${v.yes}   👎 ${v.no}   🤔 ${v.unsure}`, 'start', H - pad - ph * 2 - 14 * u, v.open ? 'rgba(31,35,40,0.86)' : 'rgba(47,93,69,0.95)');
+  }
   g.direction = 'ltr';
 }
 
@@ -221,4 +229,30 @@ export function paintRoomPanel(c: HTMLCanvasElement, s: { light: number; warmth:
   g.font = '600 36px "Inter Variable", system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,0.9)';
   g.fillText(`${s.frost}%`, W / 2, 330);
   bar(346, s.frost, '#bfe9e1');
+}
+
+const hasArabic = (s: string) => /[؀-ۿ]/.test(s);
+export const signFont = (text: string, weight: number, px: number) => font(hasArabic(text), weight, px);
+
+// A glowing sign: bright text with a soft halo of its colour on a transparent background.
+export function neonSign(text: string, color: string, opts: { w?: number; h?: number; sub?: string } = {}) {
+  const W = opts.w ?? 768, Hh = opts.h ?? 192;
+  const [c, g] = canvas(W, Hh);
+  const paint = () => {
+    g.clearRect(0, 0, W, Hh);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const size = Hh * (opts.sub ? 0.42 : 0.5);
+    g.font = signFont(text, 800, size);
+    const y = opts.sub ? Hh * 0.38 : Hh * 0.52;
+    g.shadowColor = color; g.shadowBlur = Hh * 0.16; g.fillStyle = color;
+    g.fillText(text, W / 2, y, W * 0.94); g.fillText(text, W / 2, y, W * 0.94);
+    g.shadowBlur = 0; g.fillStyle = 'rgba(255,255,255,0.92)';
+    g.fillText(text, W / 2, y, W * 0.94);
+    if (opts.sub) { g.font = signFont(opts.sub, 600, Hh * 0.2); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillText(opts.sub, W / 2, Hh * 0.78, W * 0.9); }
+  };
+  paint();
+  const t = texture(c);
+  // Once the web fonts are in, paint again with them.
+  document.fonts?.ready.then(() => { paint(); t.needsUpdate = true; }, () => {});
+  return t;
 }

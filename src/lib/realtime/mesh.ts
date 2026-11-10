@@ -21,7 +21,17 @@ interface Peer {
   // Signals are handled one at a time, and candidates wait for the remote description.
   queue: Promise<void>;
   pendingIce: RTCIceCandidateInit[];
+  rtt: number; // smoothed round trip in ms (-1 until measured)
+  lastSeen: number; // when anything last arrived on a data channel
+  downSince: number; // since when the link has not been connected (0 while it is)
 }
+
+// How a teammate's link is doing, for the people list in the office.
+export interface LinkInfo { userId: string; tabId: string; device: 'phone' | 'computer'; state: 'connected' | 'connecting' | 'lost'; rtt: number }
+
+const PING_MS = 2500;
+const STATE_BUFFER_LIMIT = 16 * 1024; // a pose that would queue behind this much is dropped (a newer one follows)
+const REBUILD_AFTER_MS = 30000; // a link that stays down this long is thrown away and built again
 
 const STUN: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 
@@ -56,12 +66,51 @@ export class Mesh {
     this.room.onPresence((list) => { this.presence = list; void this.ready.then(() => this.syncPeers(list)); });
     // Stuck links (never connected, or dropped) get an ICE restart instead of staying silent forever.
     setInterval(() => {
-      for (const p of this.peers.values()) {
+      const now = Date.now();
+      for (const p of [...this.peers.values()]) {
         const state = p.pc.connectionState;
-        if (state === 'connected' || state === 'closed') continue;
-        if (Date.now() - p.createdAt > 15000 && !p.polite) p.pc.restartIce();
+        if (state === 'connected') { p.downSince = 0; continue; }
+        if (state === 'closed') continue;
+        p.downSince ||= now;
+        // Restarting ICE did not help for a long while: start over with a fresh connection.
+        if (!p.polite && now - p.downSince > REBUILD_AFTER_MS) { this.rebuild(p); continue; }
+        if (now - p.createdAt > 15000 && !p.polite) p.pc.restartIce();
       }
     }, 8000);
+    // Round-trip time of every link (shown in the office's people list).
+    setInterval(() => {
+      const data = JSON.stringify({ type: '__ping', t: performance.now() });
+      for (const p of this.peers.values()) if (p.events?.readyState === 'open') p.events.send(data);
+    }, PING_MS);
+    // Back from the background or from a network change: do not wait for the next check.
+    const revive = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      for (const p of this.peers.values()) if (p.pc.connectionState !== 'connected' && p.pc.connectionState !== 'closed' && !p.polite) p.pc.restartIce();
+    };
+    if (typeof window !== 'undefined') { window.addEventListener('online', revive); document.addEventListener('visibilitychange', revive); }
+  }
+
+  /** Every link of the mesh with its state and round-trip time. */
+  links(): LinkInfo[] {
+    return [...this.peers.values()].map((p) => ({
+      userId: p.info.userId, tabId: p.info.tabId, device: p.info.device, rtt: Math.round(p.rtt),
+      state: p.pc.connectionState === 'connected' && p.state?.readyState === 'open' ? 'connected' : p.downSince && Date.now() - p.downSince > 12000 ? 'lost' : 'connecting',
+    }));
+  }
+
+  // Closes a dead link on both sides and, as the initiator, builds a new one (new ICE candidates, relay included).
+  private rebuild(p: Peer) {
+    this.signal(p.info.tabId, { type: 'reset' });
+    this.drop(p);
+    if (this.presence.some((m) => m.tabId === p.info.tabId)) this.createPeer(p.info, true);
+    this.emitPeers();
+  }
+
+  private drop(p: Peer) {
+    p.pc.onconnectionstatechange = null;
+    p.pc.close();
+    if (this.peers.get(p.info.tabId) === p) this.peers.delete(p.info.tabId);
+    this.trackListeners.forEach((cb) => cb(p.info, null));
   }
 
   get presenceList() { return this.presence; }
@@ -76,7 +125,7 @@ export class Mesh {
 
   sendState(msg: Record<string, unknown>) {
     const data = JSON.stringify(msg);
-    for (const p of this.peers.values()) if (p.state?.readyState === 'open') p.state.send(data);
+    for (const p of this.peers.values()) if (p.state?.readyState === 'open' && p.state.bufferedAmount < STATE_BUFFER_LIMIT) p.state.send(data);
   }
 
   sendEvent(msg: Record<string, unknown>) {
@@ -99,7 +148,7 @@ export class Mesh {
     this.presence = list;
     const alive = new Set(list.map((m) => m.tabId));
     for (const [tabId, p] of this.peers) {
-      if (!alive.has(tabId)) { p.pc.close(); this.peers.delete(tabId); this.trackListeners.forEach((cb) => cb(p.info, null)); }
+      if (!alive.has(tabId)) this.drop(p);
     }
     for (const m of list) {
       if (m.tabId === this.self.tabId || this.peers.has(m.tabId)) continue;
@@ -111,7 +160,7 @@ export class Mesh {
 
   private createPeer(info: PeerInfo, initiator: boolean): Peer {
     const pc = new RTCPeerConnection({ iceServers: this.ice });
-    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [] };
+    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [], rtt: -1, lastSeen: 0, downSince: 0 };
     this.peers.set(info.tabId, peer);
     const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
     peer.sender = transceiver.sender;
@@ -120,6 +169,14 @@ export class Mesh {
       dc.onmessage = (e) => {
         let msg: Record<string, unknown>;
         try { msg = JSON.parse(String(e.data)); } catch { return; }
+        peer.lastSeen = Date.now();
+        // Round-trip measurement stays inside the mesh.
+        if (msg.type === '__ping') { if (dc.readyState === 'open') dc.send(JSON.stringify({ type: '__pong', t: msg.t })); return; }
+        if (msg.type === '__pong') {
+          const rtt = performance.now() - Number(msg.t);
+          if (rtt >= 0 && rtt < 60000) peer.rtt = peer.rtt < 0 ? rtt : peer.rtt + (rtt - peer.rtt) * 0.3;
+          return;
+        }
         (dc.label === 'state' ? this.stateListeners : this.eventListeners).forEach((cb) => cb(peer.info, msg));
       };
       if (dc.label === 'state') peer.state = dc; else peer.events = dc;
@@ -161,6 +218,8 @@ export class Mesh {
     if (msg.to !== this.self.tabId) return Promise.resolve();
     const from = String(msg.from);
     let peer = this.peers.get(from);
+    // The other side gave up on this link and is about to build a new one.
+    if (msg.type === 'reset') { if (peer) { this.drop(peer); this.emitPeers(); } return Promise.resolve(); }
     if (!peer) peer = this.createPeer({ tabId: from, userId: String(msg.fromUser), device: msg.fromDevice === 'phone' ? 'phone' : 'computer' }, false);
     const target = peer;
     target.queue = target.queue.then(() => this.handleSignal(target, msg));
@@ -197,6 +256,7 @@ let mesh: Mesh | null = null;
 export function getMesh(userId: string, device: 'phone' | 'computer'): Mesh | null {
   if (typeof window === 'undefined') return null;
   mesh ??= new Mesh(userId, device);
+  (window as unknown as { __gcMesh?: Mesh }).__gcMesh = mesh; // for the test scripts and the debug badge
   mesh.self.device = device;
   return mesh;
 }

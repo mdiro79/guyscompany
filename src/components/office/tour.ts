@@ -46,12 +46,14 @@ export function tourSteps(slot: number, ownOffice: boolean): TourStep[] {
       look: [mx, my - 0.1, mz],
     }
     : { key: 'desk', guide: [], player: [], look: [mx, my - 0.1, mz] };
-  const loungeGuide: Vec2 = [side * (OUT - 2.7), -1.5];
+  // The side arm next to the office (café in the west, library in the east): stop at its mouth, clear of the furniture.
+  const loungeGuide: Vec2 = [side * (H + 1.6), z(1.8)];
+  const loungePlayer: Vec2 = [side * (H + 0.8), z(0.6)];
   const lounge: TourStep = {
     key: 'lounge',
-    guide: inside ? [[cx + 0.2, z(H + 1.0)], [cx + 0.2, z(H - 1.4)], loungeGuide] : [loungeGuide],
-    player: inside ? [[cx + 0.15, z(H - 1.4)], [side * (OUT - 4.2), 0.4]] : [[side * (OUT - 4.2), 0.4]],
-    look: [side * (OUT - 0.6), 0.6, 0],
+    guide: inside ? [[cx + 0.2, z(H + 1.0)], [cx + 0.2, z(H - 1.4)], [side * (H + 1.7), z(H - 1.7)], loungeGuide] : [[side * (H + 1.7), z(H - 1.7)], loungeGuide],
+    player: inside ? [[cx + 0.15, z(H - 1.4)], [side * (H + 1.0), z(H - 1.6)], loungePlayer] : [[side * (H + 1.0), z(H - 1.6)], loungePlayer],
+    look: [side * (OUT - 3), 1.0, 0],
   };
   return [
     { key: 'welcome', guide: [[1.3, SEAT[1]], [1.3, Z + 0.9], [0.55, Z + 1.15]], player: [[-0.45, Z + 2.5]], look: 'guide' },

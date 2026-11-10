@@ -41,17 +41,20 @@ export function AdminView() {
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-3">
                 <Avatar profile={p} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium">{p.displayName} <span className="text-xs text-muted" dir="ltr">@{p.username}</span></div>
+                  <div className="truncate font-medium">{p.displayName} <span className="text-xs text-muted" dir="ltr">@{p.username}</span></div>
                   <div className="text-xs text-muted">{p.jobTitle}{p.mustChangePassword && <span className="ms-2 text-accent">· {t('mustChange')}</span>}</div>
                 </div>
-                <select className="input min-h-10 w-auto" value={p.role} disabled={p.id === user.id} onChange={(e) => run(() => setRoleAction(p.id, e.target.value as 'admin' | 'member'))}>
-                  <option value="member">{t('role_member')}</option><option value="admin">{t('role_admin')}</option>
-                </select>
-                <button type="button" className="btn-ghost min-h-10" onClick={() => run(() => resetPasswordAction(p.id))}><KeyRound className="size-4" />{t('resetPassword')}</button>
-                {p.id !== user.id && (
-                  <button type="button" className="icon-btn text-muted hover:text-danger" aria-label={tc('delete')}
-                    onClick={() => { if (confirm(t('confirmDelete', { name: p.displayName }))) run(() => deleteAccountAction(p.id)); }}><Trash2 className="size-5" /></button>
-                )}
+                {/* On phones the controls take their own row under the name, so nothing covers it. */}
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                  <select className="input min-h-10 w-auto flex-1 sm:flex-none" value={p.role} disabled={p.id === user.id} onChange={(e) => run(() => setRoleAction(p.id, e.target.value as 'admin' | 'member'))}>
+                    <option value="member">{t('role_member')}</option><option value="admin">{t('role_admin')}</option>
+                  </select>
+                  <button type="button" className="btn-ghost min-h-10" onClick={() => run(() => resetPasswordAction(p.id))}><KeyRound className="size-4" />{t('resetPassword')}</button>
+                  {p.id !== user.id && (
+                    <button type="button" className="icon-btn text-muted hover:text-danger" aria-label={tc('delete')}
+                      onClick={() => { if (confirm(t('confirmDelete', { name: p.displayName }))) run(() => deleteAccountAction(p.id)); }}><Trash2 className="size-5" /></button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

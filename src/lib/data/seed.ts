@@ -1,4 +1,4 @@
-import type { Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
+import type { Post, Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
 import { todayIso } from '@/lib/format';
 import { addDays } from '@/lib/todos';
 
@@ -37,7 +37,7 @@ export function createSeed() {
     n += 1;
     return {
       id: `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
-      projectId: p1, title, description, column, tags, assigneeId, needsVolunteer: false,
+      projectId: p1, title, description, column, tags, assigneeId, needsVolunteer: false, priority: 0, checklist: [],
       startDate: day(start), dueDate: day(due), position: n, createdBy: ids.mehdi,
       createdAt: ago(60 * 24 * (10 - n / 2)), updatedAt: ago(60 * n), ...extra,
     };
@@ -46,8 +46,10 @@ export function createSeed() {
     task('Redesign mobile app UI', 'Improve user experience and modern look for the mobile app.', 'idea', ['Design', 'Mobile'], ids.sara, 2, 9),
     task('AI assistant integration', 'Integrate local AI model for offline assistant feature.', 'idea', ['Backend', 'AI'], null, 4, 14, { needsVolunteer: true }),
     task('Brand identity update', 'New logo and visual identity for next quarter.', 'idea', ['Design', 'Branding'], ids.sara, 6, 20, { projectId: p2 }),
-    task('Website performance optimization', 'Improve loading speed and SEO structure.', 'in_progress', ['Frontend', 'Performance'], ids.nima, -3, 2),
-    task('Game character animation', 'Hook up character animations in the 3D office.', 'in_progress', ['Game Dev', 'Animation'], ids.mehdi, -2, 4),
+    task('Website performance optimization', 'Improve loading speed and SEO structure.', 'in_progress', ['Frontend', 'Performance'], ids.nima, -3, 2, {
+      priority: 2, checklist: [{ text: 'Measure the slow pages', done: true }, { text: 'Compress images', done: true }, { text: 'Split the 3D code', done: false }, { text: 'Check on a phone', done: false }],
+    }),
+    task('Game character animation', 'Hook up character animations in the 3D office.', 'in_progress', ['Game Dev', 'Animation'], ids.mehdi, -2, 4, { priority: 1 }),
     task('API integration', 'Connect payment gateway and handle webhooks.', 'in_progress', ['Backend', 'Payment'], ids.reza, -1, 5),
     task('User testing results', 'Analyze feedback from beta users and make improvements.', 'review', ['UX', 'Research'], ids.sara, -6, 1),
     task('Marketing campaign', 'Prepare social media content for product launch.', 'review', ['Marketing', 'Content'], ids.reza, -5, 3, { projectId: p2 }),
@@ -155,5 +157,15 @@ export function createSeed() {
     xp: 420, counters: { done: 23, urgent: 5, early: 2, bestStreak: 5, questDays: 2, lastQuestDay: null, cat: { personal: 12, work: 6, learning: 4, health: 1 } },
   }]];
 
-  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, todoStats, events, notifications, issues, comments, ideas, milestones };
+  const post = (n: number, kind: Post['kind'], authorId: string, minutes: number, o: Partial<Post>): Post => ({
+    id: `b0000000-0000-4000-8000-${String(n).padStart(12, '0')}`, kind, authorId, targetId: null, body: '', did: '', blockers: '', badge: '', pinned: false, day: null, createdAt: ago(minutes), ...o,
+  });
+  const posts: Post[] = [
+    post(1, 'announcement', ids.mehdi, 60 * 20, { body: 'نسخه‌ی جدید دفتر سه‌بعدی آماده است: کافه، کتابخانه، اتاق سرگرمی و حیاط اضافه شده. سر بزنید!', pinned: true }),
+    post(2, 'kudos', ids.sara, 60 * 5, { targetId: ids.nima, badge: 'speed', body: 'صفحه‌ی ورود را یک‌روزه بازنویسی کرد و سرعتش دو برابر شد.' }),
+    post(3, 'kudos', ids.mehdi, 60 * 30, { targetId: ids.reza, badge: 'help', body: 'Thanks for staying late to help with the release.' }),
+    post(4, 'standup', ids.sara, 90, { day: day(0), did: 'طرح صفحه‌ی پروژه‌ها را تمام کردم.', body: 'آیکن‌های جدید و بازبینی رنگ‌ها.', blockers: '' }),
+    post(5, 'standup', ids.nima, 150, { day: day(0), did: 'Fixed the login redirect bug.', body: 'Performance pass on the dashboard.', blockers: 'Need the new logo files from design.' }),
+  ];
+  return { profiles, projects, tasks, roles, messages, polls, offices, focus, todos, todoStats, events, notifications, issues, comments, ideas, milestones, posts };
 }

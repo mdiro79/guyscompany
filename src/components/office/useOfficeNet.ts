@@ -8,7 +8,8 @@ import { EMOTE_MS, isEmoteId, type EmoteId } from './emotes';
 import { labelsChanged } from './labels';
 
 // typing: until when (Date.now()) the person counts as typing in the office chat.
-export interface RemoteAvatar { userId: string; pose: Pose; receivedAt: number; emote: { id: EmoteId; until: number } | null; typing: number }
+// vx, vz: metres per second from the last two poses, used to keep a walking character moving between messages.
+export interface RemoteAvatar { userId: string; pose: Pose; receivedAt: number; emote: { id: EmoteId; until: number } | null; typing: number; vx?: number; vz?: number }
 
 export const TYPING_MS = 4000; // a "typing" signal lasts this long unless renewed
 const TYPING_RENEW_MS = 2500;
@@ -32,7 +33,13 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
       }
       const cur = remotes.current.get(from.userId);
       if (cur && cur.pose.t > pose.t && performance.now() - cur.receivedAt < 3000) return;
-      remotes.current.set(from.userId, { userId: from.userId, pose, receivedAt: performance.now(), emote: cur?.emote ?? null, typing: cur?.typing ?? 0 });
+      const at = performance.now();
+      const gap = cur ? (at - cur.receivedAt) / 1000 : 0;
+      const steady = !!cur && pose.moving > 0 && !pose.seatId && gap > 0.03 && gap < 0.4;
+      remotes.current.set(from.userId, {
+        userId: from.userId, pose, receivedAt: at, emote: cur?.emote ?? null, typing: cur?.typing ?? 0,
+        vx: steady ? (pose.x - cur.pose.x) / gap : 0, vz: steady ? (pose.z - cur.pose.z) / gap : 0,
+      });
     });
     const offEvent = mesh.onEvent((from, msg) => {
       if (msg.type === 'typing' && from.userId !== userId) {

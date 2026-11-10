@@ -41,8 +41,8 @@ describe('office layout', () => {
   it('has reachable seats and room to stand up behind each chair', () => {
     for (const s of allSeats()) {
       expect(s.pos.every(Number.isFinite)).toBe(true);
-      const back: Vec2 = [s.pos[0] + Math.sin(s.facing) * 0.75, s.pos[1] + Math.cos(s.facing) * 0.75];
-      if (s.area !== 'lounge') expect(moved(back, PLAYER_RADIUS, walls)).toBeLessThan(0.05);
+      const back: Vec2 = s.exit ?? [s.pos[0] + Math.sin(s.facing) * 0.75, s.pos[1] + Math.cos(s.facing) * 0.75];
+      expect(moved(back, PLAYER_RADIUS, walls), s.id).toBeLessThan(0.05);
     }
     expect(officeAt(...allSeats()[0].pos)?.slot).toBe(1);
   });

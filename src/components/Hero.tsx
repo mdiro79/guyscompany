@@ -11,7 +11,7 @@ export async function Hero() {
   return (
     <section className="relative h-40 overflow-hidden rounded-2xl sm:h-48"
       style={{ background: 'url(/hero/office.webp) center/cover no-repeat, linear-gradient(120deg, #3b2a1f 0%, #8a4b23 45%, #f07a2a 75%, #1f8a8a 100%)' }}>
-      <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/25 to-transparent rtl:bg-gradient-to-l" />
+      <div className="absolute inset-0 bg-linear-to-r from-black/70 via-black/40 to-black/5 rtl:bg-linear-to-l" />
       <div className="relative flex h-full flex-col justify-center gap-1 px-5 text-white sm:px-7">
         <h1 className="text-3xl font-extrabold drop-shadow sm:text-4xl">{t('heroTitle')}</h1>
         <p className="text-base opacity-90 sm:text-lg">{t('heroSub')}</p>

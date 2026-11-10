@@ -7,6 +7,7 @@ import { isEmbedded, useDevice } from '@/lib/device';
 import { getMesh } from '@/lib/realtime/mesh';
 import { connectBoard } from '@/lib/board/sync';
 import { connectHands } from '@/lib/board/hands';
+import { connectQuickVote } from '@/lib/board/vote';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useLive, setLivePaused } from '@/lib/live';
@@ -26,10 +27,11 @@ function BoardSync({ userId }: { userId: string }) {
   const device = useDevice();
   useEffect(() => connectBoard(getMesh(userId, device), userId), [userId, device]);
   useEffect(() => connectHands(getMesh(userId, device), userId), [userId, device]);
+  useEffect(() => connectQuickVote(getMesh(userId, device), userId), [userId, device]);
   return null;
 }
 
-const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites', 'meetings', 'meeting_notes', 'shared_notes'];
+const LIVE_TABLES = ['tasks', 'messages', 'reactions', 'notifications', 'polls', 'poll_votes', 'profiles', 'offices', 'files', 'focus_items', 'todos', 'rooms', 'issues', 'issue_comments', 'project_ideas', 'idea_votes', 'milestones', 'calendar_events', 'projects', 'project_roles', 'office_swap_requests', 'private_chat_invites', 'meetings', 'meeting_notes', 'shared_notes', 'posts'];
 
 export function AppShell({ data: server, notifications, messages, files, search, children }: {
   data: ShellData; notifications: Notification[]; messages: Message[]; files: FileMeta[]; search: SearchItem[]; children: ReactNode;

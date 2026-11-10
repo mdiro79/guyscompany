@@ -9,18 +9,21 @@ import { TodaysFocus } from '@/components/widgets/TodaysFocus';
 import { PersonalTodos } from '@/components/widgets/PersonalTodos';
 import { CLEARED_TODO_RETENTION_DAYS } from '@/lib/limits';
 import { OfficeMapWidget } from '@/components/widgets/OfficeMapWidget';
+import { TeamPulseCard } from '@/components/widgets/TeamPulseCard';
 
 export default async function HomePage() {
   const user = await requirePageUser();
   const s = store();
   const streakSince = new Date(Date.now() - CLEARED_TODO_RETENTION_DAYS * 86400000).toISOString();
-  const [tasks, projects, polls, votes, focus, todos, todoStats] = await Promise.all([
+  const [tasks, projects, polls, votes, focus, todos, todoStats, posts, profiles] = await Promise.all([
     s.listTasks(), s.listProjects(), s.listPolls(), s.listVotes(), s.listFocus(user.id, todayIso()), s.listTodos(user.id, streakSince), s.getTodoStats(user.id),
+    s.listPosts(new Date(Date.now() - 30 * 86400000).toISOString(), 100), s.listProfiles(),
   ]);
   const poll = polls.find((p) => !isPollClosed(p)) ?? polls[0] ?? null;
   return (
     <div className="space-y-4">
       <Hero />
+      <TeamPulseCard posts={posts} profiles={profiles} meId={user.id} today={todayIso()} />
       <TaskViews tasks={tasks} projects={projects} compact />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3">
         <TeamVote poll={poll} summary={poll ? summarizePoll(poll, redactVotes(polls, votes, user.id), user.id) : null} />

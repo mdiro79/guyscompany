@@ -77,6 +77,8 @@ export interface ProjectIdea {
 
 export interface Milestone { id: string; projectId: string; title: string; dueDate: string | null; done: boolean; createdAt: string }
 
+export interface ChecklistItem { text: string; done: boolean }
+export const TASK_PRIORITIES = [0, 1, 2] as const; // normal, high, urgent
 export interface Task {
   id: string;
   projectId: string | null;
@@ -86,6 +88,8 @@ export interface Task {
   tags: string[];
   assigneeId: string | null;
   needsVolunteer: boolean;
+  priority: number; // 0 normal, 1 high, 2 urgent
+  checklist: ChecklistItem[]; // small steps of the task, ticked off on its card
   startDate: string | null;
   dueDate: string | null;
   position: number;
@@ -227,6 +231,25 @@ export interface CalendarEvent {
   createdBy: string | null;
 }
 
+// Team pulse: announcements for everyone, kudos to a teammate, and one standup per member and day.
+export type PostKind = 'announcement' | 'kudos' | 'standup';
+export const KUDOS_BADGES = ['thanks', 'teamwork', 'idea', 'quality', 'speed', 'help'] as const;
+export type KudosBadge = (typeof KUDOS_BADGES)[number];
+export interface Post {
+  id: string;
+  kind: PostKind;
+  authorId: string | null;
+  targetId: string | null; // kudos: who it is for
+  body: string; // the announcement, the kudos note, or the standup's plan for today
+  did: string; // standup: what was done since the last one
+  blockers: string; // standup: what is in the way
+  badge: string; // kudos: one of KUDOS_BADGES
+  pinned: boolean; // announcements an admin keeps at the top
+  day: string | null; // standup: its day (YYYY-MM-DD)
+  createdAt: string;
+}
+export type NewPost = Pick<Post, 'kind' | 'authorId' | 'body'> & Partial<Pick<Post, 'targetId' | 'did' | 'blockers' | 'badge' | 'pinned' | 'day'>>;
+
 export interface Notification {
   id: string;
   userId: string;
@@ -362,6 +385,14 @@ export interface DataStore {
   // Creates or replaces the author's shared version of a note (one per note).
   shareNote(n: Pick<SharedNote, 'noteId' | 'meetingId' | 'projectId' | 'authorId' | 'kind' | 'title' | 'body'>): Promise<SharedNote>;
   deleteSharedNote(id: string, authorId: string): Promise<void>;
+
+  // Team pulse (newest first). A member's standup for a day is replaced, not repeated.
+  listPosts(sinceIso: string, limit: number): Promise<Post[]>;
+  getPost(id: string): Promise<Post | null>;
+  createPost(p: NewPost): Promise<Post>;
+  saveStandup(authorId: string, day: string, text: Pick<Post, 'body' | 'did' | 'blockers'>): Promise<Post>;
+  updatePost(id: string, patch: Partial<Pick<Post, 'pinned' | 'body'>>): Promise<void>;
+  deletePost(id: string): Promise<void>;
 
   getRoom(id: string): Promise<Room | null>;
   updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;

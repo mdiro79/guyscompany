@@ -110,7 +110,9 @@
     "menu": "Menu",
     "ideas": "Ideas & votes",
     "board": "Drawing board",
-    "meetings": "Meetings & notes"
+    "meetings": "Meetings & notes",
+    "pulse": "Team pulse",
+    "insights": "Insights"
   },
   "meetings": {
     "title": "Meetings & notes",
@@ -381,7 +383,8 @@
     "swap_request": "{name} wants to swap offices with you",
     "chat_invite": "{name} invited you to a private office chat",
     "role_volunteer": "{name} volunteered for “{title}”",
-    "mention": "{name} mentioned you in chat"
+    "mention": "{name} mentioned you in chat",
+    "kudos": "{name} sent you kudos 🙏"
   },
   "voice": {
     "micPhone": "Mic (Phone)",
@@ -426,7 +429,13 @@
     "empty": "No tasks",
     "confirmDelete": "Delete this task?",
     "noDates": "No dates",
-    "filterMine": "Only mine"
+    "filterMine": "Only mine",
+    "priority": "Priority",
+    "priority0": "Normal",
+    "priority1": "High",
+    "priority2": "Urgent",
+    "checklist": "Steps (one per line)",
+    "checklistHint": "For example:\nDesign\nBuild\nTest on a phone"
   },
   "chat": {
     "title": "Team Chat",
@@ -687,7 +696,7 @@
     "noVisitors": "No visits",
     "invite": "Invite to private chat",
     "myOffice": "My office",
-    "controlsDesktop": "WASD move · mouse look · E interact · Q emotes · M mic · Tab cursor",
+    "controlsDesktop": "WASD move · mouse look · E interact · Q emotes · M mic · N map · Tab cursor",
     "controlsMobile": "Joystick to move · drag to look",
     "viewOnly": "Public office: view only",
     "action": "Action",
@@ -771,6 +780,104 @@
       "shareScreen": "Share Screen",
       "more": "More",
       "hands": "Hands up"
+    },
+    "cafe": "Café",
+    "library": "Library",
+    "game": "Game room",
+    "garden": "Garden",
+    "quiet": "Quiet zone",
+    "officeN": "Office {slot}",
+    "coffeeReady": "☕ Your coffee is ready!",
+    "use": {
+      "arcade": "Press E to play",
+      "jukebox": "Press E to pick the music",
+      "coffee": "Press E for a coffee"
+    },
+    "useShort": {
+      "arcade": "Play",
+      "jukebox": "Music",
+      "coffee": "Coffee"
+    },
+    "map": {
+      "title": "Office map",
+      "close": "Close the map",
+      "hint": "Tap a room to go there.",
+      "goTo": "Go to",
+      "alone": "You are the only one in the office right now."
+    },
+    "link": {
+      "connected": "Connected",
+      "connecting": "Connecting…",
+      "lost": "Link lost"
+    },
+    "arcade": {
+      "title": "Bug Squash",
+      "press": "PRESS E",
+      "tap": "TAP PLAY",
+      "scores": "Best scores",
+      "noScores": "Nobody has played yet. Be the first!",
+      "close": "Close the game",
+      "score": "Score",
+      "start": "Start",
+      "again": "Play again",
+      "how": "Squash every bug you see in 30 seconds. The golden beetle is worth 5 and every 5 hits in a row give a bonus. Leave ✨ alone: that is not a bug, it is a feature! (−3)",
+      "result": "Your score: {score}",
+      "record": "🎉 Your new best: {score}"
+    },
+    "juke": {
+      "title": "Jukebox",
+      "close": "Close",
+      "stop": "Stop",
+      "mute": "Mute for me",
+      "muted": "Muted",
+      "shared": "The chosen style plays for everyone and gets quieter the farther you are from the game room.",
+      "track": {
+        "lofi": "Lo-fi",
+        "synth": "Synthwave",
+        "calm": "Calm",
+        "party": "Party"
+      }
+    },
+    "xo": {
+      "title": "Noughts & crosses",
+      "again": "Next round",
+      "draw": "It's a draw",
+      "youWin": "You win! 🎉",
+      "youLose": "You lost this one",
+      "wins": "{mark} wins",
+      "yourTurn": "Your turn",
+      "theirTurn": "{name}'s turn",
+      "solo": "Solo practice · {mark} to play"
+    },
+    "focusTimer": {
+      "title": "Focus timer",
+      "start": "Start",
+      "pause": "Pause",
+      "reset": "Reset",
+      "hint": "Pick a length and press start.",
+      "running": "Stay focused; standing up does not stop the timer.",
+      "done": "Done! Take a short break ☕"
+    },
+    "vote": {
+      "title": "Quick vote",
+      "close": "Close",
+      "defaultQuestion": "Do you agree?",
+      "hint": "Ask a question; everyone answers with 👍 👎 🤔 and the count shows live on the big screen.",
+      "placeholder": "Question (optional)",
+      "start": "Start the vote",
+      "end": "End the vote",
+      "clear": "Take it off the screen",
+      "yes": "Yes",
+      "no": "No",
+      "unsure": "Not sure",
+      "askedBy": "Asked by {name}",
+      "votes": "{n} votes so far",
+      "closed": "Closed · {n} votes"
+    },
+    "notice": {
+      "title": "Notice board",
+      "empty": "No announcements. Write one in Team pulse.",
+      "standups": "Standups today: {done} of {all}"
     }
   },
   "emotes": {
@@ -785,7 +892,9 @@
     "love": "Love",
     "cool": "Cool",
     "shy": "Shy",
-    "party": "Party"
+    "party": "Party",
+    "coffee": "Coffee",
+    "dance": "Dancing"
   },
   "tutorial": {
     "title": "Receptionist's tour",
@@ -794,11 +903,94 @@
     "conference": "This is the conference room. Doors open and close with E. Press E next to a chair to sit; you can still look around freely while seated. Everyone in the room hears each other clearly.",
     "office": "Every member has an office. In your own office you can frost the glass, lock the door, turn on focus or public mode, see visitors and invite someone to a private chat.",
     "desk": "At your desk press E to sit and open the dashboard on the monitor: tasks (kanban), team chat, ideas and polls, projects, calendar, files and team. The fullscreen and exit buttons are at the top.",
-    "lounge": "This is the lounge. Send emotes with Q, toggle your mic with M, and chat messages show above each person's head.",
+    "lounge": "There is more around the office: the café and the garden to the west, the library with its focus pod to the east and the game room to the north. The map button (N) takes you anywhere at once. Send emotes with Q, toggle your mic with M, and chat messages show above each person's head.",
     "end": "I'll head back to my desk. Press E at the reception desk any time to take the tour again.",
     "walking": "Walking…",
     "next": "Next",
     "done": "Let's go",
     "skip": "Skip"
+  },
+  "pulse": {
+    "title": "Team pulse",
+    "subtitle": "The daily standup, kudos for teammates and announcements, all in one place.",
+    "tab": {
+      "standup": "Today's standup",
+      "kudos": "Kudos",
+      "news": "Announcements"
+    },
+    "remove": "Remove",
+    "emptyError": "Write at least one of the parts.",
+    "standup": {
+      "write": "My standup",
+      "edit": "Edit today's standup",
+      "post": "Post standup",
+      "update": "Update",
+      "did": "What I did",
+      "plan": "What I will do today",
+      "blockers": "Blockers",
+      "didHint": "Since the last standup…",
+      "planHint": "The most important things today…",
+      "blockersHint": "Is anything in your way? (optional)",
+      "today": "{done} of {all} have posted today",
+      "blockedCount": "{n} blocked",
+      "notYet": "Not posted yet",
+      "streak": "{n} days in a row"
+    },
+    "kudos": {
+      "send": "Send kudos to a teammate",
+      "who": "Who is it for?",
+      "for": "What for?",
+      "note": "Note",
+      "noteHint": "What did they do that stood out? (optional)",
+      "submit": "Send kudos",
+      "to": "to",
+      "board": "Most appreciated (last 60 days)",
+      "received": "{n} kudos",
+      "empty": "No kudos yet. Be the first to send one."
+    },
+    "badge": {
+      "thanks": "Thanks",
+      "teamwork": "Teamwork",
+      "idea": "Great idea",
+      "quality": "Quality",
+      "speed": "Speed",
+      "help": "Timely help"
+    },
+    "news": {
+      "write": "New announcement",
+      "hint": "Something the whole team should know…",
+      "post": "Publish",
+      "pinIt": "Pin it (top of the list and the home page)",
+      "pinned": "Pinned",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "empty": "No announcements."
+    },
+    "home": {
+      "title": "Team pulse",
+      "standups": "{done} of {all} standups today",
+      "writeMine": "My standup",
+      "done": "Posted ✓",
+      "open": "Open",
+      "latestKudos": "Latest kudos"
+    }
+  },
+  "insights": {
+    "title": "Team insights",
+    "subtitle": "The big picture of tasks, projects and people, worked out from the app's own data.",
+    "openTasks": "Open tasks",
+    "doneWeek": "Done in 7 days",
+    "overdue": "Overdue",
+    "openBugs": "Open bugs",
+    "meetingHours": "Meeting hours (30 days)",
+    "kudosMonth": "Kudos (30 days)",
+    "trend": "Trend of the last 4 weeks",
+    "whereWork": "Where the work sits",
+    "projects": "Projects",
+    "noProjects": "No projects.",
+    "people": "People",
+    "doneMonth": "{n} done in 30 days",
+    "kudosGot": "{n} kudos",
+    "streak": "{n}-day standup streak"
   }
 }

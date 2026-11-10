@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
-import { store, TASK_COLUMNS, type TaskColumn } from '@/lib/data';
+import { store, TASK_COLUMNS, type ChecklistItem, type TaskColumn } from '@/lib/data';
 import { fail, okResult, guard, type ActionResult } from './result';
 
 const optionalId = z.string().uuid().nullable().catch(null);
@@ -18,6 +18,9 @@ const TaskInput = z.object({
   startDate: optionalDate,
   dueDate: optionalDate,
   needsVolunteer: z.boolean().default(false),
+  priority: z.coerce.number().int().min(0).max(2).catch(0),
+  // One step per line; at most 20.
+  checklist: z.string().default('').transform((s) => s.split('\n').map((x) => x.trim().slice(0, 160)).filter(Boolean).slice(0, 20)),
 });
 
 const fromForm = (form: FormData) => TaskInput.safeParse({
@@ -30,6 +33,8 @@ const fromForm = (form: FormData) => TaskInput.safeParse({
   startDate: form.get('startDate') || null,
   dueDate: form.get('dueDate') || null,
   needsVolunteer: form.get('needsVolunteer') === 'on',
+  priority: form.get('priority') ?? 0,
+  checklist: form.get('checklist') ?? '',
 });
 
 async function notifyAssignee(assigneeId: string | null, actorId: string, title: string) {
@@ -43,16 +48,28 @@ export const saveTaskAction = guard(async function saveTaskAction(_: ActionResul
   const parsed = fromForm(form);
   if (!parsed.success) return fail('error');
   const id = String(form.get('id') ?? '');
+  // Steps keep their tick when the list is edited (matched by their text).
+  const steps = (old: ChecklistItem[] = []) => parsed.data.checklist.map((text) => ({ text, done: old.find((o) => o.text === text)?.done ?? false }));
   if (id) {
     const before = (await store().listTasks()).find((t) => t.id === id);
-    await store().updateTask(id, parsed.data);
+    await store().updateTask(id, { ...parsed.data, checklist: steps(before?.checklist) });
     if (before?.assigneeId !== parsed.data.assigneeId) await notifyAssignee(parsed.data.assigneeId, user.id, parsed.data.title);
   } else {
-    await store().createTask({ ...parsed.data, createdBy: user.id });
+    await store().createTask({ ...parsed.data, checklist: steps(), createdBy: user.id });
     await notifyAssignee(parsed.data.assigneeId, user.id, parsed.data.title);
   }
   revalidatePath('/', 'layout');
   return okResult('saved');
+});
+
+// Ticks or unticks one step of a task's checklist.
+export const toggleStepAction = guard(async function toggleStepAction(id: string, index: number, done: boolean) {
+  await requireUser();
+  const task = (await store().listTasks()).find((t) => t.id === id);
+  if (!task || !task.checklist[index]) return fail('error');
+  await store().updateTask(id, { checklist: task.checklist.map((s, i) => (i === index ? { ...s, done } : s)) });
+  revalidatePath('/', 'layout');
+  return okResult();
 });
 
 export const moveTaskAction = guard(async function moveTaskAction(id: string, column: TaskColumn) {
