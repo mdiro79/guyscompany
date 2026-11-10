@@ -22,6 +22,7 @@ import { officeUi, input, useOfficeUi, lockPointer } from './store';
 import { EMOTES } from './emotes';
 import { officeAt, inConference, allSeats, onDanceFloor, SPAWN, CONF_SCREEN } from './layout';
 import { MiniMap } from './MiniMap';
+import type { Notice } from './rooms/Rooms';
 import { QuickVotePanel } from './QuickVotePanel';
 import { ArcadeGame } from './play/ArcadeGame';
 import { JukeboxPanel } from './play/JukeboxPanel';
@@ -76,8 +77,8 @@ const canvas = () => document.querySelector<HTMLCanvasElement>('#gc-office canva
 // E (or its buttons): also wakes the 3D view when it is paused behind a full-screen panel.
 const act = () => { input.action = true; invalidate(); };
 
-export function OfficeView({ messages, privateChats, invitedSlots, files, room, meeting: meetingData }: {
-  messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null; meeting: OfficeMeeting;
+export function OfficeView({ messages, privateChats, invitedSlots, files, room, meeting: meetingData, notice }: {
+  messages: Message[]; privateChats: Record<number, Message[]>; invitedSlots: number[]; files: FileMeta[]; room: Room | null; meeting: OfficeMeeting; notice: Notice;
 }) {
   const t = useTranslations('office');
   const tc = useTranslations('common');
@@ -117,8 +118,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   }), [locale, t, runTitle, runPurpose, runStart]);
   const roomLabels = useMemo(() => ({
     cafe: t('cafe'), library: t('library'), game: t('game'), garden: t('garden'), quiet: t('quiet'),
+    noticeTitle: t('notice.title'), noticeEmpty: t('notice.empty'), noticeStandups: t('notice.standups', { done: notice.standups, all: notice.members }), notice,
     arcadeTitle: t('arcade.title'), arcadePress: isPhone ? t('arcade.tap') : t('arcade.press'), scores: t('arcade.scores'), noScores: t('arcade.noScores'), xoTitle: t('xo.title'), rtl: locale === 'fa',
-  }), [locale, t, isPhone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [locale, t, isPhone, JSON.stringify(notice)]);
   const tabletLabels = useMemo(() => ({
     title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
     raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),

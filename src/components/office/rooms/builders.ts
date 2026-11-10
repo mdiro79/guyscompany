@@ -3,7 +3,7 @@ import type { Batch } from '../batch';
 import {
   WALL_HEIGHT, H, OUT, GAME_WALL, ARCADES, JUKEBOX, DANCE_FLOOR, GAME_TV, XO_TABLE, BEAN_BAGS,
   CAFE_BAR, CAFE_TABLES, CAFE_TABLE_RADIUS, CAFE_TABLE_HEIGHT, CAFE_STOOLS, WATER_COOLER,
-  LIB_SHELVES, LIB_SHELF, LIB_TABLE, LIB_PODS, GARDEN, FOUNTAIN, GARDEN_TREES, GARDEN_BENCHES,
+  LIB_SHELVES, LIB_SHELF, LIB_TABLE, LIB_PODS, GARDEN, FOUNTAIN, GARDEN_TREES, GARDEN_BENCHES, NOTICE_KIOSK,
 } from '../layout';
 
 // The furniture and decoration of the rooms around the "+", drawn from boxes, cylinders and spheres in
@@ -81,6 +81,15 @@ export function buildGameRoom(b: Batch) {
     b.box([0.78, 1.05, 0.03], [x as number, 1.7, zN], '#0f1018').box([0.68, 0.95, 0.035], [x as number, 1.7, zN + 0.004], c as string);
     b.cyl(0.2, 0.2, 0.012, [x as number, 1.8, zN + 0.028], '#ffffff', 16, 'matte', 1, [Math.PI / 2, 0, 0]);
   });
+}
+
+// ——— Reception ———
+export function buildReception(b: Batch) {
+  // Notice kiosk: a screen on a slim stand, turned towards the entrance.
+  b.push([NOTICE_KIOSK.pos[0], 0, NOTICE_KIOSK.pos[1]], NOTICE_KIOSK.rot);
+  b.cyl(0.26, 0.3, 0.04, [0, 0.02, 0], TRIM, 18).cyl(0.035, 0.035, 1.0, [0, 0.52, 0], '#8a8f98', 10);
+  b.box([1.3, 0.9, 0.05], [0, 1.42, 0], '#14151c').box([1.32, 0.04, 0.07], [0, 0.955, 0], '#2f5d45');
+  b.pop();
 }
 
 // ——— Café ———

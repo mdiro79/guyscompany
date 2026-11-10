@@ -77,6 +77,8 @@ export interface ProjectIdea {
 
 export interface Milestone { id: string; projectId: string; title: string; dueDate: string | null; done: boolean; createdAt: string }
 
+export interface ChecklistItem { text: string; done: boolean }
+export const TASK_PRIORITIES = [0, 1, 2] as const; // normal, high, urgent
 export interface Task {
   id: string;
   projectId: string | null;
@@ -86,6 +88,8 @@ export interface Task {
   tags: string[];
   assigneeId: string | null;
   needsVolunteer: boolean;
+  priority: number; // 0 normal, 1 high, 2 urgent
+  checklist: ChecklistItem[]; // small steps of the task, ticked off on its card
   startDate: string | null;
   dueDate: string | null;
   position: number;

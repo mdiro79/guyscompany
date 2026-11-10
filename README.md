@@ -33,6 +33,11 @@ Keys are never committed; source asset zips stay in the repo but are excluded fr
 | `npm run assets:select` / `npm run assets:convert` | Pick 4 characters per pack and convert to compact GLB |
 | `node scripts/render-thumbs.cjs` | Render character portraits used as avatars |
 | `node scripts/screenshot.cjs <url> <dir> <paths…>` | Screenshots at desktop and phone size |
+| `node scripts/office-shots.cjs <url> <dir>` | Screenshots of the 3D office from fixed viewpoints |
+| `node scripts/office-play.cjs <url> <dir>` | Drives the game room, café, library, map (`PHONE=1`, `LAND=1`) |
+| `node scripts/office-stats.cjs <url>` | Draw calls and triangles of the 3D office per viewpoint |
+| `node scripts/multi-test.cjs [url]` | Two members at once: WebRTC link, round trip, events both ways |
+| `python3 scripts/add-messages.py file.json` | Add or change UI strings in both languages |
 
 ## Docs
 

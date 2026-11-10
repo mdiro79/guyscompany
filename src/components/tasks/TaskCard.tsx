@@ -1,11 +1,11 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { MoreVertical } from 'lucide-react';
+import { ChevronDown, Flag, ListChecks, MoreVertical } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useProfile, useShell } from '@/components/shell/ShellContext';
-import { moveTaskAction, deleteTaskAction, volunteerTaskAction } from '@/app/actions/tasks';
+import { moveTaskAction, deleteTaskAction, volunteerTaskAction, toggleStepAction } from '@/app/actions/tasks';
 import { daysFromToday, formatNumber, tagColor } from '@/lib/format';
 import { TASK_COLUMNS, type Task } from '@/lib/data/types';
 
@@ -31,6 +31,15 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
   const [, start] = useTransition();
   const run = (fn: () => Promise<unknown>) => start(async () => { await fn(); });
   const overdue = task.dueDate && task.column !== 'done' && daysFromToday(task.dueDate) < 0;
+  // Steps tick at once and settle with the server's answer.
+  const locale = useLocale();
+  const [openSteps, setOpenSteps] = useState(false);
+  const [steps, setSteps] = useOptimistic(task.checklist ?? []);
+  const doneSteps = steps.filter((s) => s.done).length;
+  const tick = (i: number, done: boolean) => start(async () => {
+    setSteps(steps.map((s, j) => (j === i ? { ...s, done } : s)));
+    await toggleStepAction(task.id, i, done);
+  });
 
   return (
     <article draggable={draggable} onDragStart={(e) => e.dataTransfer.setData('text/task', task.id)}
@@ -39,7 +48,30 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
         <h3 className="text-sm font-semibold leading-5" dir="auto">{task.title}</h3>
         {task.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted" dir="auto">{task.description}</p>}
       </button>
+      {steps.length > 0 && (
+        <div className="mt-2">
+          <button type="button" onClick={() => setOpenSteps((x) => !x)} aria-expanded={openSteps} className="flex min-h-8 w-full items-center gap-2 text-xs text-muted">
+            <ListChecks className="size-3.5 shrink-0" />
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-brand transition-[width]" style={{ width: `${(doneSteps / steps.length) * 100}%` }} /></span>
+            <span className="tabular-nums">{formatNumber(locale, doneSteps)}/{formatNumber(locale, steps.length)}</span>
+            <ChevronDown className={clsx('size-3.5 shrink-0 transition-transform', openSteps && 'rotate-180')} />
+          </button>
+          {openSteps && (
+            <ul className="mt-1 space-y-0.5">
+              {steps.map((s, i) => (
+                <li key={i}>
+                  <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-lg px-1 text-xs hover:bg-surface-2">
+                    <input type="checkbox" checked={s.done} onChange={(e) => tick(i, e.target.checked)} className="size-4 shrink-0 accent-[var(--color-brand)]" />
+                    <span dir="auto" className={clsx('min-w-0 break-words', s.done && 'text-muted line-through')}>{s.text}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-1">
+        {task.priority > 0 && <span className={clsx('chip gap-1', task.priority === 2 ? 'bg-danger/10 text-danger' : 'bg-accent-soft text-accent')}><Flag className="size-3 fill-current" />{t(`priority${task.priority as 1 | 2}`)}</span>}
         {task.tags.map((tag) => <span key={tag} className={clsx('chip', tagColor(tag))}>{tag}</span>)}
         {task.needsVolunteer && <span className="chip bg-accent-soft text-accent ring-1 ring-accent/30">{t('needsVolunteer')}</span>}
       </div>

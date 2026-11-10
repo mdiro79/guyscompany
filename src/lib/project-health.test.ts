@@ -5,7 +5,7 @@ import type { Issue, Milestone, Project, Task } from '@/lib/data/types';
 const today = '2026-10-24';
 const project = (o: Partial<Project> = {}): Project => ({ id: 'p', name: 'P', description: '', managerId: null, status: 'active', dueDate: null, createdAt: '2026-10-01T08:00:00Z', ...o });
 const task = (id: string, o: Partial<Task> = {}): Task => ({
-  id, projectId: 'p', title: id, description: '', column: 'in_progress', tags: [], assigneeId: null, needsVolunteer: false, startDate: null, dueDate: null,
+  id, projectId: 'p', title: id, description: '', column: 'in_progress', tags: [], assigneeId: null, needsVolunteer: false, priority: 0, checklist: [], startDate: null, dueDate: null,
   position: 0, createdBy: null, createdAt: '2026-10-01T08:00:00Z', updatedAt: '2026-10-01T08:00:00Z', ...o,
 });
 const issue = (id: string, o: Partial<Issue> = {}): Issue => ({

@@ -258,6 +258,9 @@ export function gardenSeats(): Seat[] {
 
 export const allSeats = () => [...officeSeats(), ...conferenceSeats(), ...cafeSeats(), ...librarySeats(), ...gameSeats(), ...gardenSeats()];
 
+// Notice kiosk in the reception, turned towards the entrance.
+export const NOTICE_KIOSK = { pos: [4.6, SOUTH - 2.7] as Vec2, rot: Math.atan2(-4.6, 1.5) };
+
 // Things used with E: arcade cabinets, the jukebox and the coffee machine.
 export function stations(): Station[] {
   return [
@@ -425,6 +428,7 @@ export function propColliders(): Circle[] {
   c.push({ pos: XO_TABLE, r: 0.5 });
   for (const bb of BEAN_BAGS) c.push({ pos: bb, r: 0.42 });
   c.push({ pos: FOUNTAIN.pos, r: FOUNTAIN.r });
+  c.push({ pos: NOTICE_KIOSK.pos, r: 0.3 });
   for (const t of GARDEN_TREES) c.push({ pos: t, r: 0.32 });
   c.push({ pos: [-H + 0.5, SOUTH - 3.5], r: 0.35 }, { pos: [-H + 0.5, SOUTH - 2.9], r: 0.35 }); // bench
   for (const p of props()) if (p.y === undefined && SOLID[p.model]) c.push({ pos: p.pos, r: p.size * SOLID[p.model] });

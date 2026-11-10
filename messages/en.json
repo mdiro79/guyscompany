@@ -429,7 +429,13 @@
     "empty": "No tasks",
     "confirmDelete": "Delete this task?",
     "noDates": "No dates",
-    "filterMine": "Only mine"
+    "filterMine": "Only mine",
+    "priority": "Priority",
+    "priority0": "Normal",
+    "priority1": "High",
+    "priority2": "Urgent",
+    "checklist": "Steps (one per line)",
+    "checklistHint": "For example:\nDesign\nBuild\nTest on a phone"
   },
   "chat": {
     "title": "Team Chat",
@@ -867,6 +873,11 @@
       "askedBy": "Asked by {name}",
       "votes": "{n} votes so far",
       "closed": "Closed · {n} votes"
+    },
+    "notice": {
+      "title": "Notice board",
+      "empty": "No announcements. Write one in Team pulse.",
+      "standups": "Standups today: {done} of {all}"
     }
   },
   "emotes": {

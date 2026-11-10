@@ -429,7 +429,13 @@
     "empty": "کاری نیست",
     "confirmDelete": "این کار حذف شود؟",
     "noDates": "بدون تاریخ",
-    "filterMine": "فقط کارهای من"
+    "filterMine": "فقط کارهای من",
+    "priority": "اولویت",
+    "priority0": "عادی",
+    "priority1": "مهم",
+    "priority2": "فوری",
+    "checklist": "گام‌ها (هر خط یک گام)",
+    "checklistHint": "مثلاً:\nطراحی\nپیاده‌سازی\nتست روی گوشی"
   },
   "chat": {
     "title": "چت تیم",
@@ -867,6 +873,11 @@
       "askedBy": "پرسنده: {name}",
       "votes": "{n} رأی تا الان",
       "closed": "بسته شد · {n} رأی"
+    },
+    "notice": {
+      "title": "تابلوی اعلانات",
+      "empty": "اطلاعیه‌ای نیست. از «نبض تیم» بنویسید.",
+      "standups": "استندآپ امروز: {done} از {all}"
     }
   },
   "emotes": {

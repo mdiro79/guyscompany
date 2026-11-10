@@ -157,6 +157,12 @@ describe('db store', () => {
     expect(await store.listIssues(p.id)).toEqual([]);
     expect(await store.listIdeas(p.id)).toEqual([]);
   });
+  it('tasks: priority and steps', async () => {
+    const t = await store.createTask({ title: 'Ship', createdBy: A });
+    expect(t).toMatchObject({ priority: 0, checklist: [] });
+    await store.updateTask(t.id, { priority: 2, checklist: [{ text: 'build', done: true }, { text: 'test', done: false }] });
+    expect((await store.listTasks()).find((x) => x.id === t.id)).toMatchObject({ priority: 2, checklist: [{ text: 'build', done: true }, { text: 'test', done: false }] });
+  });
   it('team pulse: posts newest first, one standup per member and day, pin and delete', async () => {
     const since = new Date(Date.now() - 60000).toISOString();
     const a = await store.createPost({ kind: 'announcement', authorId: A, body: 'Release on Friday' });

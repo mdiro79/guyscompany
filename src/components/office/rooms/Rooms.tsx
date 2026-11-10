@@ -4,18 +4,20 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BatchMeshes } from '../BatchMeshes';
 import { neonSign, signFont } from '../textures';
-import { WALL_HEIGHT, H, OUT, ARCADES, JUKEBOX, DANCE_FLOOR, GAME_TV, XO_TABLE, FOUNTAIN, GARDEN, areaAt } from '../layout';
+import { WALL_HEIGHT, H, OUT, NOTICE_KIOSK, ARCADES, JUKEBOX, DANCE_FLOOR, GAME_TV, XO_TABLE, FOUNTAIN, GARDEN, areaAt } from '../layout';
 import { jukebox } from '../play/jukebox';
 import { STYLES } from '../play/music';
 import { xo, winnerOf } from '../play/xo';
 import { arcadeScores } from '../play/scores';
-import { buildCafe, buildGameRoom, buildGarden, buildLibrary, skyColors, ARCADE_SCREEN } from './builders';
+import { buildCafe, buildReception, buildGameRoom, buildGarden, buildLibrary, skyColors, ARCADE_SCREEN } from './builders';
 
 // The rooms around the "+": game room (north), café (west), library (east) and the garden outside the
 // café. Their fixed parts are merged meshes (builders.ts); here are the few live parts: screens painted
 // on canvases, the dance floor's lights, the jukebox's glow and the fountain's water.
 
+export interface Notice { news: string | null; newsBy: string; standups: number; members: number; kudos: [string, string] | null }
 export interface RoomLabels {
+  noticeTitle: string; noticeEmpty: string; noticeStandups: string; notice: Notice;
   cafe: string; library: string; game: string; garden: string; quiet: string;
   arcadeTitle: string; arcadePress: string; scores: string; noScores: string; xoTitle: string; rtl: boolean;
 }
@@ -238,6 +240,57 @@ function FountainWater() {
   );
 }
 
+// Lines of `text` that fit `width`, at most `max` (the last one ends with … when cut).
+function wrap(g: CanvasRenderingContext2D, text: string, width: number, max: number) {
+  const words = text.replace(/\s+/g, ' ').trim().split(' '), lines: string[] = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (g.measureText(next).width <= width || !line) line = next; else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  if (lines.length > max) { lines.length = max; lines[max - 1] = `${lines[max - 1].replace(/.{2}$/, '')}…`; }
+  return lines;
+}
+
+// The notice kiosk in the reception: the team pulse at a glance (announcement, today's standups, latest kudos).
+function NoticeKiosk({ labels }: { labels: RoomLabels }) {
+  const { cv, g, tex } = useMemo(() => canvasTexture(768, 512), []);
+  useEffect(() => {
+    const paint = () => {
+      const W = cv.width, Hh = cv.height, n = labels.notice, rtl = labels.rtl, edge = rtl ? W - 44 : 44;
+      const bg = g.createLinearGradient(0, 0, 0, Hh);
+      bg.addColorStop(0, '#1f4a3c'); bg.addColorStop(1, '#16332a');
+      g.fillStyle = bg; g.fillRect(0, 0, W, Hh);
+      g.direction = rtl ? 'rtl' : 'ltr'; g.textAlign = rtl ? 'right' : 'left'; g.textBaseline = 'middle';
+      g.fillStyle = '#ffd98a'; g.font = signFont(labels.noticeTitle, 800, 44);
+      g.fillText(`📌 ${labels.noticeTitle}`, edge, 58, W - 88);
+      g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(44, 100, W - 88, 3);
+      const body = n.news ?? labels.noticeEmpty;
+      g.fillStyle = n.news ? '#ffffff' : 'rgba(255,255,255,0.6)'; g.font = signFont(body, 600, 36);
+      wrap(g, body, W - 88, 4).forEach((line, i) => g.fillText(line, edge, 152 + i * 50, W - 88));
+      if (n.news && n.newsBy) { g.fillStyle = 'rgba(255,255,255,0.6)'; g.font = signFont(n.newsBy, 500, 26); g.fillText(`— ${n.newsBy}`, edge, 362, W - 88); }
+      g.fillStyle = 'rgba(255,255,255,0.1)'; g.beginPath(); g.roundRect(32, 404, W - 64, 84, 18); g.fill();
+      g.fillStyle = '#9be2c4'; g.font = signFont(labels.noticeStandups, 700, 30);
+      g.fillText(`🗒 ${labels.noticeStandups}`, edge, 446, n.kudos ? W / 2 - 40 : W - 88);
+      if (n.kudos) {
+        g.textAlign = rtl ? 'left' : 'right'; g.fillStyle = '#ffd98a';
+        g.fillText(`🙏 ${n.kudos[0]} ${rtl ? '←' : '→'} ${n.kudos[1]}`, rtl ? 44 : W - 44, 446, W / 2 - 40);
+      }
+      g.direction = 'ltr';
+      tex.needsUpdate = true;
+    };
+    paint();
+    document.fonts?.ready.then(paint, () => {});
+  }, [cv, g, tex, labels]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  return (
+    <group position={[NOTICE_KIOSK.pos[0], 0, NOTICE_KIOSK.pos[1]]} rotation-y={NOTICE_KIOSK.rot}>
+      <mesh position={[0, 1.42, 0.032]}><planeGeometry args={[1.2, 0.8]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
+    </group>
+  );
+}
+
 function Sky() {
   const geometry = useMemo(() => {
     const g = new THREE.SphereGeometry(80, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2 + 0.08);
@@ -253,6 +306,7 @@ function Sky() {
 export function Rooms({ labels, people }: { labels: RoomLabels; people: Person[] }) {
   return (
     <group>
+      <BatchMeshes build={buildReception} />
       <BatchMeshes build={buildGameRoom} />
       <BatchMeshes build={buildCafe} />
       <BatchMeshes build={buildLibrary} />
@@ -264,6 +318,7 @@ export function Rooms({ labels, people }: { labels: RoomLabels; people: Person[]
       <JukeboxGlow />
       <XoBoard />
       <FountainWater />
+      <NoticeKiosk labels={labels} />
       <Sign text={labels.game} color="#ff4fa3" pos={[2.6, 2.48, -OUT + 0.12]} rotY={0} size={[3.0, 0.75]} board={false} />
       <Sign text={labels.game} color="#b98cff" pos={[0, 2.62, -H + 0.2]} rotY={0} size={[1.9, 0.48]} />
       <Sign text={labels.cafe} color="#ffb45c" pos={[-H - 0.9, 2.55, 0]} rotY={Math.PI / 2} size={[1.9, 0.48]} both />

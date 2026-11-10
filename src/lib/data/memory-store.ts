@@ -78,7 +78,7 @@ export function createMemoryStore(): DataStore {
     async listTasks() { return clone(db.tasks); },
     async createTask(t: NewTask) {
       const x: Task = {
-        projectId: null, description: '', column: 'idea', tags: [], assigneeId: null, needsVolunteer: false,
+        projectId: null, description: '', column: 'idea', tags: [], assigneeId: null, needsVolunteer: false, priority: 0, checklist: [],
         startDate: null, dueDate: null, position: db.tasks.length + 1, createdBy: null, ...t,
         id: uuid(), createdAt: now(), updatedAt: now(),
       };

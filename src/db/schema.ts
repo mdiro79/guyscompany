@@ -43,6 +43,8 @@ export const tasks = pgTable('tasks', {
   tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   assigneeId: uuid('assignee_id').references(() => profiles.id, { onDelete: 'set null' }),
   needsVolunteer: boolean('needs_volunteer').notNull().default(false),
+  priority: smallint('priority').notNull().default(0),
+  checklist: jsonb('checklist').$type<{ text: string; done: boolean }[]>().notNull().default([]),
   startDate: date('start_date'),
   dueDate: date('due_date'),
   position: integer('position').notNull().default(0),
