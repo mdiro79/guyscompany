@@ -34,11 +34,11 @@ export function useChat(channel: string, saved: Message[]) {
   }, [saved, local, savedIds]);
 
   // The message shows right away as "sending"; resolves false (and the copy disappears) if sending fails.
-  const send = useCallback((body: string, fileId: string | null = null) => new Promise<boolean>((resolve) => {
+  const send = useCallback((body: string, fileId: string | null = null, replyTo: string | null = null) => new Promise<boolean>((resolve) => {
     const tempId = `${PENDING}${crypto.randomUUID()}`;
-    setLocal((l) => [...l, { id: tempId, channel, authorId: user.id, body: body.trim(), fileId, createdAt: new Date().toISOString(), reactions: [] }]);
+    setLocal((l) => [...l, { id: tempId, channel, authorId: user.id, body: body.trim(), fileId, replyTo, createdAt: new Date().toISOString(), reactions: [] }]);
     start(async () => {
-      const r = await sendMessageAction(channel, body, fileId).catch(() => null);
+      const r = await sendMessageAction(channel, body, fileId, replyTo).catch(() => null);
       if (r?.ok && r.sent) {
         const sent = r.sent;
         // Realtime may have delivered it already.

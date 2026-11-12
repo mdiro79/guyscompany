@@ -101,7 +101,7 @@ export function createMemoryStore(): DataStore {
     async listMessages(channel, limit) {
       return clone(db.messages.filter((m) => m.channel === channel).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-limit));
     },
-    async createMessage(m) { const x = { ...m, id: uuid(), createdAt: now(), reactions: [] }; db.messages.push(x); return clone(x); },
+    async createMessage(m) { const x = { ...m, replyTo: m.replyTo ?? null, id: uuid(), createdAt: now(), reactions: [] }; db.messages.push(x); return clone(x); },
     async toggleReaction(messageId, userId, emoji) {
       const m = db.messages.find((x) => x.id === messageId);
       if (!m) return;

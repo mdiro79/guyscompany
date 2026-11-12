@@ -128,6 +128,7 @@ export interface Message {
   authorId: string | null;
   body: string;
   fileId: string | null;
+  replyTo?: string | null; // the message this one answers
   createdAt: string;
   reactions: Reaction[];
 }
@@ -327,7 +328,7 @@ export interface DataStore {
   deleteFile(id: string): Promise<void>;
 
   listMessages(channel: string, limit: number): Promise<Message[]>;
-  createMessage(m: Pick<Message, 'channel' | 'authorId' | 'body' | 'fileId'>): Promise<Message>;
+  createMessage(m: Pick<Message, 'channel' | 'authorId' | 'body' | 'fileId' | 'replyTo'>): Promise<Message>;
   toggleReaction(messageId: string, userId: string, emoji: string): Promise<void>;
 
   listPolls(): Promise<Poll[]>;

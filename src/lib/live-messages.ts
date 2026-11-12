@@ -7,10 +7,10 @@ type Listener = (m: Message) => void;
 const listeners = new Set<Listener>();
 let channel: RealtimeChannel | null = null;
 
-interface MessageRow { id: string; channel: string; author_id: string | null; body: string; file_id: string | null; created_at: string }
+interface MessageRow { id: string; channel: string; author_id: string | null; body: string; file_id: string | null; reply_to?: string | null; created_at: string }
 
 const toMessage = (r: MessageRow): Message => ({
-  id: r.id, channel: r.channel, authorId: r.author_id, body: r.body, fileId: r.file_id,
+  id: r.id, channel: r.channel, authorId: r.author_id, body: r.body, fileId: r.file_id, replyTo: r.reply_to ?? null,
   createdAt: new Date(r.created_at).toISOString(), reactions: [],
 });
 

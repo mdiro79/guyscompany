@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { MessageCircle, MoreHorizontal, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { toggleReactionAction } from '@/app/actions/chat';
+import { VoicePlayer, voiceSeconds } from './voice';
 import { formatBytes, formatTime } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
 import { uploadFile } from '@/lib/upload';
@@ -82,10 +83,19 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
                   <span className="text-sm font-semibold">{author?.displayName ?? '—'}</span>
                   <span className="text-[11px] text-muted" dir={sending ? undefined : 'ltr'}>{sending ? t('sending') : formatTime(locale, m.createdAt)}</span>
                 </div>
-                {m.body && (
+                {m.replyTo && (() => {
+                  // A reply: the message it answers, quoted in one line.
+                  const q = messages.find((x) => x.id === m.replyTo);
+                  return <div dir="auto" className="mt-1 truncate border-s-2 border-line ps-2 text-xs text-muted"><b>{q ? byId(q.authorId)?.displayName ?? '—' : '…'}</b> {q ? (voiceSeconds(q) !== null ? '🎤' : q.body || '📎') : ''}</div>;
+                })()}
+                {voiceSeconds(m) !== null && m.fileId ? (
+                  <div className={clsx('mt-1 inline-flex rounded-2xl rounded-ss-md px-3 py-2', mine ? 'bg-brand text-brand-ink' : 'bg-[#4a453f] text-white', sending && 'opacity-60')}>
+                    <VoicePlayer fileId={m.fileId} seconds={voiceSeconds(m)!} />
+                  </div>
+                ) : m.body && (
                   <div dir="auto" className={clsx('mt-1 whitespace-pre-wrap break-words rounded-2xl rounded-ss-md px-3 py-2 text-sm leading-6', mine ? 'bg-brand-soft' : 'bg-surface-2', sending && 'opacity-60')}>{m.body}</div>
                 )}
-                {file && (
+                {file && voiceSeconds(m) === null && (
                   <a href={`/api/files/${file.id}`} className="mt-1 flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:bg-surface-2">
                     <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand"><FileText className="size-5" /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium" dir="ltr">{file.name}</span><span className="text-xs text-brand">{formatBytes(locale, file.size)}</span></span>

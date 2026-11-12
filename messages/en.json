@@ -453,7 +453,20 @@
     "uploadFailed": "File upload failed",
     "online": "{n} online",
     "collapse": "Hide messages",
-    "expand": "Show messages"
+    "expand": "Show messages",
+    "reply": "Reply",
+    "replyTo": "Reply to {name}",
+    "cancelReply": "Cancel reply",
+    "voice": "Voice message",
+    "record": "Record a voice message",
+    "recording": "Recording",
+    "cancelRecording": "Cancel recording",
+    "sendVoice": "Send voice message",
+    "micDenied": "Microphone access is not allowed",
+    "voiceFailed": "Voice message not sent",
+    "play": "Play",
+    "pause": "Pause",
+    "closeMenu": "Close"
   },
   "todos": {
     "title": "My to-dos",

@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, boolean, integer, smallint, timestamp, date, jsonb, primaryKey, pgEnum, index, check,
+  pgTable, uuid, text, boolean, integer, smallint, timestamp, date, jsonb, primaryKey, pgEnum, index, check, type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -80,6 +80,8 @@ export const messages = pgTable('messages', {
   authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'set null' }),
   body: text('body').notNull().default(''),
   fileId: uuid('file_id').references(() => files.id, { onDelete: 'set null' }),
+  // The message this one answers (a reply); kept as a plain id so a deleted original only loses the quote.
+  replyTo: uuid('reply_to').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('messages_channel_created_idx').on(t.channel, t.createdAt)]);
 
