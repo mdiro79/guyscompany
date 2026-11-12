@@ -3,6 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 /* Phones in landscape (and other very short viewports). */
 @custom-variant short (@media (max-height: 500px));
+/* Tablets and computers: wide and not short. */
+@custom-variant roomy (@media (min-width: 640px) and (min-height: 501px));
 
 @theme {
   --font-sans: 'Inter Variable', 'Vazirmatn Variable', ui-sans-serif, system-ui, sans-serif;
@@ -85,6 +87,9 @@ html.gc-lock, html.gc-lock body { height: 100%; overflow: hidden; }
 html.gc-lock body { position: fixed; inset: 0; width: 100%; }
 /* While a phone's keyboard is open, everything not needed for typing steps aside. */
 html.gc-kb .gc-kb-hide { display: none !important; }
+/* The office's buttons and panels fade away while the team chat is open, and come back when it closes. */
+.gc-hud { transition: opacity .25s ease, visibility 0s linear 0s; }
+.gc-chat-open .gc-hud { opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility 0s linear .25s; }
 html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif; }
 
 @utility card { @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.04)]; }

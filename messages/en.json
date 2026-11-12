@@ -450,7 +450,10 @@
     "newMessages": "{n} new",
     "sendFailed": "Message not sent; try again",
     "sending": "Sending…",
-    "uploadFailed": "File upload failed"
+    "uploadFailed": "File upload failed",
+    "online": "{n} online",
+    "collapse": "Hide messages",
+    "expand": "Show messages"
   },
   "todos": {
     "title": "My to-dos",

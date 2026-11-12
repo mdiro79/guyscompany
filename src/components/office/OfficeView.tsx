@@ -498,7 +498,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   );
 
   return (
-    <div id="gc-office" className={clsx('fixed inset-0 bg-[#2a221c] text-white select-none', showCursor && 'cursor-none [&_*]:cursor-none')}>
+    <div id="gc-office" className={clsx('fixed inset-0 bg-[#2a221c] text-white select-none', showCursor && 'cursor-none [&_*]:cursor-none', ui.chat && 'gc-chat-open')}>
       {/* The 3D view: all of the screen, or beside (landscape) or above (portrait) the drawing board in split view. */}
       <div className={clsx('absolute', boardSplit
         ? 'inset-x-0 top-0 h-[42dvh] landscape:inset-y-0 landscape:start-auto landscape:end-0 landscape:h-auto landscape:w-[42vw]'
@@ -528,7 +528,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Top bar */}
       {!working && (
-        <div className="gc-kb-hide pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 px-safe pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-2">
+        <div className="gc-hud gc-kb-hide pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start gap-2 px-safe pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-2">
           <Link href="/" className="pointer-events-auto flex min-h-11 items-center gap-2 rounded-xl bg-black/55 px-3 text-sm backdrop-blur hover:bg-black/70"><Back className="size-4" /><span className="max-sm:hidden short:hidden">{t('back')}</span></Link>
           {officeControls ? (
             // In one's own office the place name is the small "my office" button: the panel opens below it,
@@ -581,7 +581,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {/* Crosshair and hints */}
       {ui.locked && !working && <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80" />}
       {!working && !touring && ui.board === 'none' && (
-        <div className="gc-kb-hide pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] short:p-2">
+        <div className="gc-hud gc-kb-hide pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] short:p-2">
           {!isPhone && !ui.locked && <div className="rounded-xl bg-black/60 px-4 py-2 text-sm">{ui.seatId ? t('cursorHint') : t('clickToLook')}</div>}
           {!isPhone && hint && <div className={clsx('rounded-xl px-4 py-2 text-sm', it?.kind === 'door' && !it.allowed ? 'bg-[#d9443c]/90' : 'bg-[#2f5d45]/90')}>{hint}</div>}
           {!isPhone && !ui.chat && <div className="hidden rounded-lg bg-black/40 px-3 py-1 text-xs text-white/80 md:block">{t('controlsDesktop')}</div>}
@@ -591,7 +591,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Contextual action (phones; on computers it's E) */}
       {isPhone && !working && !touring && action && !ui.roomPanel && !ui.chat && (
-        <div className="gc-kb-hide absolute end-safe bottom-6 z-40 pb-[env(safe-area-inset-bottom)] short:bottom-3">
+        <div className="gc-hud gc-kb-hide absolute end-safe bottom-6 z-40 pb-[env(safe-area-inset-bottom)] short:bottom-3">
           <button type="button" disabled={'disabled' in action} className="flex min-h-14 items-center gap-2 rounded-2xl bg-[#2f5d45] px-5 text-base font-semibold shadow-lg disabled:bg-[#d9443c]/90 short:min-h-12"
             onClick={act}>
             <action.icon className="size-5" />{action.label}
@@ -637,7 +637,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Empty office: anyone inside can take it */}
       {current && !current.ownerId && !ui.seatId && !touring && !working && (
-        <div className="absolute top-[4.25rem] left-1/2 z-30 flex w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 flex-col items-center gap-2 short:top-14">
+        <div className="gc-hud absolute top-[4.25rem] left-1/2 z-30 flex w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 flex-col items-center gap-2 short:top-14">
           {claim === 'confirm' && myOffice ? (
             <div className="w-full rounded-2xl bg-black/75 p-3 text-sm shadow-xl backdrop-blur">
               <p className="mb-3 leading-6">{t('claimMove', { slot: myOffice.slot })}</p>
@@ -662,7 +662,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Owner controls inside one's own office */}
       {officeControls && officeTab && (
-        <div className="absolute top-[4.25rem] start-safe z-30 short:top-14">
+        <div className="gc-hud absolute top-[4.25rem] start-safe z-30 short:top-14">
           <OfficePanel office={myOffice} profiles={profiles} me={user} privateMessages={privateChats[myOffice.slot] ?? []} files={files} onChange={changeMyOffice}
             tab={officeTab} onTab={setOfficeTab} />
         </div>
@@ -670,12 +670,12 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Conference room wall panel: light and glass */}
       {ui.roomPanel && !ui.seatId && !touring && (
-        <div className="absolute top-[4.25rem] end-safe z-30 short:top-14"><RoomControls onClose={() => officeUi.set({ roomPanel: false })} /></div>
+        <div className="gc-hud absolute top-[4.25rem] end-safe z-30 short:top-14"><RoomControls onClose={() => officeUi.set({ roomPanel: false })} /></div>
       )}
 
       {/* Private chat for invited guests inside the host's office */}
       {current && !inMyOffice && invitedSlots.includes(current.slot) && !ui.seatId && !touring && (
-        <div className="absolute top-20 end-safe z-30 flex flex-col items-end gap-2 short:top-16">
+        <div className="gc-hud absolute top-20 end-safe z-30 flex flex-col items-end gap-2 short:top-16">
           <button type="button" className="flex min-h-11 items-center gap-2 rounded-xl bg-black/60 px-3 text-sm backdrop-blur" onClick={() => setGuestChat((x) => !x)}>
             {guestChat ? <X className="size-4" /> : <MessageSquare className="size-4" />}{t('privateChat')}
           </button>
@@ -691,7 +691,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {/* Hidden while the wall panel is open (they would cover each other on a phone held sideways). While a
           phone's keyboard is open only the panel being typed in stays, small, in the top corner. */}
       {!touring && ui.board === 'none' && ui.inConference && !(ui.roomPanel && !ui.seatId) && (
-        <div className={clsx('z-30', kb
+        <div className={clsx('gc-hud z-30', kb
           ? 'pointer-events-none absolute inset-0'
           : 'absolute top-[4.25rem] left-1/2 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap justify-center gap-2 short:top-14')}>
           <MeetingPanel data={meetingData} running={running} mode={meetingPanel} onMode={setMeetingPanel} presentNow={presentNow} />
@@ -715,7 +715,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {/* Game room, library pod and the map */}
       {ui.overlay === 'arcade' && <ArcadeGame people={profiles.map((p) => ({ id: p.id, name: p.displayName }))} meId={user.id} onClose={closeOverlay} />}
       {ui.overlay === 'jukebox' && !ui.seatId && (
-        <div className="absolute top-[4.25rem] end-safe z-30 short:top-14"><JukeboxPanel onClose={closeOverlay} /></div>
+        <div className="gc-hud absolute top-[4.25rem] end-safe z-30 short:top-14"><JukeboxPanel onClose={closeOverlay} /></div>
       )}
       {ui.overlay === 'map' && (
         <MiniMap profiles={profiles} offices={offices} meId={user.id} myPos={myPos} remotes={net.remotes} mesh={mesh} onClose={closeOverlay}
@@ -730,7 +730,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       )}
       {/* A running focus timer stays in sight after leaving the pod */}
       {focusTimer.running && !ui.seatId?.startsWith('pod-') && !working && (
-        <div className="pointer-events-none absolute start-safe top-[4.25rem] z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs tabular-nums backdrop-blur short:top-14" dir="ltr"><Timer className="size-3.5 text-[#8fe0c8]" />{clock(focusTimer.leftMs)}</div>
+        <div className="gc-hud pointer-events-none absolute start-safe top-[4.25rem] z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-xs tabular-nums backdrop-blur short:top-14" dir="ltr"><Timer className="size-3.5 text-[#8fe0c8]" />{clock(focusTimer.leftMs)}</div>
       )}
       {toast && <div className="gc-pop gc-kb-hide pointer-events-none absolute top-24 left-1/2 z-40 -translate-x-1/2 rounded-2xl bg-[#2f5d45] px-4 py-2 text-sm font-semibold shadow-lg short:top-16">{toast}</div>}
 
