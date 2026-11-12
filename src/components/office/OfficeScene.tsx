@@ -1,7 +1,8 @@
 'use client';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Environment, Lightformer, PerformanceMonitor, useProgress } from '@react-three/drei';
+import * as THREE from 'three';
+import { Canvas, addAfterEffect, useThree } from '@react-three/fiber';
+import { Environment, Lightformer, useProgress } from '@react-three/drei';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import type { Office, Profile } from '@/lib/data/types';
 import { Building } from './Building';
@@ -21,8 +22,9 @@ import { LightPool } from './LightPool';
 import type { MeetingLabels } from './textures';
 import { SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
-import { officeUi } from './store';
+import { input } from './store';
 import { SceneStats } from './SceneStats';
+import { COMPUTER, LADDER, LOWEST, PHONE, WINDOW_MS, dprOf, initialQuality, stepQuality } from './quality';
 
 export interface SceneProps {
   user: Profile; profiles: Profile[]; offices: Office[]; invitedSlots: number[];
@@ -84,31 +86,98 @@ function LoadingOverlay({ label, ready }: { label: string; ready: boolean }) {
   );
 }
 
-// Pixels rendered per CSS pixel. Phone screens have 3, so rendering at 1 looked blurry and jagged;
-// low quality now means fewer lights and at most 1.5, high quality up to 2. If the frame rate drops,
-// the scale steps down towards 1 (and back up when there is headroom again).
-const MAX_DPR = { low: 1.5, high: 2 };
-// Sharper only gives way when movement is really choppy (drei's default already steps down below 50 fps).
-const FPS_BOUNDS = (): [number, number] => [30, 55];
-function useRenderScale(low: boolean) {
-  const max = Math.max(1, Math.min(window.devicePixelRatio || 1, low ? MAX_DPR.low : MAX_DPR.high));
-  const [share, setShare] = useState(1);
-  const shareRef = useRef(share);
-  shareRef.current = share;
-  return {
-    dpr: 1 + (max - 1) * share,
-    decline: () => {
-      // Still too slow at the lowest scale: drop the effects and extra lights (the gauge button brings them back).
-      if (shareRef.current === 0 && !low) officeUi.set({ lowQuality: true });
-      setShare((x) => Math.max(0, x - 0.34));
-    },
-    incline: () => setShare((x) => Math.min(1, x + 0.34)),
-  };
+// Graphics quality follows the device (see quality.ts): it steps down gently when frames come late or the
+// device has been working for a while, and back up when there is headroom. Kept between visits to the
+// office, so coming back from the dashboard does not start a warm phone at full quality again.
+let quality = initialQuality();
+let lastWindow = 0;
+let frames = 0;
+const IDLE_MS = 8000; // no touch, key or mouse for this long: the view is drawn at 30 frames a second
+
+// Nobody is touching, typing or moving: a still view does not need 60 frames a second.
+function useIdle() {
+  const [idle, setIdle] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined, isIdle = false;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(function check() {
+        // A joystick held still sends no events, but the player is walking.
+        if (input.forward || input.right) { timer = setTimeout(check, 1000); return; }
+        isIdle = true; setIdle(true);
+      }, IDLE_MS);
+    };
+    const wake = () => { if (isIdle) { isIdle = false; setIdle(false); } arm(); };
+    const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
+    events.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }));
+    arm();
+    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, wake, { capture: true })); };
+  }, []);
+  return idle;
+}
+
+function useAdaptiveQuality(manualLow: boolean, phone: boolean, paused: boolean, ready: boolean) {
+  const tune = phone ? PHONE : COMPUTER;
+  const [level, setLevel] = useState(() => quality.level);
+  const idle = useIdle();
+  const step = LADDER[manualLow ? LOWEST : level];
+  const fps = idle ? 30 : step.fps;
+  const live = useRef({ paused, ready, fps, fpsSince: 0 });
+  if (live.current.fps !== fps) live.current.fpsSince = performance.now();
+  Object.assign(live.current, { paused, ready, fps });
+  // Turning high quality back on (the gauge button) starts again from the best step.
+  const wasLow = useRef(manualLow);
+  useEffect(() => {
+    if (wasLow.current && !manualLow) { quality = initialQuality(); setLevel(0); }
+    wasLow.current = manualLow;
+  }, [manualLow]);
+  useEffect(() => {
+    if (manualLow) return;
+    // Time away from the office cooled the device down.
+    const now = performance.now();
+    if (lastWindow) quality = stepQuality(quality, { now, dt: now - lastWindow, running: false, ratio: null }, tune);
+    lastWindow = now; frames = 0;
+    setLevel(quality.level);
+    const id = setInterval(() => {
+      const t = performance.now(), dt = t - lastWindow, l = live.current;
+      const running = !l.paused && l.ready && document.visibilityState === 'visible';
+      const judged = running && t - quality.changedAt > 2500 && t - l.fpsSince > dt;
+      const ratio = judged ? frames / (l.fps * dt / 1000) : null;
+      quality = stepQuality(quality, { now: t, dt, running, ratio }, tune);
+      lastWindow = t; frames = 0;
+      // For the measuring scripts and the debug badge, like window.__gcStats.
+      (window as unknown as { __gcQuality?: unknown }).__gcQuality = { ...quality, ratio, fps: l.fps };
+      setLevel(quality.level);
+    }, WINDOW_MS);
+    return () => clearInterval(id);
+  }, [manualLow, tune]);
+  const max = Math.min(window.devicePixelRatio || 1, 2);
+  return { step, fps, dpr: dprOf(step, max) };
+}
+
+// Draws the view at a steady rate (60 or 30 frames a second, also on 90 and 120 Hz screens) and counts
+// the frames actually drawn, which is how the quality controller knows whether the device keeps up.
+function FrameDriver({ fps }: { fps: number }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const step = 1000 / fps;
+    let raf = 0, next = 0;
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      if (t + 2 < next) return;
+      next = t - next > step ? t + step : next + step;
+      invalidate();
+    };
+    raf = requestAnimationFrame(loop);
+    const off = addAfterEffect(() => { frames++; });
+    return () => { cancelAnimationFrame(raf); off(); };
+  }, [fps, invalidate]);
+  return null;
 }
 
 export default function OfficeScene(p: SceneProps) {
   const [ready, setReady] = useState(false);
-  const scale = useRenderScale(p.lowQuality);
+  const q = useAdaptiveQuality(p.lowQuality, p.isPhone, p.paused, ready);
   const markReady = useCallback(() => setReady(true), []);
   // Names for the conference screen (who presents, who wrote what, raised hands).
   const people = useMemo(() => p.profiles.map((x) => ({ id: x.id, name: x.displayName })), [p.profiles]);
@@ -118,19 +187,22 @@ export default function OfficeScene(p: SceneProps) {
     <>
     <LoadingOverlay label={p.loadingLabel} ready={ready} />
     <Canvas
-      dpr={scale.dpr}
-      frameloop={p.paused ? 'demand' : 'always'}
+      dpr={q.dpr}
+      // Frames are requested by FrameDriver at the chosen rate; none at all while paused (only on demand).
+      frameloop="demand"
       // Fixed when the canvas is created, so it cannot follow the quality toggle; edges stay smooth on phones too.
       gl={{ antialias: true, powerPreference: 'high-performance' }}
+      // The same tone mapping as the effects pass, so colours do not jump when the effects turn off.
+      onCreated={({ gl }) => { gl.toneMapping = THREE.NeutralToneMapping; }}
       camera={{ fov: p.isPhone ? 72 : 68, near: 0.05, far: 120, position: [SPAWN.pos[0], 1.6, SPAWN.pos[1]] }}
       style={{ touchAction: 'none' }}
     >
-      <PerformanceMonitor bounds={FPS_BOUNDS} onDecline={scale.decline} onIncline={scale.incline} flipflops={4} />
+      {!p.paused && <FrameDriver fps={q.fps} />}
       <color attach="background" args={['#e4dbcf']} />
       <fog attach="fog" args={['#e4dbcf', 30, 64]} />
-      <Lights low={p.lowQuality} />
+      <Lights low={q.step.simpleLights} />
       <SoftEnvironment />
-      <ConferenceRoom labels={p.meetingLabels} people={people} lowQuality={p.lowQuality} />
+      <ConferenceRoom labels={p.meetingLabels} people={people} lowQuality={q.step.simpleLights} />
       <Rooms labels={p.roomLabels} people={people} />
       <Suspense fallback={null}>
         <Building offices={p.offices} />
@@ -145,7 +217,7 @@ export default function OfficeScene(p: SceneProps) {
       <TourBubbleAnchor />
       <LabelProjector offices={p.offices} />
       <SceneStats />
-      {!p.lowQuality && ready && <Suspense fallback={null}><Effects phone={p.isPhone} /></Suspense>}
+      {q.step.effects && ready && <Suspense fallback={null}><Effects phone={p.isPhone} ao={q.step.ao} glow={q.step.glow} msaa={q.step.msaa} /></Suspense>}
     </Canvas>
     </>
   );

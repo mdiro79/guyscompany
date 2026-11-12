@@ -14,7 +14,11 @@ export type BoardItem = ItemBase & (
   | { kind: 'image'; x: number; y: number; w: number; h: number; fileId: string });
 
 // `clear` with a page empties that page only; `delpage` removes a page and moves the later ones up.
-export type BoardOp = { t: 'put'; item: BoardItem } | { t: 'del'; id: string } | { t: 'clear'; pg?: number } | { t: 'delpage'; pg: number };
+// `pts` adds points to a stroke being drawn: only the new ones travel (`from` is how many numbers the
+// stroke had when they were taken), so a long stroke does not resend all of itself many times a second.
+export type BoardOp =
+  | { t: 'put'; item: BoardItem } | { t: 'del'; id: string } | { t: 'clear'; pg?: number } | { t: 'delpage'; pg: number }
+  | { t: 'pts'; id: string; from: number; points: number[] };
 
 export const BOARD_COLORS = ['#1f2328', '#e5484d', '#f08a24', '#2f9e44', '#2a78d6', '#8e4ec6'] as const;
 export const PEN_SIZES = [4, 9, 18] as const;
@@ -31,18 +35,31 @@ export function applyOp(items: BoardItem[], op: BoardOp): BoardItem[] {
   if (op.t === 'clear') return op.pg === undefined ? [] : items.filter((i) => pageOf(i) !== op.pg);
   if (op.t === 'delpage') return items.filter((i) => pageOf(i) !== op.pg).map((i) => (pageOf(i) > op.pg ? { ...i, pg: pageOf(i) - 1 } : i));
   if (op.t === 'del') return items.filter((i) => i.id !== op.id);
+  if (op.t === 'pts') return appendPoints(items, op);
   const at = items.findIndex((i) => i.id === op.item.id);
   if (at >= 0) return items.map((i, k) => (k === at ? op.item : i));
   return items.length >= MAX_ITEMS ? items : [...items, op.item];
+}
+
+// New points for a stroke: the part not there yet is added. Points that were missed (a gap) are not
+// guessed: the whole stroke follows when it ends.
+function appendPoints(items: BoardItem[], op: Extract<BoardOp, { t: 'pts' }>): BoardItem[] {
+  const at = items.findIndex((i) => i.id === op.id);
+  const old = at >= 0 ? items[at] : null;
+  if (!old || old.kind !== 'stroke' || op.from > old.points.length) return items;
+  const extra = op.points.slice(old.points.length - op.from);
+  if (!extra.length || old.points.length >= MAX_POINTS * 2) return items;
+  const points = old.points.concat(extra.slice(0, MAX_POINTS * 2 - old.points.length));
+  return items.map((i, k) => (k === at ? { ...old, points } : i));
 }
 
 // The op that undoes `op` on `before` (the board as it was).
 export function inverseOps(before: BoardItem[], op: BoardOp): BoardOp[] {
   if (op.t === 'clear') return (op.pg === undefined ? before : onPage(before, op.pg)).map((item) => ({ t: 'put', item }));
   if (op.t === 'delpage') return []; // not undoable (asked for confirmation instead)
-  const id = op.t === 'del' ? op.id : op.item.id;
+  const id = op.t === 'put' ? op.item.id : op.id;
   const old = before.find((i) => i.id === id);
-  return old ? [{ t: 'put', item: old }] : [{ t: 'del', id }];
+  return old ? [{ t: 'put', item: old }] : op.t === 'pts' ? [] : [{ t: 'del', id }];
 }
 
 const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : null);
@@ -69,16 +86,22 @@ function cleanBase(o: Record<string, unknown>): ItemBase | null {
   return base;
 }
 
+// Flat x,y pairs from the network, clamped near the board; null if any is not a number.
+function cleanPoints(v: unknown): number[] | null {
+  if (!Array.isArray(v)) return null;
+  const pts: number[] = [];
+  for (let i = 0; i + 1 < Math.min(v.length, MAX_POINTS * 2); i += 2) {
+    const x = num(v[i], -50, BOARD_W + 50), y = num(v[i + 1], -50, BOARD_H + 50);
+    if (x === null || y === null) return null;
+    pts.push(x, y);
+  }
+  return pts;
+}
+
 function cleanKind(o: Record<string, unknown>, id: string): BoardItem | null {
   if (o.kind === 'stroke') {
-    const c = color(o.color), size = num(o.size, 1, 60);
-    if (!c || size === null || !Array.isArray(o.points)) return null;
-    const pts: number[] = [];
-    for (let i = 0; i + 1 < Math.min(o.points.length, MAX_POINTS * 2); i += 2) {
-      const x = num(o.points[i], -50, BOARD_W + 50), y = num(o.points[i + 1], -50, BOARD_H + 50);
-      if (x === null || y === null) return null;
-      pts.push(x, y);
-    }
+    const c = color(o.color), size = num(o.size, 1, 60), pts = cleanPoints(o.points);
+    if (!c || size === null || !pts) return null;
     return pts.length >= 2 ? { id, kind: 'stroke', color: c, size, points: pts, ...(o.hl === true ? { hl: true } : {}) } : null;
   }
   if (o.kind === 'text') {
@@ -99,6 +122,10 @@ export function cleanOp(v: unknown): BoardOp | null {
   if (o.t === 'delpage') { const pg = num(o.pg, 0, MAX_PAGES - 1); return pg === null ? null : { t: 'delpage', pg }; }
   if (o.t === 'del') { const id = str(o.id, 40); return id ? { t: 'del', id } : null; }
   if (o.t === 'put') { const item = cleanItem(o.item); return item ? { t: 'put', item } : null; }
+  if (o.t === 'pts') {
+    const id = str(o.id, 40), from = num(o.from, 0, MAX_POINTS * 2), points = cleanPoints(o.points);
+    return id && from !== null && from % 2 === 0 && points?.length ? { t: 'pts', id, from, points } : null;
+  }
   return null;
 }
 
@@ -161,9 +188,10 @@ export const authorOf = (i: BoardItem, owner: string) => i.by ?? owner;
 export function mayEdit(items: BoardItem[], op: BoardOp, by: string, owner: string, shared: boolean) {
   if (by === owner) return true;
   if (!shared || op.t === 'clear' || op.t === 'delpage') return false;
-  const id = op.t === 'del' ? op.id : op.item.id;
+  const id = op.t === 'put' ? op.item.id : op.id;
   const old = items.find((i) => i.id === id);
   if (old && authorOf(old, owner) !== by) return false;
+  if (op.t === 'pts') return !!old;
   return op.t === 'del' || op.item.by === by;
 }
 

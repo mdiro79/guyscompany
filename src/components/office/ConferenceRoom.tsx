@@ -8,9 +8,9 @@ import {
   WALL_HEIGHT,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
-import { drawBoard, memberColor } from '@/lib/board/draw';
+import { BoardPainter, memberColor } from '@/lib/board/draw';
 import { BOARD_H, BOARD_W, onPage } from '@/lib/board/model';
-import { boardOf, lasersOn, presentation, subscribeBoards, writingNow } from '@/lib/board/sync';
+import { boardOf, isHot, lasersOn, presentation, subscribeBoards, writingNow } from '@/lib/board/sync';
 import { handQueue, subscribeHands } from '@/lib/board/hands';
 import { quickVote, subscribeQuickVote, tally } from '@/lib/board/vote';
 import { useVoice } from '@/components/voice/VoiceContext';
@@ -32,6 +32,7 @@ import { officeUi, useOfficeUi } from './store';
 const FRAME = '#f6f4f0';
 const CUSHION = '#86a7df';
 const SCREEN_PX: [number, number] = [2048, 1152];
+const SCREEN_MIN_MS = 100; // the screen picture is repainted at most this often
 const LIGHT = new THREE.Color(2, 1.8, 1.45); // above white: glows in high quality
 
 const mat = {
@@ -311,8 +312,9 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
   // frame and only when what it shows changed (checked every second too, for the countdown and the
   // "writing now" tags), and again once the web fonts are ready.
   useEffect(() => {
-    let live = true, raf = 0, shown = '';
+    let live = true, raf = 0, shown = '', wait: ReturnType<typeof setTimeout> | undefined, last = 0;
     let shownRefs: unknown[] = [];
+    const painter = new BoardPainter();
     const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? null;
     const paint = (force = false) => {
       raf = 0;
@@ -330,10 +332,10 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
       const key = [who, left === null ? '' : clock(left), writers, elapsed, speaking, qv ? JSON.stringify(qv) : ''].join('|');
       const refs = [board, p, hands];
       if (!force && key === shown && refs.every((r, i) => r === shownRefs[i])) return;
-      shown = key; shownRefs = refs;
+      shown = key; shownRefs = refs; last = performance.now();
       if (who && board) {
-        drawBoard(cv.getContext('2d')!, onPage(board.items, board.page), cv.width / BOARD_W, () => schedule(true), {
-          tags: { owner: who, name: nameOf, color: (id) => colorOf(people, id), active: writingNow },
+        painter.paint(cv.getContext('2d')!, onPage(board.items, board.page), cv.width / BOARD_W, () => schedule(true), {
+          tags: { owner: who, name: nameOf, color: (id) => colorOf(people, id), active: writingNow }, hot: isHot,
         });
       } else paintScreen(cv, labels);
       paintScreenInfo(cv, {
@@ -344,7 +346,15 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
       });
       tex.needsUpdate = true;
     };
-    const schedule = (force = false) => { if (force) shown = '\0'; if (!raf) raf = requestAnimationFrame(() => paint()); };
+    // While someone draws, the big screen picture is sent to the graphics card about ten times a second, not
+    // on every frame: smooth enough to watch, and far less work (and heat) on phones.
+    const schedule = (force = false) => {
+      if (force) shown = '\0';
+      if (raf || wait) return;
+      const gap = SCREEN_MIN_MS - (performance.now() - last);
+      if (gap > 0) wait = setTimeout(() => { wait = undefined; raf = requestAnimationFrame(() => paint()); }, gap);
+      else raf = requestAnimationFrame(() => paint());
+    };
     const offBoards = subscribeBoards(() => schedule());
     const offHands = subscribeHands(() => schedule());
     const offVote = subscribeQuickVote(() => schedule());
@@ -352,7 +362,7 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
     paint(true);
     const fam = labels.rtl ? '"Vazirmatn Variable"' : '"Inter Variable"';
     Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(() => schedule(true), () => {});
-    return () => { live = false; offBoards(); offHands(); offVote(); clearInterval(tick); cancelAnimationFrame(raf); };
+    return () => { live = false; offBoards(); offHands(); offVote(); clearInterval(tick); cancelAnimationFrame(raf); clearTimeout(wait); };
   }, [cv, tex, labels, people]);
   useEffect(() => () => tex.dispose(), [tex]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;

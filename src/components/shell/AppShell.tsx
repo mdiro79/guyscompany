@@ -61,6 +61,11 @@ export function AppShell({ data: server, notifications, messages, files, search,
     return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
   }, [messages, seenId, data.user.id]);
   const fullBleed = pathname.startsWith('/office') || pathname.startsWith('/board');
+  // Full-screen pages do not scroll at all (see lib/viewport.ts): they stay put like an installed app.
+  useEffect(() => {
+    document.documentElement.classList.toggle('gc-lock', fullBleed);
+    return () => document.documentElement.classList.remove('gc-lock');
+  }, [fullBleed]);
   // Embedded on a 3D monitor: no presence, voice or sidebar (the parent page owns those).
   // The ?embed=1 flag only exists on the first page; later navigation inside the iframe stays embedded too.
   const embedParam = useSearchParams().get('embed') === '1';

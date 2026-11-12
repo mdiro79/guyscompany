@@ -5,6 +5,7 @@ import { BOARD_H, BOARD_W, nameTags, type BoardItem } from './model';
 // use the same code, so both show exactly the same picture.
 
 const images = new Map<string, HTMLImageElement>();
+const failed = new Set<string>();
 const waiting = new Set<() => void>();
 
 /** The loaded picture for an uploaded file, or null while it loads (`onLoad` runs when it is ready). */
@@ -16,11 +17,13 @@ export function boardImage(fileId: string, onLoad: () => void): HTMLImageElement
     img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = () => { const l = [...waiting]; waiting.clear(); l.forEach((f) => f()); };
+    // A picture that cannot load stays a grey box (and stops collecting callbacks on every repaint).
+    img.onerror = () => { failed.add(fileId); };
     img.src = `/api/files/${fileId}`;
     images.set(fileId, img);
   }
   if (img.complete && img.naturalWidth) return img;
-  waiting.add(onLoad);
+  if (!failed.has(fileId)) waiting.add(onLoad);
   return null;
 }
 
@@ -97,18 +100,21 @@ export function drawTags(g: CanvasRenderingContext2D, items: BoardItem[], scale:
   g.restore();
 }
 
-/** Draws `items` on a canvas whose size is the board scaled by `scale`. */
-export function drawBoard(g: CanvasRenderingContext2D, items: BoardItem[], scale: number, onImage: () => void, opts: { grid?: boolean; tags?: TagOptions } = {}) {
-  g.save();
-  g.setTransform(scale, 0, 0, scale, 0, 0);
+// The paper and its dot grid (board units).
+function background(g: CanvasRenderingContext2D, grid: boolean) {
   g.fillStyle = '#fbfaf7';
   g.fillRect(0, 0, BOARD_W, BOARD_H);
-  if (opts.grid) {
+  if (grid) {
     g.fillStyle = '#dcd6cc';
     for (let x = 40; x < BOARD_W; x += 40) for (let y = 40; y < BOARD_H; y += 40) g.fillRect(x - 1.5, y - 1.5, 3, 3);
   }
+}
+
+// Items in order (board units).
+function drawItems(g: CanvasRenderingContext2D, items: BoardItem[], from: number, to: number, onImage: () => void) {
   g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const i of items) {
+  for (let k = from; k < to; k++) {
+    const i = items[k];
     if (i.kind === 'stroke') stroke(g, i);
     else if (i.kind === 'text') text(g, i);
     else {
@@ -117,6 +123,61 @@ export function drawBoard(g: CanvasRenderingContext2D, items: BoardItem[], scale
       else { g.fillStyle = '#ece7df'; g.fillRect(i.x, i.y, i.w, i.h); }
     }
   }
+}
+
+export interface DrawOptions { grid?: boolean; tags?: TagOptions }
+
+/** Draws `items` on a canvas whose size is the board scaled by `scale`. */
+export function drawBoard(g: CanvasRenderingContext2D, items: BoardItem[], scale: number, onImage: () => void, opts: DrawOptions = {}) {
+  g.save();
+  g.setTransform(scale, 0, 0, scale, 0, 0);
+  background(g, !!opts.grid);
+  drawItems(g, items, 0, items.length, onImage);
   g.restore();
   if (opts.tags) drawTags(g, items, scale, opts.tags);
+}
+
+/**
+ * Paints a board like drawBoard, but keeps a picture of the items that are no longer changing (all items
+ * before the first one still being drawn or moved, `hot`) and only draws the rest over it. A full board
+ * then costs about as much to update as an empty one: new items are added to the picture once they
+ * settle, and it is only redrawn from scratch when an older item changes (erase, undo, page turn).
+ */
+export class BoardPainter {
+  private layer: HTMLCanvasElement | null = null;
+  private drawn: BoardItem[] = []; // the items in the picture, in order
+  private key = '';
+
+  /** Forget the picture (a picture finished loading, so it must be drawn again). */
+  invalidate() { this.key = ''; }
+
+  paint(g: CanvasRenderingContext2D, items: BoardItem[], scale: number, onImage: () => void, opts: DrawOptions & { hot?: (id: string) => boolean } = {}) {
+    const { width, height } = g.canvas;
+    const loaded = () => { this.invalidate(); onImage(); };
+    let settled = items.length;
+    if (opts.hot) for (let k = 0; k < items.length; k++) if (opts.hot(items[k].id)) { settled = k; break; }
+    const key = `${width}x${height}|${scale}|${opts.grid ? 1 : 0}`;
+    let keep = key === this.key && !!this.layer && this.drawn.length <= settled;
+    for (let k = 0; keep && k < this.drawn.length; k++) if (this.drawn[k] !== items[k]) keep = false;
+    if (!keep || settled > this.drawn.length) {
+      if (!this.layer) this.layer = document.createElement('canvas');
+      const L = this.layer;
+      if (L.width !== width || L.height !== height) { L.width = width; L.height = height; keep = false; }
+      const lg = L.getContext('2d')!;
+      lg.save();
+      lg.setTransform(scale, 0, 0, scale, 0, 0);
+      if (!keep) background(lg, !!opts.grid);
+      drawItems(lg, items, keep ? this.drawn.length : 0, settled, loaded);
+      lg.restore();
+      this.drawn = items.slice(0, settled);
+      this.key = key;
+    }
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(this.layer!, 0, 0);
+    g.setTransform(scale, 0, 0, scale, 0, 0);
+    drawItems(g, items, settled, items.length, loaded);
+    g.restore();
+    if (opts.tags) drawTags(g, items, scale, opts.tags);
+  }
 }

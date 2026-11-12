@@ -24,12 +24,14 @@ interface Peer {
   rtt: number; // smoothed round trip in ms (-1 until measured)
   lastSeen: number; // when anything last arrived on a data channel
   downSince: number; // since when the link has not been connected (0 while it is)
+  eventsOpen: number; // which opening of the reliable channel this is (a new one may have missed messages)
 }
 
 // How a teammate's link is doing, for the people list in the office.
 export interface LinkInfo { userId: string; tabId: string; device: 'phone' | 'computer'; state: 'connected' | 'connecting' | 'lost'; rtt: number }
 
 const PING_MS = 2500;
+let openings = 0;
 const STATE_BUFFER_LIMIT = 16 * 1024; // a pose that would queue behind this much is dropped (a newer one follows)
 const REBUILD_AFTER_MS = 30000; // a link that stays down this long is thrown away and built again
 
@@ -128,9 +130,26 @@ export class Mesh {
     for (const p of this.peers.values()) if (p.state?.readyState === 'open' && p.state.bufferedAmount < STATE_BUFFER_LIMIT) p.state.send(data);
   }
 
-  sendEvent(msg: Record<string, unknown>) {
+  /** Sends on the reliable channel to every tab, or only to the tabs `to` accepts. */
+  sendEvent(msg: Record<string, unknown>, to?: (peer: PeerInfo) => boolean) {
     const data = JSON.stringify(msg);
-    for (const p of this.peers.values()) if (p.events?.readyState === 'open') p.events.send(data);
+    for (const p of this.peers.values()) if (p.events?.readyState === 'open' && (!to || to(p.info))) p.events.send(data);
+  }
+
+  /**
+   * Which opening of the reliable channel to a tab is in use (0 while it is closed). A new number means a
+   * new channel that may have missed earlier messages, so it should be sent a fresh snapshot.
+   */
+  eventsLink(tabId: string) { const p = this.peers.get(tabId); return p?.events?.readyState === 'open' ? p.eventsOpen : 0; }
+
+  /**
+   * Bytes still waiting on the slowest reliable channel (of the tabs `to` accepts). Live updates that can be
+   * skipped (a newer one carries the same) wait while it is high, so they never pile up behind each other.
+   */
+  eventBacklog(to?: (peer: PeerInfo) => boolean) {
+    let most = 0;
+    for (const p of this.peers.values()) if (p.events?.readyState === 'open' && (!to || to(p.info))) most = Math.max(most, p.events.bufferedAmount);
+    return most;
   }
 
   // Replaces the outgoing microphone track on every connection (no renegotiation needed).
@@ -160,7 +179,7 @@ export class Mesh {
 
   private createPeer(info: PeerInfo, initiator: boolean): Peer {
     const pc = new RTCPeerConnection({ iceServers: this.ice });
-    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [], rtt: -1, lastSeen: 0, downSince: 0 };
+    const peer: Peer = { info, pc, state: null, events: null, sender: null, remoteStream: null, makingOffer: false, polite: !initiator, createdAt: Date.now(), queue: Promise.resolve(), pendingIce: [], rtt: -1, lastSeen: 0, downSince: 0, eventsOpen: 0 };
     this.peers.set(info.tabId, peer);
     const transceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
     peer.sender = transceiver.sender;
@@ -181,7 +200,8 @@ export class Mesh {
       };
       if (dc.label === 'state') peer.state = dc; else peer.events = dc;
       // Listeners send their snapshots (doors, room, board) as soon as the channel can carry them.
-      if (dc.readyState === 'open') this.emitPeers(); else dc.onopen = () => this.emitPeers();
+      const opened = () => { if (dc.label !== 'state') peer.eventsOpen = ++openings; this.emitPeers(); };
+      if (dc.readyState === 'open') opened(); else dc.onopen = opened;
     };
     if (initiator) {
       wire(pc.createDataChannel('state', { ordered: false, maxRetransmits: 0 }));

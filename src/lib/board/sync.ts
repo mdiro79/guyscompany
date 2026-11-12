@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Mesh, PeerInfo } from '@/lib/realtime/mesh';
 import { syncedNow } from '@/lib/realtime/room';
-import { applyOp, cleanItem, cleanOp, inverseOps, mayEdit, MAX_PAGES, BOARD_H, BOARD_W, type BoardItem, type BoardOp } from './model';
+import { applyOp, cleanItem, cleanOp, inverseOps, mayEdit, MAX_ITEMS, MAX_PAGES, BOARD_H, BOARD_W, type BoardItem, type BoardOp } from './model';
 
 // Live boards over the WebRTC mesh (nothing goes to the database). Each member draws on their own
 // board; every change is sent to all tabs, so the member's other devices (draw on the phone while the
@@ -12,6 +12,10 @@ import { applyOp, cleanItem, cleanOp, inverseOps, mayEdit, MAX_PAGES, BOARD_H, B
 // (each item records its author) and may change or erase only those. The presenter also turns the
 // pages, which everyone follows, and can run a countdown shown on the screen.
 // A member's own board is kept in this browser (localStorage) between visits.
+// Traffic stays small as boards fill up: a board's changes go only to the tabs that show it (the owner's
+// other devices, and everyone while it is on the screen); a stroke being drawn sends only its new points;
+// a whole board (snapshot) goes once to each newly connected tab, in a few large messages; and live
+// updates wait while a channel is still busy instead of queueing behind each other.
 
 export interface Board { items: BoardItem[]; at: number; page: number; pages: number }
 export interface Presenter { userId: string | null; t: number; shared: boolean; timerEnd: number | null }
@@ -37,7 +41,24 @@ const stacks = new Map<string, { undo: BoardOp[][]; redo: BoardOp[][] }>();
 const lasers = new Map<string, Laser>();
 // When each member last changed a board (performance.now), for the "writing now" name tags.
 const activity = new Map<string, number>();
+// When each item last changed (performance.now): items still changing are drawn over a cached picture
+// of the rest (see BoardPainter), so a full board does not get slower to update.
+const touched = new Map<string, number>();
+export const HOT_MS = 700;
+/** Whether an item changed in the last moment (it is probably still being drawn or moved). */
+export const isHot = (id: string) => performance.now() - (touched.get(id) ?? -1e9) < HOT_MS;
+// Tabs that were sent my board, with the opening of the channel they got it on (see Mesh.eventsLink).
+const synced = new Map<string, number>();
 const emit = () => listeners.forEach((l) => l());
+// Changes from the network are shown at most once a frame (a snapshot is many messages at once).
+let emitQueued = false;
+function emitSoon() {
+  if (emitQueued) return;
+  emitQueued = true;
+  const run = () => { if (!emitQueued) return; emitQueued = false; emit(); };
+  requestAnimationFrame(run);
+  setTimeout(run, 150); // hidden tabs get no animation frames
+}
 const emitLasers = () => laserListeners.forEach((l) => l());
 const EMPTY: Board = { items: [], at: 0, page: 0, pages: 1 };
 const pageNum = (v: unknown, hi = MAX_PAGES - 1) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(hi, Math.round(v))) : 0);
@@ -51,16 +72,25 @@ function load(): Board {
   } catch { return { ...EMPTY }; }
 }
 
+// Saved a moment after the last change, when the browser is idle (a full board is a large text).
 let saveTimer: number | undefined;
 function save() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
-    try { if (me) localStorage.setItem(STORAGE, JSON.stringify(boards.get(me) ?? EMPTY)); } catch { /* storage full or blocked */ }
-  }, 400);
+    const write = () => { try { if (me) localStorage.setItem(STORAGE, JSON.stringify(boards.get(me) ?? EMPTY)); } catch { /* storage full or blocked */ } };
+    if ('requestIdleCallback' in window) requestIdleCallback(write, { timeout: 2000 }); else write();
+  }, 1000);
 }
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (saveTimer !== undefined && me) { window.clearTimeout(saveTimer); try { localStorage.setItem(STORAGE, JSON.stringify(boards.get(me) ?? EMPTY)); } catch { /* ignore */ } } });
 
 const boardOf = (userId: string) => boards.get(userId) ?? EMPTY;
 const shared = (owner: string) => presenter.userId === owner && presenter.shared;
+// Who needs the changes of a board: everyone while it is on the screen, otherwise only its owner's other tabs.
+const audience = (owner: string) => (presenter.userId === owner ? undefined : (p: PeerInfo) => p.userId === owner);
+/** Bytes above which live updates of a stroke or a drag wait for the channel to drain. */
+const BUSY_BYTES = 48 * 1024;
+/** The link to the tabs showing `owner`'s board is still sending earlier changes (skip a live update). */
+export const boardBusy = (owner = me) => !!owner && (mesh?.eventBacklog(audience(owner)) ?? 0) > BUSY_BYTES;
 const stackOf = (owner: string) => {
   let s = stacks.get(owner);
   if (!s) stacks.set(owner, (s = { undo: [], redo: [] }));
@@ -69,6 +99,10 @@ const stackOf = (owner: string) => {
 
 function applyTo(userId: string, op: BoardOp, at: number) {
   const b = boardOf(userId);
+  if (op.t === 'put' || op.t === 'pts') {
+    touched.set(op.t === 'put' ? op.item.id : op.id, performance.now());
+    if (touched.size > 3000) { const old = performance.now() - HOT_MS; for (const [id, t] of touched) if (t < old) touched.delete(id); }
+  }
   const pages = op.t === 'delpage' ? Math.max(1, b.pages - 1) : b.pages;
   boards.set(userId, { ...b, items: applyOp(b.items, op), at: Math.max(b.at, at), pages, page: Math.min(b.page, pages - 1) });
 }
@@ -87,7 +121,7 @@ export function boardOp(op: BoardOp, record = true, owner = me) {
   }
   const at = syncedNow();
   applyTo(owner, op, at);
-  mesh?.sendEvent({ type: 'board', u: owner, op, at });
+  mesh?.sendEvent({ type: 'board', u: owner, op, at }, audience(owner));
   if (owner === me) save();
   activity.set(me, performance.now());
   emit();
@@ -126,7 +160,7 @@ function setPages(page: number, pages: number) {
   const at = syncedNow();
   boards.set(me, { ...b, page: Math.max(0, Math.min(pages - 1, page)), pages, at: Math.max(b.at, at) });
   const nb = boardOf(me);
-  mesh?.sendEvent({ type: 'board-page', u: me, page: nb.page, pages: nb.pages, at });
+  mesh?.sendEvent({ type: 'board-page', u: me, page: nb.page, pages: nb.pages, at }, audience(me));
   save();
   emit();
 }
@@ -152,7 +186,7 @@ function setPresenter(next: Presenter) {
   presenter = next;
   emit();
 }
-const sendPresenter = () => mesh?.sendEvent({ type: 'present', u: presenter.userId, t: presenter.t, shared: presenter.shared, timer: presenter.timerEnd });
+const sendPresenter = (to?: (p: PeerInfo) => boolean) => mesh?.sendEvent({ type: 'present', u: presenter.userId, t: presenter.t, shared: presenter.shared, timer: presenter.timerEnd }, to);
 
 /** Start or stop showing one's board on the conference screen. False when someone else is presenting. */
 export function present(on: boolean) {
@@ -198,12 +232,21 @@ export function pointLaser(owner: string, at: [number, number] | null) {
   else laserPending ??= setTimeout(send, LASER_SEND_MS);
 }
 
-// Whole board to the others: a start marker (receivers replace the board if this one is newer), then its items.
-function sendBoard(to?: string) {
+// Whole board to some tabs: a start marker (receivers replace the board if this one is newer), then its
+// items in batches of about 32 kB (fewer, larger messages than one per item).
+const BATCH_BYTES = 32 * 1024;
+function sendBoard(to?: (p: PeerInfo) => boolean) {
   if (!me || !mesh) return;
   const b = boardOf(me);
-  mesh.sendEvent({ type: 'board-snap', u: me, at: b.at, n: b.items.length, page: b.page, pages: b.pages, to });
-  for (const item of b.items) mesh.sendEvent({ type: 'board', u: me, op: { t: 'put', item }, at: b.at, snap: true, to });
+  mesh.sendEvent({ type: 'board-snap', u: me, at: b.at, n: b.items.length, page: b.page, pages: b.pages }, to);
+  let batch: BoardItem[] = [], bytes = 0;
+  const flush = () => { if (batch.length) mesh?.sendEvent({ type: 'board-batch', u: me, items: batch, at: b.at }, to); batch = []; bytes = 0; };
+  for (const item of b.items) {
+    const n = item.kind === 'stroke' ? item.points.length * 5 + 120 : 200;
+    if (bytes + n > BATCH_BYTES) flush();
+    batch.push(item); bytes += n;
+  }
+  flush();
 }
 
 function onMessage(from: PeerInfo, msg: Record<string, unknown>) {
@@ -223,22 +266,38 @@ function onMessage(from: PeerInfo, msg: Record<string, unknown>) {
     applyTo(u, op, at);
     if (!msg.snap) activity.set(from.userId, performance.now());
     if (u === me) save();
-    emit();
+    emitSoon();
+  } else if (msg.type === 'board-batch' && u && u === from.userId && Array.isArray(msg.items)) {
+    // Part of a snapshot: only the board's owner sends one.
+    if (u === me && rejected.has(from.tabId)) return;
+    const at = typeof msg.at === 'number' ? msg.at : 0;
+    const b = boardOf(u);
+    let items = b.items;
+    for (const raw of msg.items.slice(0, MAX_ITEMS)) { const item = cleanItem(raw); if (item) items = applyOp(items, { t: 'put', item }); }
+    boards.set(u, { ...b, items, at: Math.max(b.at, at) });
+    if (u === me) save();
+    emitSoon();
   } else if (msg.type === 'board-snap' && u && u === from.userId) {
     const at = typeof msg.at === 'number' ? msg.at : 0;
     const mine = boards.get(u);
-    // Another device of mine with an older board keeps mine; others always take the presenter's.
-    if (u === me && mine && mine.at >= at) { rejected.add(from.tabId); sendBoard(from.tabId); return; }
+    // Another device of mine with an older board gets mine back; one with the same board (same last change)
+    // needs nothing (answering it too made the two devices send their boards back and forth forever,
+    // filling the link more with every reconnect). Others always take the presenter's.
+    if (u === me && mine && mine.at >= at) {
+      rejected.add(from.tabId);
+      if (mine.at > at) sendBoard((p) => p.tabId === from.tabId);
+      return;
+    }
     rejected.delete(from.tabId);
     const pages = pageNum(msg.pages, MAX_PAGES) || 1;
     boards.set(u, { items: [], at, pages, page: Math.min(pageNum(msg.page), pages - 1) });
-    emit();
+    emitSoon();
   } else if (msg.type === 'board-page' && u && u === from.userId) {
     const b = boardOf(u);
     const pages = pageNum(msg.pages, MAX_PAGES) || 1;
     boards.set(u, { ...b, pages, page: Math.min(pageNum(msg.page), pages - 1), at: Math.max(b.at, typeof msg.at === 'number' ? msg.at : 0) });
     if (u === me) save();
-    emit();
+    emitSoon();
   } else if (msg.type === 'present' && (u === null || u === from.userId)) {
     const t = typeof msg.t === 'number' ? msg.t : 0;
     if (u === null) { if (presenter.userId === from.userId) setPresenter({ userId: null, t, shared: true, timerEnd: null }); return; }
@@ -253,20 +312,32 @@ function onMessage(from: PeerInfo, msg: Record<string, unknown>) {
   }
 }
 
+// A snapshot of my board goes once to each tab that needs it, when its channel (re)opens: my other
+// devices always, everyone while I present. Re-sending whole boards on every change of the people list
+// used to flood the links (and delay live drawing) as boards filled up.
+
 function onPeers(peers: PeerInfo[]) {
   if (!me || !mesh) return;
+  const m = mesh;
   // The presenter left (closed every tab): the screen goes back to the meeting page.
   if (presenter.userId && presenter.userId !== me && !peers.some((p) => p.userId === presenter.userId)) setPresenter({ userId: null, t: syncedNow(), shared: true, timerEnd: null });
+  const alive = new Set(peers.map((p) => p.tabId));
+  for (const id of synced.keys()) if (!alive.has(id)) synced.delete(id);
+  const fresh = new Set(peers.filter((p) => { const link = m.eventsLink(p.tabId); return link > 0 && synced.get(p.tabId) !== link; }).map((p) => p.tabId));
+  if (!fresh.size) return;
+  for (const id of fresh) synced.set(id, m.eventsLink(id));
+  const isFresh = (p: PeerInfo) => fresh.has(p.tabId);
   if (presenter.userId === me) {
-    sendPresenter();
-    sendBoard();
-  } else if (peers.some((p) => p.userId === me)) sendBoard();
+    sendPresenter(isFresh);
+    sendBoard(isFresh);
+  } else if (peers.some((p) => p.userId === me && fresh.has(p.tabId))) sendBoard((p) => p.userId === me && fresh.has(p.tabId));
 }
 
 /** Called once per page with the shared mesh; returns the disconnect. */
 export function connectBoard(m: Mesh | null, userId: string) {
   if (me !== userId) { me = userId; boards.set(userId, load()); emit(); }
   mesh = m;
+  synced.clear();
   if (!m) return () => {};
   const off = m.onEvent(onMessage);
   let timer: number | undefined;

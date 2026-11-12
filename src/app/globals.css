@@ -77,6 +77,14 @@
 }
 
 html, body { background: var(--bg); color: var(--ink); }
+/* App-like on phones: no rubber-band bounce or pull-to-refresh moving the whole app, no double-tap zoom. */
+html, body { overscroll-behavior: none; }
+html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+/* Full-screen pages (office, board): the page itself never scrolls; see lib/viewport.ts. */
+html.gc-lock, html.gc-lock body { height: 100%; overflow: hidden; }
+html.gc-lock body { position: fixed; inset: 0; width: 100%; }
+/* While a phone's keyboard is open, everything not needed for typing steps aside. */
+html.gc-kb .gc-kb-hide { display: none !important; }
 html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif; }
 
 @utility card { @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.04)]; }
@@ -87,6 +95,10 @@ html[lang='fa'] body { font-family: 'Vazirmatn Variable', 'Inter Variable', ui-s
 @utility icon-btn { @apply inline-flex size-11 shrink-0 items-center justify-center rounded-xl hover:bg-surface-2; }
 @utility input { @apply min-h-11 w-full rounded-xl border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-muted focus:border-brand; }
 @utility label { @apply mb-1 block text-sm font-medium; }
+/* Edges clear of a phone's notch and rounded corners (both sides: the notch moves when the phone turns). */
+@utility start-safe { inset-inline-start: max(0.75rem, env(safe-area-inset-left), env(safe-area-inset-right)); }
+@utility end-safe { inset-inline-end: max(0.75rem, env(safe-area-inset-left), env(safe-area-inset-right)); }
+@utility px-safe { padding-inline: max(0.75rem, env(safe-area-inset-left), env(safe-area-inset-right)); }
 @utility chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium; }
 
 .scrollbar-thin { scrollbar-width: thin; }
