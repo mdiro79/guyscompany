@@ -1,9 +1,9 @@
 import type {
   DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
   Issue, IssueComment, ProjectIdea, Milestone, Meeting, MeetingAttendance, MeetingNote, SharedNote,
-  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post,
+  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post, ChatRead,
 } from './types';
-import { OFFICE_DEFAULTS } from './types';
+import { MESSAGE_DEFAULTS, OFFICE_DEFAULTS, PROJECT_DEFAULTS } from './types';
 import { createSeed } from './seed';
 import { emptyCounters } from '@/lib/todo-game';
 
@@ -20,6 +20,7 @@ export function createMemoryStore(): DataStore {
     roles: seed.roles as ProjectRole[],
     files: [] as FileMeta[],
     messages: seed.messages as Message[],
+    reads: [] as ChatRead[],
     polls: seed.polls as Poll[],
     votes: [] as PollVote[],
     focus: seed.focus as FocusItem[],
@@ -62,7 +63,7 @@ export function createMemoryStore(): DataStore {
     },
 
     async listProjects() { return clone(db.projects); },
-    async createProject(p) { const x: Project = { status: 'active', dueDate: null, ...p, id: uuid(), createdAt: now() }; db.projects.push(x); return clone(x); },
+    async createProject(p) { const x: Project = { ...PROJECT_DEFAULTS, memberIds: [], ...p, id: uuid(), createdAt: now() }; db.projects.push(x); return clone(x); },
     async updateProject(id, patch) { patchIn(db.projects, (p) => p.id === id, patch); },
     async deleteProject(id) {
       db.projects = db.projects.filter((p) => p.id !== id);
@@ -72,6 +73,7 @@ export function createMemoryStore(): DataStore {
       db.ideas = db.ideas.filter((r) => r.projectId !== id);
       db.milestones = db.milestones.filter((r) => r.projectId !== id);
       db.shared = db.shared.filter((r) => r.projectId !== id);
+      db.messages = db.messages.filter((m) => m.channel !== `project:${id}`);
       for (const m of db.meetings) if (m.projectId === id) m.projectId = null;
     },
 
@@ -79,6 +81,7 @@ export function createMemoryStore(): DataStore {
     async createTask(t: NewTask) {
       const x: Task = {
         projectId: null, description: '', column: 'idea', tags: [], assigneeId: null, needsVolunteer: false, priority: 0, checklist: [],
+        milestoneId: null, effort: 0, blockedReason: '',
         startDate: null, dueDate: null, position: db.tasks.length + 1, createdBy: null, ...t,
         id: uuid(), createdAt: now(), updatedAt: now(),
       };
@@ -98,15 +101,49 @@ export function createMemoryStore(): DataStore {
     async createFile(f) { const x = { ...f, id: uuid(), createdAt: now() }; db.files.push(x); return clone(x); },
     async deleteFile(id) { db.files = db.files.filter((f) => f.id !== id); },
 
-    async listMessages(channel, limit) {
-      return clone(db.messages.filter((m) => m.channel === channel).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-limit));
+    async listMessages(channel, limit, beforeIso) {
+      return clone(db.messages.filter((m) => m.channel === channel && (!beforeIso || m.createdAt < beforeIso))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-limit));
     },
-    async createMessage(m) { const x = { ...m, id: uuid(), createdAt: now(), reactions: [] }; db.messages.push(x); return clone(x); },
+    async getMessage(id) { return clone(db.messages.find((m) => m.id === id) ?? null); },
+    async createMessage(m) { const x: Message = { ...MESSAGE_DEFAULTS, ...m, id: uuid(), createdAt: now(), reactions: [] }; db.messages.push(x); return clone(x); },
+    async updateMessage(id, patch) { patchIn(db.messages, (m) => m.id === id, patch); },
+    async deleteMessage(id) {
+      db.messages = db.messages.filter((m) => m.id !== id);
+      db.messages.forEach((m) => { if (m.replyToId === id) m.replyToId = null; });
+    },
     async toggleReaction(messageId, userId, emoji) {
       const m = db.messages.find((x) => x.id === messageId);
       if (!m) return;
       const i = m.reactions.findIndex((r) => r.userId === userId && r.emoji === emoji);
       if (i >= 0) m.reactions.splice(i, 1); else m.reactions.push({ userId, emoji });
+    },
+    async listPinnedMessages(channel) {
+      return clone(db.messages.filter((m) => m.channel === channel && m.pinnedAt).sort((a, b) => a.pinnedAt!.localeCompare(b.pinnedAt!)));
+    },
+    async listMessagesOfKind(channel, kind, limit) {
+      return clone(db.messages.filter((m) => m.channel === channel && m.kind === kind).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit));
+    },
+    async searchMessages(channels, query, limit) {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      return clone(db.messages.filter((m) => channels.includes(m.channel) && (m.kind === 'text' || m.kind === 'decision') && m.body.toLowerCase().includes(q))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit));
+    },
+    async chatSummaries(userId, channels) {
+      return channels.map((channel) => {
+        const list = db.messages.filter((m) => m.channel === channel).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        const readAt = db.reads.find((r) => r.userId === userId && r.channel === channel)?.readAt ?? null;
+        const unread = list.filter((m) => m.authorId !== userId && (!readAt || m.createdAt > readAt)).length;
+        const last = list.at(-1);
+        return { channel, last: last ? clone({ ...last, reactions: [] }) : null, unread, readAt };
+      });
+    },
+    async listChatReads(channel) { return clone(db.reads.filter((r) => r.channel === channel)); },
+    async markChatRead(userId, channel, atIso) {
+      const r = db.reads.find((x) => x.userId === userId && x.channel === channel);
+      if (!r) db.reads.push({ userId, channel, readAt: atIso });
+      else if (atIso > r.readAt) r.readAt = atIso;
     },
 
     async listPolls() { return clone(db.polls).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
@@ -150,7 +187,10 @@ export function createMemoryStore(): DataStore {
     async listMilestones(projectId) { return clone(db.milestones.filter((m) => !projectId || m.projectId === projectId)); },
     async createMilestone(m) { const x = { ...m, done: false, id: uuid(), createdAt: now() }; db.milestones.push(x); return clone(x); },
     async updateMilestone(id, patch) { patchIn(db.milestones, (m) => m.id === id, patch); },
-    async deleteMilestone(id) { db.milestones = db.milestones.filter((m) => m.id !== id); },
+    async deleteMilestone(id) {
+      db.milestones = db.milestones.filter((m) => m.id !== id);
+      db.tasks.forEach((t) => { if (t.milestoneId === id) t.milestoneId = null; });
+    },
 
     async listMeetings(limit) { return clone([...db.meetings].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, limit)); },
     async getMeeting(id) { const m = db.meetings.find((x) => x.id === id); return m ? clone(m) : null; },

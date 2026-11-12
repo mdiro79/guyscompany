@@ -6,12 +6,12 @@ import { Home, CheckSquare, Box, MessageCircle, Menu } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { isActive } from './nav';
 
-const LINKS = [['/', 'home', Home], ['/tasks', 'tasks', CheckSquare], ['/office', 'office', Box]] as const;
-const SLOTS = LINKS.length + 2;
+const LINKS = [['/', 'home', Home], ['/tasks', 'tasks', CheckSquare], ['/chat', 'chat', MessageCircle], ['/office', 'office', Box]] as const;
+const SLOTS = LINKS.length + 1;
 
 // Bottom bar on phones. A soft pill glides to the chosen item the moment it is tapped (before the
 // page has loaded), its icon springs up, and chat/menu give a short pop.
-export function MobileNav({ onChat, onMenu, unreadChat }: { onChat: () => void; onMenu: () => void; unreadChat: number }) {
+export function MobileNav({ onMenu, unreadChat }: { onMenu: () => void; unreadChat: number }) {
   const t = useTranslations('nav');
   const pathname = usePathname();
   const [tapped, setTapped] = useState<string | null>(null);
@@ -38,15 +38,12 @@ export function MobileNav({ onChat, onMenu, unreadChat }: { onChat: () => void; 
               <Icon key={on ? `${key}-on` : key} className={clsx('size-5 transition-transform duration-300', on && 'gc-tab -translate-y-0.5')} strokeWidth={on ? 2.4 : 2} />
               {t(key)}
             </span>
+            {href === '/chat' && unreadChat > 0 && (
+              <span className="absolute top-1.5 start-1/2 ms-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">{unreadChat > 99 ? '99+' : unreadChat}</span>
+            )}
           </Link>
         );
       })}
-      <button type="button" onClick={() => { bump('chat'); onChat(); }} className={clsx(item, 'text-muted')}>
-        <span className={clsx(inner, pop === 'chat' && 'gc-tab')}>
-          <MessageCircle className="size-5" />{t('chat')}
-        </span>
-        {unreadChat > 0 && <span className="absolute top-2 start-1/2 ms-2 size-2 animate-pulse rounded-full bg-accent" />}
-      </button>
       <button type="button" onClick={() => { bump('menu'); onMenu(); }} className={clsx(item, 'text-muted')}>
         <span className={clsx(inner, pop === 'menu' && 'gc-tab')}><Menu className="size-5" />{t('menu')}</span>
       </button>

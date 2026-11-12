@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, boolean, integer, smallint, timestamp, date, jsonb, primaryKey, pgEnum, index, check,
+  pgTable, uuid, text, boolean, integer, smallint, timestamp, date, jsonb, primaryKey, pgEnum, index, check, type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -31,8 +31,16 @@ export const projects = pgTable('projects', {
   managerId: uuid('manager_id').references(() => profiles.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('active'), // planning | active | paused | done
   dueDate: date('due_date'),
+  // Project brief: what it is for, when it starts, how important it is, its icon and colour, and who is on it.
+  goal: text('goal').notNull().default(''),
+  startDate: date('start_date'),
+  priority: smallint('priority').notNull().default(1), // 0 low, 1 medium, 2 high, 3 critical
+  icon: text('icon').notNull().default('rocket'),
+  color: text('color').notNull().default('green'),
+  memberIds: uuid('member_ids').array().notNull().default(sql`'{}'::uuid[]`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check('project_status', sql`${t.status} in ('planning', 'active', 'paused', 'done')`)]);
+}, (t) => [check('project_status', sql`${t.status} in ('planning', 'active', 'paused', 'done')`),
+  check('project_priority', sql`${t.priority} between 0 and 3`)]);
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -45,6 +53,10 @@ export const tasks = pgTable('tasks', {
   needsVolunteer: boolean('needs_volunteer').notNull().default(false),
   priority: smallint('priority').notNull().default(0),
   checklist: jsonb('checklist').$type<{ text: string; done: boolean }[]>().notNull().default([]),
+  // The milestone (phase) the task belongs to, its size, and why it is stuck (empty: not blocked).
+  milestoneId: uuid('milestone_id').references((): AnyPgColumn => milestones.id, { onDelete: 'set null' }),
+  effort: smallint('effort').notNull().default(0), // 0 not set, 1 small, 2 medium, 3 large, 4 huge
+  blockedReason: text('blocked_reason').notNull().default(''),
   startDate: date('start_date'),
   dueDate: date('due_date'),
   position: integer('position').notNull().default(0),
@@ -73,15 +85,33 @@ export const files = pgTable('files', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// channel: 'team' or 'office:<slot>' for private office chats.
+// channel: 'team', 'project:<id>' (a project's topic) or 'office:<slot>' for private office chats.
+// kind: a plain message ('text'), a team decision, a card for a task/bug made from the chat (refId), or
+// a line the app writes itself ('system', e.g. a task finished).
 export const messages = pgTable('messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   channel: text('channel').notNull().default('team'),
   authorId: uuid('author_id').references(() => profiles.id, { onDelete: 'set null' }),
   body: text('body').notNull().default(''),
   fileId: uuid('file_id').references(() => files.id, { onDelete: 'set null' }),
+  replyToId: uuid('reply_to_id').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+  forwardedFrom: uuid('forwarded_from').references(() => profiles.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull().default('text'),
+  refId: uuid('ref_id'),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
+  pinnedAt: timestamp('pinned_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index('messages_channel_created_idx').on(t.channel, t.createdAt)]);
+}, (t) => [
+  index('messages_channel_created_idx').on(t.channel, t.createdAt),
+  check('message_kind', sql`${t.kind} in ('text', 'decision', 'task', 'issue', 'system')`),
+]);
+
+// When each member last read each chat (unread counts and "seen" ticks).
+export const chatReads = pgTable('chat_reads', {
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  channel: text('channel').notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.channel] })]);
 
 export const reactions = pgTable('reactions', {
   messageId: uuid('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),

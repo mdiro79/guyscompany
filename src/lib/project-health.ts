@@ -14,7 +14,7 @@ export function progress(tasks: Task[]) {
 export type Health = 'on_track' | 'at_risk' | 'off_track';
 export type HealthReason =
   | { key: 'criticalBugs'; n: number } | { key: 'overdueTasks'; n: number } | { key: 'overdueMilestones'; n: number }
-  | { key: 'behindSchedule'; pct: number } | { key: 'pastDeadline' } | { key: 'manyBugs'; n: number };
+  | { key: 'behindSchedule'; pct: number } | { key: 'pastDeadline' } | { key: 'manyBugs'; n: number } | { key: 'blockedTasks'; n: number };
 
 // On track, at risk or off track, with the reasons that decided it.
 export function projectHealth(project: Project, tasks: Task[], issues: Issue[], milestones: Milestone[], today: string): { health: Health; reasons: HealthReason[] } {
@@ -26,13 +26,9 @@ export function projectHealth(project: Project, tasks: Task[], issues: Issue[], 
   const overdueTasks = tasks.filter((t) => t.column !== 'done' && t.dueDate && t.dueDate < today).length;
   const overdueMilestones = milestones.filter((m) => !m.done && m.dueDate && m.dueDate < today).length;
   const { pct } = progress(tasks);
-  let lag = 0;
-  if (project.dueDate) {
-    const start = zonedDate(project.createdAt);
-    const span = Math.max(1, dayDiff(start, project.dueDate));
-    const elapsed = Math.min(100, Math.max(0, (dayDiff(start, today) / span) * 100));
-    lag = Math.round(elapsed - pct);
-  }
+  const elapsed = timeElapsed(project, today);
+  const lag = elapsed === null ? 0 : Math.round(elapsed - pct);
+  const blocked = tasks.filter((t) => t.column !== 'done' && t.blockedReason).length;
   const pastDeadline = !!project.dueDate && project.dueDate < today && pct < 100;
   if (critical) reasons.push({ key: 'criticalBugs', n: critical });
   if (pastDeadline) reasons.push({ key: 'pastDeadline' });
@@ -40,11 +36,28 @@ export function projectHealth(project: Project, tasks: Task[], issues: Issue[], 
   if (overdueTasks) reasons.push({ key: 'overdueTasks', n: overdueTasks });
   if (lag > 15) reasons.push({ key: 'behindSchedule', pct: lag });
   if (high >= 3) reasons.push({ key: 'manyBugs', n: high });
+  if (blocked) reasons.push({ key: 'blockedTasks', n: blocked });
   const severe = pastDeadline || overdueMilestones > 0 || lag > 35 || (critical > 0 && overdueTasks >= 3);
   return { health: severe ? 'off_track' : reasons.length ? 'at_risk' : 'on_track', reasons };
 }
 
-const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+export const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+
+/** The project's first day: its start date, or the day it was created. */
+export const projectStart = (p: Pick<Project, 'startDate' | 'createdAt'>) => p.startDate ?? zonedDate(p.createdAt);
+
+/** How much of the project's time has passed (0–100), or null without a deadline. */
+export function timeElapsed(project: Pick<Project, 'startDate' | 'createdAt' | 'dueDate'>, today: string) {
+  if (!project.dueDate) return null;
+  const start = projectStart(project);
+  const span = Math.max(1, dayDiff(start, project.dueDate));
+  return Math.min(100, Math.max(0, (dayDiff(start, today) / span) * 100));
+}
+
+/** A milestone's own progress: its linked tasks that are done. */
+export function milestoneProgress(milestoneId: string, tasks: Task[]) {
+  return progress(tasks.filter((t) => t.milestoneId === milestoneId));
+}
 
 export type AttentionItem =
   | { kind: 'issue'; id: string; title: string; severity: number; status: Issue['status'] }

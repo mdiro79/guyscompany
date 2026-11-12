@@ -28,6 +28,14 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof s>;
 export function createDbStore(injected?: Db): DataStore {
   // Resolved per call so a stale serverless connection is replaced (see getDb).
   const db = () => injected ?? (getDb() as unknown as Db);
+  const withReactions = async (rows: Row[]): Promise<Message[]> => {
+    const ids = rows.map((r) => r.id as string);
+    const reacts = ids.length ? await db().select().from(s.reactions).where(inArray(s.reactions.messageId, ids)) : [];
+    return rows.map((r) => ({
+      ...iso<Omit<Message, 'reactions'>>(r),
+      reactions: reacts.filter((x) => x.messageId === r.id).map(({ userId, emoji }) => ({ userId, emoji })),
+    }));
+  };
   const store: DataStore = {
     async listProfiles() { return isoAll(await db().select().from(s.profiles).orderBy(asc(s.profiles.createdAt))); },
     async getProfile(id) { const [r] = await db().select().from(s.profiles).where(eq(s.profiles.id, id)); return r ? iso(r) : null; },
@@ -39,7 +47,11 @@ export function createDbStore(injected?: Db): DataStore {
     async listProjects() { return isoAll(await db().select().from(s.projects).orderBy(asc(s.projects.createdAt))); },
     async createProject(p) { const [r] = await db().insert(s.projects).values(p).returning(); return iso(r); },
     async updateProject(id, patch) { await db().update(s.projects).set(patch).where(eq(s.projects.id, id)); },
-    async deleteProject(id) { await db().delete(s.projects).where(eq(s.projects.id, id)); },
+    async deleteProject(id) {
+      // Its topic in the chat goes too (channels are text, so nothing cascades there).
+      await db().delete(s.messages).where(eq(s.messages.channel, `project:${id}`));
+      await db().delete(s.projects).where(eq(s.projects.id, id));
+    },
 
     async listTasks() { return isoAll(await db().select().from(s.tasks).orderBy(asc(s.tasks.position), asc(s.tasks.createdAt))); },
     async createTask(t) {
@@ -60,20 +72,66 @@ export function createDbStore(injected?: Db): DataStore {
     async createFile(f) { const [r] = await db().insert(s.files).values(f).returning(); return iso(r); },
     async deleteFile(id) { await db().delete(s.files).where(eq(s.files.id, id)); },
 
-    async listMessages(channel, limit) {
-      const rows = await db().select().from(s.messages).where(eq(s.messages.channel, channel)).orderBy(desc(s.messages.createdAt)).limit(limit);
-      const ids = rows.map((r) => r.id);
-      const reacts = ids.length ? await db().select().from(s.reactions).where(inArray(s.reactions.messageId, ids)) : [];
-      return rows.reverse().map((r) => ({
-        ...iso<Omit<Message, 'reactions'>>(r),
-        reactions: reacts.filter((x) => x.messageId === r.id).map(({ userId, emoji }) => ({ userId, emoji })),
-      }));
+    async listMessages(channel, limit, beforeIso) {
+      const where = beforeIso ? and(eq(s.messages.channel, channel), lt(s.messages.createdAt, new Date(beforeIso))) : eq(s.messages.channel, channel);
+      const rows = await db().select().from(s.messages).where(where).orderBy(desc(s.messages.createdAt)).limit(limit);
+      return withReactions(rows.reverse());
+    },
+    async getMessage(id) {
+      const [r] = await db().select().from(s.messages).where(eq(s.messages.id, id));
+      return r ? (await withReactions([r]))[0] : null;
     },
     async createMessage(m) { const [r] = await db().insert(s.messages).values(m).returning(); return { ...iso<Omit<Message, 'reactions'>>(r), reactions: [] }; },
+    async updateMessage(id, patch) { await db().update(s.messages).set(dates(patch)).where(eq(s.messages.id, id)); },
+    async deleteMessage(id) { await db().delete(s.messages).where(eq(s.messages.id, id)); },
     async toggleReaction(messageId, userId, emoji) {
       const where = and(eq(s.reactions.messageId, messageId), eq(s.reactions.userId, userId), eq(s.reactions.emoji, emoji));
       const deleted = await db().delete(s.reactions).where(where).returning();
       if (!deleted.length) await db().insert(s.reactions).values({ messageId, userId, emoji });
+    },
+    async listPinnedMessages(channel) {
+      return withReactions(await db().select().from(s.messages).where(and(eq(s.messages.channel, channel), isNotNull(s.messages.pinnedAt))).orderBy(asc(s.messages.pinnedAt)));
+    },
+    async listMessagesOfKind(channel, kind, limit) {
+      return withReactions(await db().select().from(s.messages).where(and(eq(s.messages.channel, channel), eq(s.messages.kind, kind))).orderBy(desc(s.messages.createdAt)).limit(limit));
+    },
+    async searchMessages(channels, query, limit) {
+      const q = query.trim();
+      if (!q || !channels.length) return [];
+      const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      return withReactions(await db().select().from(s.messages)
+        .where(and(inArray(s.messages.channel, channels), sql`${s.messages.body} ilike ${pattern}`, inArray(s.messages.kind, ['text', 'decision'])))
+        .orderBy(desc(s.messages.createdAt)).limit(limit));
+    },
+    async chatSummaries(userId, channels) {
+      if (!channels.length) return [];
+      // The newest message of each chat, and the messages from others since the member's last read.
+      const lasts = await db().selectDistinctOn([s.messages.channel]).from(s.messages)
+        .where(inArray(s.messages.channel, channels)).orderBy(s.messages.channel, desc(s.messages.createdAt));
+      const reads = await db().select().from(s.chatReads).where(and(eq(s.chatReads.userId, userId), inArray(s.chatReads.channel, channels)));
+      const counts = await db().select({ channel: s.messages.channel, n: sql<number>`count(*)` }).from(s.messages)
+        .leftJoin(s.chatReads, and(eq(s.chatReads.channel, s.messages.channel), eq(s.chatReads.userId, userId)))
+        .where(and(inArray(s.messages.channel, channels), or(isNull(s.messages.authorId), sql`${s.messages.authorId} <> ${userId}`),
+          or(isNull(s.chatReads.readAt), sql`${s.messages.createdAt} > ${s.chatReads.readAt}`)))
+        .groupBy(s.messages.channel);
+      return channels.map((channel) => {
+        const last = lasts.find((r) => r.channel === channel);
+        const read = reads.find((r) => r.channel === channel);
+        return {
+          channel,
+          last: last ? { ...iso<Omit<Message, 'reactions'>>(last), reactions: [] } : null,
+          unread: Number(counts.find((c) => c.channel === channel)?.n ?? 0),
+          readAt: read ? read.readAt.toISOString() : null,
+        };
+      });
+    },
+    async listChatReads(channel) { return isoAll(await db().select().from(s.chatReads).where(eq(s.chatReads.channel, channel))); },
+    async markChatRead(userId, channel, atIso) {
+      // Never moves back (an older device or a late request cannot mark newer messages unread).
+      const at = new Date(atIso);
+      await db().insert(s.chatReads).values({ userId, channel, readAt: at }).onConflictDoUpdate({
+        target: [s.chatReads.userId, s.chatReads.channel], set: { readAt: sql`greatest(${s.chatReads.readAt}, excluded.read_at)` },
+      });
     },
 
     async listPolls() { return isoAll(await db().select().from(s.polls).orderBy(desc(s.polls.createdAt))); },

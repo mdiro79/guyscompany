@@ -1,14 +1,22 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowRight, Bug, CalendarClock, ClipboardCopy, Flag, LayoutDashboard, Lightbulb, ListTodo, Map as MapIcon, AlertTriangle, CheckCircle2, NotebookPen } from 'lucide-react';
+import { ArrowRight, Bug, CalendarClock, ClipboardCopy, Flag, LayoutDashboard, Lightbulb, ListTodo, Map as MapIcon, AlertTriangle, CheckCircle2, NotebookPen, Users, MessageCircle, Pencil, Target, KanbanSquare } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Avatar } from '@/components/ui/Avatar';
 import { useShell } from '@/components/shell/ShellContext';
 import { formatDate, formatNumber } from '@/lib/format';
-import { activityTrend, isOpenIssue, needsAttention, progress, projectHealth, workload, type HealthReason } from '@/lib/project-health';
-import type { Issue, IssueComment, Meeting, Milestone, Project, ProjectIdea, SharedNote, Task } from '@/lib/data/types';
+import { activityTrend, isOpenIssue, needsAttention, progress, projectHealth, projectStart, timeElapsed, workload, type HealthReason } from '@/lib/project-health';
+import type { Issue, IssueComment, Meeting, Message, Milestone, Project, ProjectIdea, ProjectRole, SharedNote, Task } from '@/lib/data/types';
+import { TaskViews } from '@/components/tasks/TaskViews';
+import { ProjectDialog } from '@/components/projects/ProjectDialog';
+import { Ring } from '@/components/ui/Ring';
+import { ProjectIcon, ProjectStatusChip, ProjectPriorityChip } from '@/components/icons/options';
+import { DecisionGlyph } from '@/components/icons/glyphs';
+import { projectChannel } from '@/lib/chat';
+import { TeamPanel } from './TeamPanel';
+import { DecisionsPanel } from './DecisionsPanel';
 import { ProjectNotes } from '@/components/meetings/ProjectNotes';
 import { HealthBadge, SeverityBadge } from './badges';
 import { TrendChart, StackBar, MiniBar } from './Charts';
@@ -17,20 +25,16 @@ import { IdeasPanel } from './IdeasPanel';
 import { Roadmap } from './Roadmap';
 import { ReportIssueDialog } from './ReportIssue';
 
-const TABS = ['overview', 'issues', 'ideas', 'roadmap', 'notes'] as const;
+const TABS = ['overview', 'tasks', 'roadmap', 'issues', 'ideas', 'team', 'decisions', 'notes'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_ICON = { overview: LayoutDashboard, issues: Bug, ideas: Lightbulb, roadmap: MapIcon, notes: NotebookPen };
-const STATUS_CLS: Record<Project['status'], string> = {
-  planning: 'bg-[#e6eefb] text-[#3567c4] dark:bg-[#1c2636] dark:text-[#8fb3f2]',
-  active: 'bg-brand-soft text-brand', paused: 'bg-surface-2 text-muted', done: 'bg-ink text-surface',
-};
+const TAB_ICON = { overview: LayoutDashboard, tasks: KanbanSquare, issues: Bug, ideas: Lightbulb, roadmap: MapIcon, team: Users, decisions: DecisionGlyph, notes: NotebookPen };
 
 export interface CommandData {
-  project: Project; tasks: Task[]; issues: Issue[]; comments: IssueComment[]; ideas: ProjectIdea[]; milestones: Milestone[];
-  sharedNotes: SharedNote[]; meetings: Meeting[]; today: string; tab?: string;
+  project: Project; projects: Project[]; tasks: Task[]; issues: Issue[]; comments: IssueComment[]; ideas: ProjectIdea[]; milestones: Milestone[];
+  sharedNotes: SharedNote[]; meetings: Meeting[]; roles: ProjectRole[]; decisions: Message[]; today: string; tab?: string;
 }
 
-export function CommandCenter({ project, tasks, issues, comments, ideas, milestones, sharedNotes, meetings, today, tab: initialTab }: CommandData) {
+export function CommandCenter({ project, projects, tasks, issues, comments, ideas, milestones, sharedNotes, meetings, roles, decisions, today, tab: initialTab }: CommandData) {
   const t = useTranslations('command');
   const tt = useTranslations('tasks');
   const locale = useLocale();
@@ -39,6 +43,11 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
   const [reporting, setReporting] = useState(false);
   const [openIssue, setOpenIssue] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const tp = useTranslations('projects');
+  const team = profiles.filter((p) => project.memberIds.includes(p.id) && p.id !== project.managerId);
+  const elapsed = timeElapsed(project, today);
+  const chatHref = `/chat?c=${encodeURIComponent(projectChannel(project.id))}`;
   const canManage = user.role === 'admin' || project.managerId === user.id;
   const manager = profiles.find((p) => p.id === project.managerId) ?? null;
   const n = (v: number) => formatNumber(locale, v);
@@ -66,6 +75,7 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
     };
   }, [project, tasks, issues, milestones, ideas, profiles, today]);
 
+  const closeEdit = useCallback(() => setEditing(false), []);
   const reason = (r: HealthReason) => (r.key === 'pastDeadline' ? t('reason.pastDeadline') : r.key === 'behindSchedule' ? t('reason.behindSchedule', { pct: n(r.pct) }) : t(`reason.${r.key}`, { n: n(r.n) }));
 
   const copyReport = async () => {
@@ -80,7 +90,10 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
     try { await navigator.clipboard.writeText(lines.join('\n')); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ }
   };
 
-  const tabCount: Record<Tab, number | null> = { overview: null, issues: stats.open.length, ideas: stats.newIdeas, roadmap: milestones.filter((m) => !m.done).length, notes: sharedNotes.length };
+  const tabCount: Record<Tab, number | null> = {
+    overview: null, tasks: tasks.filter((x) => x.column !== 'done').length, issues: stats.open.length, ideas: stats.newIdeas, roadmap: milestones.filter((m) => !m.done).length,
+    team: roles.filter((r) => !r.volunteerId).length || null, decisions: decisions.length, notes: sharedNotes.length,
+  };
   const columns = ['idea', 'in_progress', 'review', 'done'] as const;
   const maxLoad = Math.max(1, ...stats.load.flatMap((l) => [l.tasks, l.bugs]));
 
@@ -88,15 +101,16 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
     <div className="space-y-4">
       <header className="space-y-2">
         <Link href="/projects" className="inline-flex min-h-8 items-center gap-1 text-sm text-muted hover:text-ink"><ArrowRight className="size-4 ltr:rotate-180" />{t('back')}</Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold sm:text-2xl" dir="auto">{project.name}</h1>
-          <span className={clsx('chip', STATUS_CLS[project.status])}>{t(`status.${project.status}`)}</span>
-          <HealthBadge health={stats.health.health} />
-        </div>
-        {project.description && <p className="max-w-3xl text-sm text-muted" dir="auto">{project.description}</p>}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-          <span className="flex items-center gap-1.5"><Avatar profile={manager} size="sm" />{t('manager')}: <span className="text-ink">{manager?.displayName ?? '—'}</span></span>
-          <span className="flex items-center gap-1.5"><CalendarClock className="size-4" />{project.dueDate ? `${t('due')}: ${fmtDay(project.dueDate)}` : t('noDue')}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <ProjectIcon icon={project.icon} color={project.color} size="lg" />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-semibold sm:text-2xl" dir="auto">{project.name}</h1>
+            <div className="mt-1 flex flex-wrap gap-1.5"><ProjectStatusChip status={project.status} /><ProjectPriorityChip priority={project.priority} /><HealthBadge health={stats.health.health} /></div>
+          </div>
+          <div className="flex gap-2">
+            <Link href={chatHref} className="btn-primary min-h-10"><MessageCircle className="size-4" />{tp('discuss')}</Link>
+            {canManage && <button type="button" className="btn-ghost min-h-10 px-3" onClick={() => setEditing(true)} aria-label={tp('edit')}><Pencil className="size-4" /><span className="max-sm:hidden">{tp('edit')}</span></button>}
+          </div>
         </div>
       </header>
 
@@ -115,6 +129,26 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
 
       {tab === 'overview' && (
         <div className="space-y-4">
+          {/* Project brief: the goal, from start to deadline, who leads it and who is on it */}
+          <section className="card grid gap-4 p-3 sm:p-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+            <Ring value={stats.p.pct} inner={elapsed} size={96} label={t('kpi.progress')}>
+              <span className="text-xl font-bold">{n(stats.p.pct)}<span className="text-xs">{locale === 'fa' ? '٪' : '%'}</span></span>
+            </Ring>
+            <div className="min-w-0 space-y-2">
+              <p className="flex items-start gap-2 text-sm" dir="auto"><Target className="mt-0.5 size-4 shrink-0 text-accent" />
+                {project.goal || <span className="text-muted">{tp('noGoal')}</span>}</p>
+              {project.description && <p className="text-sm text-muted" dir="auto">{project.description}</p>}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand" />{tp('briefWork', { pct: n(stats.p.pct) })}</span>
+                {elapsed !== null && <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-accent" />{tp('briefTime', { pct: n(Math.round(elapsed)) })}</span>}
+                <span className="flex items-center gap-1.5"><CalendarClock className="size-3.5" />{fmtDay(projectStart(project))} → {project.dueDate ? fmtDay(project.dueDate) : t('noDue')}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 md:flex-col md:items-end">
+              <span className="flex items-center gap-1.5 text-sm"><Avatar profile={manager} size="sm" /><span className="text-muted">{t('manager')}:</span>{manager?.displayName ?? '—'}</span>
+              {team.length > 0 && <span className="flex -space-x-1.5 rtl:space-x-reverse">{team.map((p) => <span key={p.id} title={p.displayName} className="rounded-full ring-2 ring-surface"><Avatar profile={p} size="sm" /></span>)}</span>}
+            </div>
+          </section>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="card p-3 sm:p-4">
               <div className="text-xs text-muted">{t('kpi.progress')}</div>
@@ -178,7 +212,7 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
                 <button type="button" className="btn-primary justify-start" onClick={() => setReporting(true)}><Bug className="size-4" />{t('reportBug')}</button>
                 <button type="button" className="btn-ghost justify-start border border-line" onClick={() => setTab('ideas')}><Lightbulb className="size-4" />{t('addIdea')}</button>
-                <Link href={`/tasks?project=${project.id}`} className="btn-ghost justify-start border border-line"><ListTodo className="size-4" />{t('projectTasks')}</Link>
+                <button type="button" onClick={() => setTab('tasks')} className="btn-ghost justify-start border border-line"><ListTodo className="size-4" />{t('projectTasks')}</button>
                 <button type="button" className="btn-ghost justify-start border border-line" onClick={copyReport}><ClipboardCopy className="size-4" />{copied ? t('copied') : t('progressReport')}</button>
               </div>
             </section>
@@ -222,11 +256,15 @@ export function CommandCenter({ project, tasks, issues, comments, ideas, milesto
         </div>
       )}
 
+      {tab === 'tasks' && <TaskViews tasks={tasks} projects={projects} milestones={milestones} projectId={project.id} />}
+      {tab === 'team' && <TeamPanel project={project} tasks={tasks} issues={issues} roles={roles} canManage={canManage} />}
+      {tab === 'decisions' && <DecisionsPanel project={project} decisions={decisions} />}
       {tab === 'issues' && <IssuesPanel issues={issues} comments={comments} canManage={canManage} onReport={() => setReporting(true)} openId={openIssue} setOpenId={setOpenIssue} />}
       {tab === 'ideas' && <IdeasPanel projectId={project.id} ideas={ideas} canManage={canManage} />}
       {tab === 'notes' && <ProjectNotes notes={sharedNotes} meetings={meetings} />}
       {tab === 'roadmap' && <Roadmap project={project} tasks={tasks} milestones={milestones} canManage={canManage} today={today} />}
 
+      <ProjectDialog open={editing} project={project} onClose={closeEdit} />
       <ReportIssueDialog open={reporting} onClose={() => setReporting(false)} projectId={project.id} />
     </div>
   );

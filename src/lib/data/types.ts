@@ -28,8 +28,16 @@ export interface Project {
   managerId: string | null;
   status: ProjectStatus;
   dueDate: string | null;
+  goal: string; // what "done" means for the project
+  startDate: string | null;
+  priority: number; // 0 low, 1 medium, 2 high, 3 critical
+  icon: string; // one of PROJECT_ICONS (components/icons/project)
+  color: string; // one of PROJECT_COLORS
+  memberIds: string[]; // the project team (the manager counts too)
   createdAt: string;
 }
+export type NewProject = Pick<Project, 'name' | 'description' | 'managerId'> & Partial<Omit<Project, 'id' | 'createdAt' | 'name' | 'description' | 'managerId'>>;
+export const PROJECT_DEFAULTS = { status: 'active', dueDate: null, goal: '', startDate: null, priority: 1, icon: 'rocket', color: 'green', memberIds: [] as string[] } as const satisfies Partial<Project>;
 
 // Project command center.
 export type IssueKind = 'bug' | 'defect';
@@ -90,6 +98,9 @@ export interface Task {
   needsVolunteer: boolean;
   priority: number; // 0 normal, 1 high, 2 urgent
   checklist: ChecklistItem[]; // small steps of the task, ticked off on its card
+  milestoneId: string | null; // the project phase it belongs to
+  effort: number; // 0 not set, 1 small, 2 medium, 3 large, 4 huge
+  blockedReason: string; // why it is stuck; empty when it is not blocked
   startDate: string | null;
   dueDate: string | null;
   position: number;
@@ -122,15 +133,33 @@ export interface Reaction {
   emoji: string;
 }
 
+// 'text' a plain message; 'decision' a message the team marked as decided; 'task'/'issue' a card for a
+// task or bug made from the chat (refId); 'system' a line the app writes itself (body is its JSON data).
+export type MessageKind = 'text' | 'decision' | 'task' | 'issue' | 'system';
+export const MESSAGE_KINDS: MessageKind[] = ['text', 'decision', 'task', 'issue', 'system'];
+
 export interface Message {
   id: string;
   channel: string;
   authorId: string | null;
   body: string;
   fileId: string | null;
+  replyToId: string | null;
+  forwardedFrom: string | null; // the original author of a forwarded message
+  kind: MessageKind;
+  refId: string | null;
+  editedAt: string | null;
+  pinnedAt: string | null;
   createdAt: string;
   reactions: Reaction[];
 }
+export type NewMessage = Pick<Message, 'channel' | 'authorId' | 'body' | 'fileId'> & Partial<Pick<Message, 'replyToId' | 'forwardedFrom' | 'kind' | 'refId'>>;
+export type MessagePatch = Partial<Pick<Message, 'body' | 'editedAt' | 'pinnedAt' | 'kind' | 'refId'>>;
+export const MESSAGE_DEFAULTS = { replyToId: null, forwardedFrom: null, kind: 'text', refId: null, editedAt: null, pinnedAt: null } as const satisfies Partial<Message>;
+
+// One chat in the list: its newest message, how many arrived since the member last read it, and when that was.
+export interface ChatSummary { channel: string; last: Message | null; unread: number; readAt: string | null }
+export interface ChatRead { userId: string; channel: string; readAt: string }
 
 export interface Poll {
   id: string;
@@ -307,7 +336,7 @@ export interface DataStore {
   deleteProfile(id: string): Promise<void>;
 
   listProjects(): Promise<Project[]>;
-  createProject(p: Pick<Project, 'name' | 'description' | 'managerId'> & Partial<Pick<Project, 'status' | 'dueDate'>>): Promise<Project>;
+  createProject(p: NewProject): Promise<Project>;
   updateProject(id: string, patch: Partial<Omit<Project, 'id' | 'createdAt'>>): Promise<void>;
   deleteProject(id: string): Promise<void>;
 
@@ -326,9 +355,20 @@ export interface DataStore {
   createFile(f: Omit<FileMeta, 'id' | 'createdAt'>): Promise<FileMeta>;
   deleteFile(id: string): Promise<void>;
 
-  listMessages(channel: string, limit: number): Promise<Message[]>;
-  createMessage(m: Pick<Message, 'channel' | 'authorId' | 'body' | 'fileId'>): Promise<Message>;
+  // The newest `limit` messages of a chat (oldest first), or the ones before `beforeIso` (older pages).
+  listMessages(channel: string, limit: number, beforeIso?: string): Promise<Message[]>;
+  getMessage(id: string): Promise<Message | null>;
+  createMessage(m: NewMessage): Promise<Message>;
+  updateMessage(id: string, patch: MessagePatch): Promise<void>;
+  deleteMessage(id: string): Promise<void>;
   toggleReaction(messageId: string, userId: string, emoji: string): Promise<void>;
+  listPinnedMessages(channel: string): Promise<Message[]>;
+  // Messages of one kind in a chat, newest first (e.g. a project's decisions).
+  listMessagesOfKind(channel: string, kind: MessageKind, limit: number): Promise<Message[]>;
+  searchMessages(channels: string[], query: string, limit: number): Promise<Message[]>;
+  chatSummaries(userId: string, channels: string[]): Promise<ChatSummary[]>;
+  listChatReads(channel: string): Promise<ChatRead[]>;
+  markChatRead(userId: string, channel: string, atIso: string): Promise<void>;
 
   listPolls(): Promise<Poll[]>;
   createPoll(p: Pick<Poll, 'question' | 'taskId' | 'createdBy' | 'closesAt'>): Promise<Poll>;

@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { store, type IdeaStatus, type IssueKind, type IssuePatch, type IssueStatus, type Profile, type Severity } from '@/lib/data';
 import { IDEA_STATUSES, ISSUE_STATUSES } from '@/lib/data/types';
+import { postSystem } from '@/lib/chat-server';
 import { fail, okResult, guard } from './result';
 
 // Project command center: bugs and defects, their comments, ideas and upgrades, milestones.
@@ -72,6 +73,7 @@ export const updateIssueAction = guard(async function updateIssueAction(id: stri
     }
   }
   await store().updateIssue(id, clean);
+  if (clean.status === 'fixed' && issue.status !== 'fixed') await postSystem(issue.projectId, user.id, { e: 'issue_fixed', title: clean.title ?? issue.title });
   return done();
 });
 
@@ -154,6 +156,7 @@ export const toggleMilestoneAction = guard(async function toggleMilestoneAction(
   if (!m) return fail('error');
   if (!manages(user, (await projectOf(m.projectId))?.managerId ?? null)) return fail('forbidden');
   await store().updateMilestone(id, { done: isDone });
+  if (isDone && !m.done) await postSystem(m.projectId, user.id, { e: 'milestone_done', title: m.title });
   return done();
 });
 

@@ -1,9 +1,13 @@
 import 'server-only';
 import { store } from '@/lib/data';
+import { projectIdOf } from '@/lib/chat';
 
-// 'team' is open to everyone; 'office:<slot>' only to the office owner and accepted invitees.
+// 'team' and project topics ('project:<id>') are open to every member; 'office:<slot>' only to the
+// office owner and accepted invitees.
 export async function canUseChannel(userId: string, channel: string) {
   if (channel === 'team') return true;
+  const projectId = projectIdOf(channel);
+  if (projectId) return (await store().listProjects()).some((p) => p.id === projectId);
   const m = /^office:([1-4])$/.exec(channel);
   if (!m) return false;
   const slot = Number(m[1]);

@@ -46,6 +46,7 @@ alter table meeting_attendance enable row level security;
 alter table meeting_notes enable row level security;
 alter table shared_notes enable row level security;
 alter table posts enable row level security;
+alter table chat_reads enable row level security;
 
 create policy "read" on profiles for select to authenticated using (public.is_member());
 create policy "read" on projects for select to authenticated using (public.is_member());
@@ -53,7 +54,7 @@ create policy "read" on tasks for select to authenticated using (public.is_membe
 create policy "read" on project_roles for select to authenticated using (public.is_member());
 create policy "read" on files for select to authenticated using (public.is_member());
 create policy "read" on messages for select to authenticated using (
-  (channel = 'team' and public.is_member())
+  ((channel = 'team' or channel like 'project:%') and public.is_member())
   or exists (select 1 from offices o where 'office:' || o.slot = channel and o.owner_id = auth.uid())
   or exists (select 1 from private_chat_invites i where 'office:' || i.slot = channel and i.invitee_id = auth.uid() and i.status = 'accepted')
 );
@@ -88,6 +89,8 @@ create policy "read own" on meeting_notes for select to authenticated using (use
 create policy "read" on shared_notes for select to authenticated using (public.is_member());
 -- Team pulse (announcements, kudos, standups): open to the whole team.
 create policy "read" on posts for select to authenticated using (public.is_member());
+-- When each member last read each chat: only their own (the server works out "seen" ticks).
+create policy "read own" on chat_reads for select to authenticated using (user_id = auth.uid());
 
 -- Realtime change events for live refresh (not meeting_attendance: its regular "still here" updates
 -- would refresh every page; the office shows who is in the room from the live connections instead).

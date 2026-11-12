@@ -3,9 +3,9 @@ import { progress, projectHealth, needsAttention, activityTrend, workload } from
 import type { Issue, Milestone, Project, Task } from '@/lib/data/types';
 
 const today = '2026-10-24';
-const project = (o: Partial<Project> = {}): Project => ({ id: 'p', name: 'P', description: '', managerId: null, status: 'active', dueDate: null, createdAt: '2026-10-01T08:00:00Z', ...o });
+const project = (o: Partial<Project> = {}): Project => ({ id: 'p', name: 'P', description: '', managerId: null, status: 'active', dueDate: null, goal: '', startDate: null, priority: 1, icon: 'rocket', color: 'green', memberIds: [], createdAt: '2026-10-01T08:00:00Z', ...o });
 const task = (id: string, o: Partial<Task> = {}): Task => ({
-  id, projectId: 'p', title: id, description: '', column: 'in_progress', tags: [], assigneeId: null, needsVolunteer: false, priority: 0, checklist: [], startDate: null, dueDate: null,
+  id, projectId: 'p', title: id, description: '', column: 'in_progress', tags: [], assigneeId: null, needsVolunteer: false, priority: 0, checklist: [], milestoneId: null, effort: 0, blockedReason: '', startDate: null, dueDate: null,
   position: 0, createdBy: null, createdAt: '2026-10-01T08:00:00Z', updatedAt: '2026-10-01T08:00:00Z', ...o,
 });
 const issue = (id: string, o: Partial<Issue> = {}): Issue => ({
@@ -48,4 +48,13 @@ it('counts daily activity and workload', () => {
   expect(tr).toEqual({ days: ['2026-10-22', '2026-10-23', '2026-10-24'], done: [0, 0, 1], reported: [0, 1, 0], fixed: [0, 0, 1] });
   expect(workload(['u'], [task('a', { assigneeId: 'u' }), task('b', { assigneeId: 'u', column: 'done' })], [issue('x', { assigneeId: 'u' })]))
     .toEqual([{ id: 'u', tasks: 1, bugs: 1 }]);
+});
+
+it('counts blocked tasks and uses the start date for the schedule', async () => {
+  const { timeElapsed, milestoneProgress } = await import('./project-health');
+  const p = project({ startDate: '2026-10-20', dueDate: '2026-10-28' });
+  expect(timeElapsed(p, today)).toBe(50);
+  const h = projectHealth(p, [task('a', { blockedReason: 'waiting for keys' }), task('b', { column: 'done' })], [], [], today);
+  expect(h.reasons).toContainEqual({ key: 'blockedTasks', n: 1 });
+  expect(milestoneProgress('m', [task('x', { milestoneId: 'm', column: 'done' }), task('y', { milestoneId: 'm' }), task('z')])).toEqual({ done: 1, total: 2, pct: 50 });
 });
