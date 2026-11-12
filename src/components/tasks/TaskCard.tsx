@@ -2,12 +2,13 @@
 import { useOptimistic, useState, useTransition } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ChevronDown, Flag, ListChecks, MoreVertical } from 'lucide-react';
+import { ChevronDown, Flag, ListChecks, MoreVertical, Ban, Pencil, Trash2 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useProfile, useShell } from '@/components/shell/ShellContext';
 import { moveTaskAction, deleteTaskAction, volunteerTaskAction, toggleStepAction } from '@/app/actions/tasks';
 import { daysFromToday, formatNumber, tagColor } from '@/lib/format';
-import { TASK_COLUMNS, type Task } from '@/lib/data/types';
+import { TASK_COLUMNS, type Milestone, type Task } from '@/lib/data/types';
+import { COLUMN_STYLE, TONE, PriorityChip, EffortChip } from '@/components/icons/options';
 
 export function useDueLabel() {
   const t = useTranslations('common');
@@ -21,7 +22,7 @@ export function useDueLabel() {
   };
 }
 
-export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () => void; draggable?: boolean }) {
+export function TaskCard({ task, onEdit, draggable, milestone }: { task: Task; onEdit: () => void; draggable?: boolean; milestone?: Milestone }) {
   const t = useTranslations('tasks');
   const tc = useTranslations('common');
   const { user } = useShell();
@@ -43,7 +44,12 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
 
   return (
     <article draggable={draggable} onDragStart={(e) => e.dataTransfer.setData('text/task', task.id)}
-      className="group relative rounded-xl border border-line bg-surface p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-brand/40">
+      className={clsx('group relative rounded-xl border bg-surface p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-brand/40', task.blockedReason && task.column !== 'done' ? 'border-danger/40' : 'border-line')}>
+      {task.blockedReason && task.column !== 'done' && (
+        <div className="-mx-3 -mt-3 mb-2 flex items-center gap-1.5 rounded-t-xl bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger" title={task.blockedReason}>
+          <Ban className="size-3.5 shrink-0" /><span className="truncate" dir="auto">{t('blocked')}: {task.blockedReason}</span>
+        </div>
+      )}
       <button type="button" onClick={onEdit} className="block w-full text-start">
         <h3 className="text-sm font-semibold leading-5" dir="auto">{task.title}</h3>
         {task.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted" dir="auto">{task.description}</p>}
@@ -71,7 +77,9 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
         </div>
       )}
       <div className="mt-2 flex flex-wrap gap-1">
-        {task.priority > 0 && <span className={clsx('chip gap-1', task.priority === 2 ? 'bg-danger/10 text-danger' : 'bg-accent-soft text-accent')}><Flag className="size-3 fill-current" />{t(`priority${task.priority as 1 | 2}`)}</span>}
+        {task.priority > 0 && <PriorityChip priority={task.priority} />}
+        <EffortChip effort={task.effort} />
+        {milestone && <span className="chip gap-1 bg-surface-2 text-muted" title={t('phase')}><Flag className="size-3 text-accent" /><span className="max-w-28 truncate" dir="auto">{milestone.title}</span></span>}
         {task.tags.map((tag) => <span key={tag} className={clsx('chip', tagColor(tag))}>{tag}</span>)}
         {task.needsVolunteer && <span className="chip bg-accent-soft text-accent ring-1 ring-accent/30">{t('needsVolunteer')}</span>}
       </div>
@@ -84,15 +92,26 @@ export function TaskCard({ task, onEdit, draggable }: { task: Task; onEdit: () =
         <div className="relative ms-auto">
           <button type="button" aria-label={tc('more')} className="flex size-8 items-center justify-center rounded-lg hover:bg-surface-2" onClick={() => setMenu((x) => !x)}><MoreVertical className="size-4" /></button>
           {menu && (
-            <div className="card absolute end-0 top-9 z-20 w-44 p-1 text-sm text-ink" onMouseLeave={() => setMenu(false)}>
-              <button type="button" className="flex min-h-10 w-full items-center rounded-lg px-3 hover:bg-surface-2" onClick={() => { setMenu(false); onEdit(); }}>{tc('edit')}</button>
-              <div className="px-3 pt-1 text-[11px] text-muted">{t('moveTo')}</div>
-              {TASK_COLUMNS.filter((c) => c !== task.column).map((c) => (
-                <button key={c} type="button" className="flex min-h-10 w-full items-center rounded-lg px-3 hover:bg-surface-2" onClick={() => { setMenu(false); run(() => moveTaskAction(task.id, c)); }}>{t(`col_${c}`)}</button>
-              ))}
+            <div className="card gc-menu absolute end-0 top-9 z-20 w-56 p-1.5 text-sm text-ink" onMouseLeave={() => setMenu(false)}>
+              <div className="px-1.5 pb-1 text-[11px] text-muted">{t('moveTo')}</div>
+              <div className="grid grid-cols-4 gap-1">
+                {TASK_COLUMNS.map((c) => {
+                  const on = c === task.column;
+                  const tone = TONE[COLUMN_STYLE[c].tone];
+                  return (
+                    <button key={c} type="button" title={t(`col_${c}`)} aria-label={t(`col_${c}`)} disabled={on}
+                      onClick={() => { setMenu(false); run(() => moveTaskAction(task.id, c)); }}
+                      className={clsx('flex aspect-square flex-col items-center justify-center rounded-xl border-2 transition active:scale-90', on ? clsx(tone.tile, tone.ring, tone.ink) : 'border-transparent bg-surface-2 text-muted hover:text-ink')}>
+                      {COLUMN_STYLE[c].icon('size-6')}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="my-1.5 border-t border-line" />
+              <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 hover:bg-surface-2" onClick={() => { setMenu(false); onEdit(); }}><Pencil className="size-4" />{tc('edit')}</button>
               {(user.role === 'admin' || task.createdBy === user.id) && (
-                <button type="button" className="flex min-h-10 w-full items-center rounded-lg px-3 text-danger hover:bg-surface-2"
-                  onClick={() => { setMenu(false); if (confirm(t('confirmDelete'))) run(() => deleteTaskAction(task.id)); }}>{tc('delete')}</button>
+                <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-danger hover:bg-surface-2"
+                  onClick={() => { setMenu(false); if (confirm(t('confirmDelete'))) run(() => deleteTaskAction(task.id)); }}><Trash2 className="size-4" />{tc('delete')}</button>
               )}
             </div>
           )}

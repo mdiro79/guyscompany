@@ -57,6 +57,13 @@
       "when": 1794315218688,
       "tag": "0007_task_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794488302535,
+      "tag": "0008_chat_projects",
+      "breakpoints": true
     }
   ]
 }

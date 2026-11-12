@@ -27,6 +27,50 @@ beforeAll(async () => {
 });
 
 describe('db store', () => {
+  it('chat: replies, edits, pins, decisions, search, older pages, unread counts and reads', async () => {
+    const p = await store.createProject({ name: 'Chat', description: '', managerId: A, icon: 'game', color: 'blue', memberIds: [A, B], priority: 3 });
+    expect(p).toMatchObject({ icon: 'game', color: 'blue', memberIds: [A, B], priority: 3, goal: '', startDate: null });
+    const ch = `project:${p.id}`;
+    const m1 = await store.createMessage({ channel: ch, authorId: A, body: 'We should ship on Friday', fileId: null });
+    expect(m1).toMatchObject({ kind: 'text', replyToId: null, editedAt: null, pinnedAt: null });
+    await new Promise((r) => setTimeout(r, 5));
+    const m2 = await store.createMessage({ channel: ch, authorId: B, body: 'agreed 100%_done', fileId: null, replyToId: m1.id });
+    await store.updateMessage(m1.id, { kind: 'decision', pinnedAt: new Date().toISOString() });
+    await store.updateMessage(m2.id, { body: 'Agreed 100%_done', editedAt: new Date().toISOString() });
+    expect((await store.getMessage(m2.id))).toMatchObject({ replyToId: m1.id, body: 'Agreed 100%_done' });
+    expect((await store.listPinnedMessages(ch)).map((m) => m.id)).toEqual([m1.id]);
+    expect((await store.listMessagesOfKind(ch, 'decision', 10)).map((m) => m.id)).toEqual([m1.id]);
+    // Search matches text literally (% and _ are not wildcards) and skips cards and system lines.
+    expect((await store.searchMessages([ch], '100%_', 10)).map((m) => m.id)).toEqual([m2.id]);
+    expect(await store.searchMessages([ch], '100%x', 10)).toEqual([]);
+    expect((await store.listMessages(ch, 1)).map((m) => m.id)).toEqual([m2.id]);
+    expect((await store.listMessages(ch, 10, m2.createdAt)).map((m) => m.id)).toEqual([m1.id]);
+    // Unread: messages from others since the last read; a read never moves back.
+    let [sum] = await store.chatSummaries(A, [ch]);
+    expect(sum).toMatchObject({ unread: 1, readAt: null });
+    expect(sum.last?.id).toBe(m2.id);
+    await store.markChatRead(A, ch, m2.createdAt);
+    await store.markChatRead(A, ch, m1.createdAt);
+    [sum] = await store.chatSummaries(A, [ch]);
+    expect(sum.unread).toBe(0);
+    expect((await store.listChatReads(ch))[0].readAt).toBe(m2.createdAt);
+    expect((await store.chatSummaries(B, [ch, 'team']))[0].unread).toBe(1);
+    // Deleting the original keeps the reply (its link is cleared); deleting the project removes its topic.
+    await store.deleteMessage(m1.id);
+    expect((await store.getMessage(m2.id))?.replyToId).toBeNull();
+    await store.deleteProject(p.id);
+    expect(await store.listMessages(ch, 10)).toEqual([]);
+  });
+
+  it('tasks: phase, size and blocked', async () => {
+    const p = await store.createProject({ name: 'Phases', description: '', managerId: A });
+    const ms = await store.createMilestone({ projectId: p.id, title: 'Beta', dueDate: null });
+    const t = await store.createTask({ title: 'Ship', projectId: p.id, milestoneId: ms.id, effort: 3, blockedReason: 'keys' });
+    expect(t).toMatchObject({ milestoneId: ms.id, effort: 3, blockedReason: 'keys' });
+    await store.deleteMilestone(ms.id);
+    expect((await store.listTasks()).find((x) => x.id === t.id)?.milestoneId).toBeNull();
+  });
+
   it('meetings, attendance, private notes and shared notes', async () => {
     const p = await store.createProject({ name: 'Notes', description: '', managerId: A });
     const m = await store.createMeeting({ title: 'Weekly', purpose: 'Plan the week', projectId: p.id, startedBy: A });

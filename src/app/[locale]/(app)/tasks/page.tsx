@@ -4,6 +4,6 @@ import { TaskViews } from '@/components/tasks/TaskViews';
 
 export default async function TasksPage() {
   await requirePageUser();
-  const [tasks, projects] = await Promise.all([store().listTasks(), store().listProjects()]);
-  return <TaskViews tasks={tasks} projects={projects} />;
+  const [tasks, projects, milestones] = await Promise.all([store().listTasks(), store().listProjects(), store().listMilestones()]);
+  return <TaskViews tasks={tasks} projects={projects} milestones={milestones} />;
 }

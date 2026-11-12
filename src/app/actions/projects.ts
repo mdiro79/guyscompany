@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { store } from '@/lib/data';
 import { PROJECT_STATUSES, type ProjectStatus } from '@/lib/data/types';
+import { PROJECT_COLOR_KEYS, PROJECT_ICON_KEYS } from '@/lib/project-look';
 import { fail, okResult, guard, type ActionResult } from './result';
 
 export const saveProjectAction = guard(async function saveProjectAction(_: ActionResult | null, form: FormData): Promise<ActionResult> {
@@ -12,16 +13,27 @@ export const saveProjectAction = guard(async function saveProjectAction(_: Actio
   const managerId = String(form.get('managerId') ?? '') || null;
   const statusIn = String(form.get('status') ?? 'active');
   const status: ProjectStatus = (PROJECT_STATUSES as string[]).includes(statusIn) ? (statusIn as ProjectStatus) : 'active';
-  const due = String(form.get('dueDate') ?? '');
-  const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : null;
+  const day = (k: string) => { const v = String(form.get(k) ?? ''); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null; };
+  const dueDate = day('dueDate');
+  const startDate = day('startDate');
   if (!name) return fail('error');
+  if (startDate && dueDate && startDate > dueDate) return fail('dates');
+  const profiles = new Set((await store().listProfiles()).map((p) => p.id));
+  const brief = {
+    goal: String(form.get('goal') ?? '').trim().slice(0, 1000),
+    startDate,
+    priority: Math.max(0, Math.min(3, Number(form.get('priority') ?? 1) || 0)),
+    icon: PROJECT_ICON_KEYS.includes(String(form.get('icon'))) ? String(form.get('icon')) : 'rocket',
+    color: PROJECT_COLOR_KEYS.includes(String(form.get('color'))) ? String(form.get('color')) : 'green',
+    memberIds: [...new Set(form.getAll('memberIds').map(String))].filter((x) => profiles.has(x)),
+  };
   const id = String(form.get('id') ?? '');
   if (id) {
     const p = (await store().listProjects()).find((x) => x.id === id);
     if (!p || (user.role !== 'admin' && p.managerId !== user.id)) return fail('forbidden');
-    await store().updateProject(id, { name, description, managerId, status, dueDate });
+    await store().updateProject(id, { name, description, managerId, status, dueDate, ...brief });
   } else {
-    await store().createProject({ name, description, managerId: managerId ?? user.id, status, dueDate });
+    await store().createProject({ name, description, managerId: managerId ?? user.id, status, dueDate, ...brief });
   }
   revalidatePath('/', 'layout');
   return okResult('saved');

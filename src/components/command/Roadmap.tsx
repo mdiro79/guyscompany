@@ -6,6 +6,7 @@ import { Flag, Plus, Trash2, Check } from 'lucide-react';
 import { createMilestoneAction, toggleMilestoneAction, deleteMilestoneAction } from '@/app/actions/command';
 import { formatDate, zonedDate } from '@/lib/format';
 import { addDays } from '@/lib/todos';
+import { milestoneProgress } from '@/lib/project-health';
 import type { Milestone, Project, Task } from '@/lib/data/types';
 
 const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86400000;
@@ -61,8 +62,9 @@ export function Roadmap({ project, tasks, milestones, canManage, today }: { proj
         <ul className="space-y-1.5">
           {ms.map((m) => {
             const late = !m.done && !!m.dueDate && m.dueDate < today;
+            const mp = milestoneProgress(m.id, tasks);
             return (
-              <li key={m.id} className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+              <li key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-surface-2 px-3 py-2 text-sm">
                 <button type="button" disabled={!canManage} aria-pressed={m.done} aria-label={m.title}
                   onClick={() => start(async () => { await toggleMilestoneAction(m.id, !m.done); })}
                   className={clsx('flex size-6 shrink-0 items-center justify-center rounded-md border-2', m.done ? 'border-brand bg-brand text-brand-ink' : 'border-line', canManage && 'hover:border-brand')}>
@@ -73,6 +75,13 @@ export function Roadmap({ project, tasks, milestones, canManage, today }: { proj
                 {canManage && (
                   <button type="button" className="icon-btn size-8 text-muted hover:text-danger" aria-label={t('delete')}
                     onClick={() => { if (confirm(t('confirmDelete'))) start(async () => { await deleteMilestoneAction(m.id); }); }}><Trash2 className="size-3.5" /></button>
+                )}
+                {/* Its own tasks (phase of the project): how many are done */}
+                {mp.total > 0 && (
+                  <span className="flex basis-full items-center gap-2 ps-8 text-xs text-muted">
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface"><span className={clsx('block h-full rounded-full', m.done ? 'bg-brand' : 'bg-accent')} style={{ width: `${mp.pct}%` }} /></span>
+                    {t('phaseTasks', { done: mp.done, total: mp.total })}
+                  </span>
                 )}
               </li>
             );

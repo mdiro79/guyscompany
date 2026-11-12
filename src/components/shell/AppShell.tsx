@@ -49,13 +49,13 @@ export function AppShell({ data: server, notifications, messages, files, search,
   const t = useTranslations();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
-  const [chat, setChat] = useState(false);
+  const chatPage = pathname.startsWith('/chat');
   // The chat list is capped, so unread messages are counted from the last one seen rather than by length.
   const lastId = messages.at(-1)?.id;
   const [seenId, setSeenId] = useState(lastId);
   useLive(LIVE_TABLES);
   useEffect(() => { setDrawer(false); }, [pathname]);
-  useEffect(() => { if (chat) setSeenId(lastId); }, [chat, lastId]);
+  useEffect(() => { if (chatPage) setSeenId(lastId); }, [chatPage, lastId]);
   const unreadChat = useMemo(() => {
     const from = seenId ? messages.findIndex((m) => m.id === seenId) + 1 : 0;
     return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
@@ -112,21 +112,28 @@ export function AppShell({ data: server, notifications, messages, files, search,
         <VoiceProvider>
           <BoardSync userId={data.user.id} />
           {fullBleed ? children : (
-            <div className="flex min-h-dvh flex-col">
+            <div className={clsx('flex flex-col', chatPage ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
               {data.demo && <div className="bg-accent px-4 py-1 text-center text-xs text-white">{t('common.demoBanner')}</div>}
               <TopBar notifications={notifications} search={search} onMenu={() => setDrawer(true)} />
-              <div className="flex flex-1">
+              <div className={clsx('flex flex-1', chatPage && 'min-h-0')}>
                 <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-64 shrink-0 border-e border-line lg:block short:top-12 short:block short:h-[calc(100dvh-3rem)] short:w-56"><Sidebar /></aside>
-                <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-4 short:pb-4">{children}</main>
-                <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex 2xl:w-96">
-                  <ChatPanel messages={messages} files={files} className="w-full" />
-                </aside>
+                {/* The chat page fills the screen like an app (its lists scroll inside). */}
+                <main className={chatPage ? 'flex min-h-0 min-w-0 flex-1 flex-col lg:p-3 max-lg:pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] short:pb-0'
+                  : 'min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-4 short:pb-4'}>{children}</main>
+                {!chatPage && (
+                  <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-80 shrink-0 border-s border-line bg-surface xl:flex 2xl:w-96">
+                    <ChatPanel messages={messages} files={files} className="w-full" />
+                  </aside>
+                )}
               </div>
-              <MobileNav onChat={() => setChat(true)} onMenu={() => setDrawer(true)} unreadChat={unreadChat} />
-              <button type="button" onClick={() => setChat(true)} aria-label={t('nav.chat')}
-                className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden short:flex short:bottom-3 short:end-3 short:size-12">
-                <MessageCircle className="size-6" />
-              </button>
+              <MobileNav onMenu={() => setDrawer(true)} unreadChat={chatPage ? 0 : unreadChat} />
+              {!chatPage && (
+                <Link href="/chat" aria-label={t('nav.chat')}
+                  className="fixed bottom-6 end-6 z-30 hidden size-14 items-center justify-center rounded-full bg-brand text-brand-ink shadow-lg lg:flex xl:hidden short:flex short:bottom-3 short:end-3 short:size-12">
+                  <MessageCircle className="size-6" />
+                  {unreadChat > 0 && <span className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white">{unreadChat}</span>}
+                </Link>
+              )}
               {/* Drawer (phone/tablet) */}
               <div className={clsx('fixed inset-0 z-40 lg:hidden', drawer ? 'visible' : 'invisible')}>
                 <div className={clsx('absolute inset-0 bg-black/40 transition-opacity', drawer ? 'opacity-100' : 'opacity-0')} onClick={() => setDrawer(false)} />
@@ -136,13 +143,6 @@ export function AppShell({ data: server, notifications, messages, files, search,
                   <Sidebar onNavigate={() => setDrawer(false)} />
                 </div>
               </div>
-              {/* Full-screen chat (below xl) */}
-              {chat && (
-                <div className="fixed inset-0 z-50 flex flex-col bg-surface xl:hidden">
-                  <button type="button" className="icon-btn absolute top-3 end-3 z-10" onClick={() => setChat(false)} aria-label={t('common.close')}><X className="size-5" /></button>
-                  <ChatPanel messages={messages} files={files} className="h-full pb-[env(safe-area-inset-bottom)]" />
-                </div>
-              )}
             </div>
           )}
         </VoiceProvider>

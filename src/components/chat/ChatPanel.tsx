@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { MessageCircle, MoreHorizontal, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus } from 'lucide-react';
+import { MessageCircle, Maximize2, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus, Reply } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { Avatar } from '@/components/ui/Avatar';
-import { toggleReactionAction } from '@/app/actions/chat';
 import { formatBytes, formatTime } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
 import { uploadFile } from '@/lib/upload';
@@ -25,8 +25,7 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [reactFor, setReactFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [, start] = useTransition();
-  const { messages, send: post } = useChat(channel, saved);
+  const { messages, send: post, react } = useChat(channel, saved);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -61,7 +60,7 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
     <section className={clsx('flex min-h-0 flex-col', className)}>
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold"><MessageCircle className="size-5" />{title ?? t('title')}</h2>
-        <MoreHorizontal className="size-5 text-muted" />
+        {channel === 'team' && <Link href="/chat" className="icon-btn size-9 text-muted hover:text-ink" aria-label={t('openFull')} title={t('openFull')}><Maximize2 className="size-4" /></Link>}
       </div>
       {channel === 'team' && (
         <div className="px-4 pb-2"><span className="chip gap-1 bg-surface-2 text-muted"><Users className="size-3" />{t('groupChat')}</span></div>
@@ -82,7 +81,14 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
                   <span className="text-sm font-semibold">{author?.displayName ?? '—'}</span>
                   <span className="text-[11px] text-muted" dir={sending ? undefined : 'ltr'}>{sending ? t('sending') : formatTime(locale, m.createdAt)}</span>
                 </div>
-                {m.body && (
+                {m.replyToId && (() => { const r = messages.find((x) => x.id === m.replyToId); return r ? (
+                  <div className="mt-1 flex items-center gap-1.5 border-s-2 border-brand ps-2 text-xs text-muted"><Reply className="size-3 shrink-0" /><span className="truncate" dir="auto">{byId(r.authorId)?.displayName}: {r.body || '📎'}</span></div>
+                ) : null; })()}
+                {m.kind === 'system' ? null : m.body && (m.kind === 'task' || m.kind === 'issue') ? (
+                  <Link href={`/chat?c=${encodeURIComponent(channel)}&m=${m.id}`} className="mt-1 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-2">
+                    <span aria-hidden>{m.kind === 'task' ? '✅' : '🐞'}</span><span className="min-w-0 flex-1 truncate font-medium" dir="auto">{m.body}</span>
+                  </Link>
+                ) : m.body && (
                   <div dir="auto" className={clsx('mt-1 whitespace-pre-wrap break-words rounded-2xl rounded-ss-md px-3 py-2 text-sm leading-6', mine ? 'bg-brand-soft' : 'bg-surface-2', sending && 'opacity-60')}>{m.body}</div>
                 )}
                 {file && (
@@ -94,7 +100,7 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
                 )}
                 {!sending && <div className="mt-1 flex flex-wrap items-center gap-1">
                   {grouped.map(([emoji, users]) => (
-                    <button key={emoji} type="button" onClick={() => start(async () => { await toggleReactionAction(m.id, emoji); })}
+                    <button key={emoji} type="button" onClick={() => react(m.id, emoji)}
                       className={clsx('chip gap-1 border', users.includes(user.id) ? 'border-brand bg-brand-soft' : 'border-line bg-surface')}>
                       {emoji} <span>{users.length}</span>
                     </button>
@@ -105,7 +111,7 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
                       <div className="card absolute bottom-8 start-0 z-10 flex gap-1 p-1">
                         {QUICK.map((e) => (
                           <button key={e} type="button" className="rounded-lg p-1.5 text-lg hover:bg-surface-2"
-                            onClick={() => { setReactFor(null); start(async () => { await toggleReactionAction(m.id, e); }); }}>{e}</button>
+                            onClick={() => { setReactFor(null); react(m.id, e); }}>{e}</button>
                         ))}
                       </div>
                     )}

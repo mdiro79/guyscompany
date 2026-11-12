@@ -1,6 +1,7 @@
 import type { Post, Profile, Project, Task, Message, Poll, Office, FocusItem, Todo, TodoStats, CalendarEvent, Notification, ProjectRole, Issue, IssueComment, ProjectIdea, Milestone } from './types';
 import { todayIso } from '@/lib/format';
 import { addDays } from '@/lib/todos';
+import { MESSAGE_DEFAULTS } from './types';
 
 // Demo data used when Supabase is not configured.
 export const DEMO_PASSWORD = 'guys1234';
@@ -27,8 +28,10 @@ export function createSeed() {
   ];
 
   const projects: Project[] = [
-    { id: '10000000-0000-4000-8000-000000000001', name: 'Guyscompany', description: 'Virtual office and dashboard', managerId: ids.mehdi, status: 'active', dueDate: day(30), createdAt: ago(60 * 24 * 20) },
-    { id: '10000000-0000-4000-8000-000000000002', name: 'Marketing', description: 'Launch campaign', managerId: ids.sara, status: 'planning', dueDate: day(45), createdAt: ago(60 * 24 * 10) },
+    { id: '10000000-0000-4000-8000-000000000001', name: 'Guyscompany', description: 'Virtual office and dashboard', managerId: ids.mehdi, status: 'active', dueDate: day(30), createdAt: ago(60 * 24 * 20),
+      goal: 'یک دفتر مجازی که هر چهار نفر هر روز در آن کار کنند.', startDate: day(-20), priority: 2, icon: 'box', color: 'green', memberIds: [ids.mehdi, ids.sara, ids.nima, ids.reza] },
+    { id: '10000000-0000-4000-8000-000000000002', name: 'Marketing', description: 'Launch campaign', managerId: ids.sara, status: 'planning', dueDate: day(45), createdAt: ago(60 * 24 * 10),
+      goal: 'Launch with 500 sign-ups in the first month.', startDate: day(-3), priority: 1, icon: 'megaphone', color: 'orange', memberIds: [ids.sara, ids.reza] },
   ];
   const [p1, p2] = projects.map((p) => p.id);
 
@@ -37,7 +40,7 @@ export function createSeed() {
     n += 1;
     return {
       id: `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
-      projectId: p1, title, description, column, tags, assigneeId, needsVolunteer: false, priority: 0, checklist: [],
+      projectId: p1, title, description, column, tags, assigneeId, needsVolunteer: false, priority: 0, checklist: [], milestoneId: null, effort: 0, blockedReason: '',
       startDate: day(start), dueDate: day(due), position: n, createdBy: ids.mehdi,
       createdAt: ago(60 * 24 * (10 - n / 2)), updatedAt: ago(60 * n), ...extra,
     };
@@ -47,14 +50,14 @@ export function createSeed() {
     task('AI assistant integration', 'Integrate local AI model for offline assistant feature.', 'idea', ['Backend', 'AI'], null, 4, 14, { needsVolunteer: true }),
     task('Brand identity update', 'New logo and visual identity for next quarter.', 'idea', ['Design', 'Branding'], ids.sara, 6, 20, { projectId: p2 }),
     task('Website performance optimization', 'Improve loading speed and SEO structure.', 'in_progress', ['Frontend', 'Performance'], ids.nima, -3, 2, {
-      priority: 2, checklist: [{ text: 'Measure the slow pages', done: true }, { text: 'Compress images', done: true }, { text: 'Split the 3D code', done: false }, { text: 'Check on a phone', done: false }],
+      priority: 2, effort: 3, milestoneId: 'a3000000-0000-4000-8000-000000000002', checklist: [{ text: 'Measure the slow pages', done: true }, { text: 'Compress images', done: true }, { text: 'Split the 3D code', done: false }, { text: 'Check on a phone', done: false }],
     }),
-    task('Game character animation', 'Hook up character animations in the 3D office.', 'in_progress', ['Game Dev', 'Animation'], ids.mehdi, -2, 4, { priority: 1 }),
-    task('API integration', 'Connect payment gateway and handle webhooks.', 'in_progress', ['Backend', 'Payment'], ids.reza, -1, 5),
+    task('Game character animation', 'Hook up character animations in the 3D office.', 'in_progress', ['Game Dev', 'Animation'], ids.mehdi, -2, 4, { priority: 1, effort: 3, milestoneId: 'a3000000-0000-4000-8000-000000000002' }),
+    task('API integration', 'Connect payment gateway and handle webhooks.', 'in_progress', ['Backend', 'Payment'], ids.reza, -1, 5, { effort: 2, blockedReason: 'منتظر کلید درگاه پرداخت' }),
     task('User testing results', 'Analyze feedback from beta users and make improvements.', 'review', ['UX', 'Research'], ids.sara, -6, 1),
     task('Marketing campaign', 'Prepare social media content for product launch.', 'review', ['Marketing', 'Content'], ids.reza, -5, 3, { projectId: p2 }),
     task('Landing page design', 'Create modern landing page for new product.', 'done', ['Design', 'Web'], ids.sara, -12, -4),
-    task('User authentication', 'Implement secure login and signup.', 'done', ['Backend', 'Security'], ids.nima, -14, -6),
+    task('User authentication', 'Implement secure login and signup.', 'done', ['Backend', 'Security'], ids.nima, -14, -6, { milestoneId: 'a3000000-0000-4000-8000-000000000001', effort: 2 }),
     task('Bug fixes', 'Fix reported issues from production.', 'done', ['Bug', 'Hotfix'], ids.reza, -8, -2),
   ];
 
@@ -63,14 +66,22 @@ export function createSeed() {
     { id: '60000000-0000-4000-8000-000000000002', projectId: p1, name: 'QA', description: 'Test on phones before each release.', volunteerId: ids.reza, createdAt: ago(500) },
   ];
 
-  const msg = (id: number, authorId: string, body: string, minutes: number, reactions: Message['reactions'] = []): Message => ({
-    id: `30000000-0000-4000-8000-${String(id).padStart(12, '0')}`, channel: 'team', authorId, body, fileId: null, createdAt: ago(minutes), reactions,
+  const msg = (id: number, authorId: string, body: string, minutes: number, reactions: Message['reactions'] = [], o: Partial<Message> = {}): Message => ({
+    id: `30000000-0000-4000-8000-${String(id).padStart(12, '0')}`, channel: 'team', authorId, body, fileId: null, ...MESSAGE_DEFAULTS, createdAt: ago(minutes), reactions, ...o,
   });
+  const mid = (id: number) => `30000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
+  const topic = `project:${p1}`;
   const messages: Message[] = [
     msg(1, ids.sara, 'سلام بچه‌ها! امروز جلسه‌ی بررسی طراحی رو داریم. لطفاً فایل‌های نهایی رو تا ساعت ۱۲ آپلود کنید.', 95, [{ userId: ids.mehdi, emoji: '👍' }, { userId: ids.nima, emoji: '👍' }]),
     msg(2, ids.nima, 'در حال حاضر روی بهینه‌سازی فونت‌ها کار می‌کنم. تا عصر آماده میشه.', 90, [{ userId: ids.sara, emoji: '🔥' }]),
     msg(3, ids.mehdi, 'عالی 👌 من هم انیمیشن کاراکتر رو آپدیت می‌کنم.', 80),
     msg(4, ids.reza, 'من هم بررسی مارکتینگ رو تکمیل کردم.', 40, [{ userId: ids.mehdi, emoji: '👍' }]),
+    msg(5, ids.sara, 'عالیه رضا! فایلش رو کجا گذاشتی؟', 35, [], { replyToId: mid(4) }),
+    // The main project's topic: a discussion, a decision and a task made from a message.
+    msg(10, ids.nima, 'صفحه‌ی داشبورد روی گوشی هنوز کنده. پیشنهاد می‌کنم کد سه‌بعدی رو جدا بارگذاری کنیم.', 300, [], { channel: topic }),
+    msg(11, ids.mehdi, 'موافقم. کد سه‌بعدی فقط وقتی وارد دفتر می‌شیم بارگذاری بشه.', 290, [{ userId: ids.nima, emoji: '👍' }, { userId: ids.sara, emoji: '👍' }], { channel: topic, replyToId: mid(10), kind: 'decision' }),
+    msg(12, ids.mehdi, 'Website performance optimization', 285, [], { channel: topic, kind: 'task', refId: '20000000-0000-4000-8000-000000000004', replyToId: mid(10) }),
+    msg(13, ids.sara, 'من طرح آیکن‌های جدید پروژه‌ها رو تا فردا می‌فرستم 🎨', 60, [{ userId: ids.mehdi, emoji: '🔥' }], { channel: topic }),
   ];
 
   const polls: Poll[] = [
