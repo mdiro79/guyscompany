@@ -16,6 +16,9 @@ const GROUP_MS = 5 * 60_000; // messages of one person this close together share
 const ONLINE_MS = 5000;
 const NAME_COLORS = ['#ffd27a', '#c9a2ff', '#7fe0d2', '#ffab91', '#9cc8ff', '#b8e986']; // a teammate counts as here while their position keeps arriving
 
+// A phone held sideways with the keyboard up leaves little room, so then the card gives way to a slim strip
+// of the latest messages, like a messenger: others' at the start, one's own at the end (swipe for older
+// ones); the card comes back when the keyboard closes. The panel glides with the keyboard.
 // Team chat inside the 3D office. It fills the part of the screen that is visible (above a phone's
 // keyboard): the messages in a card at the top (the start side on a phone held sideways; above the
 // writing bar on computers) and a wide writing bar at the bottom, right on top of the keyboard. While it
@@ -37,6 +40,7 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
   const [collapsed, setCollapsed] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
   const kb = useKeyboardOpen();
 
   useEffect(() => { if (focusKey) field.current?.focus({ preventScroll: true }); }, [focusKey]);
@@ -47,7 +51,12 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
   const typingNames = profiles.filter((p) => p.id !== meId && (remotes.current.get(p.id)?.typing ?? 0) > now).map((p) => p.displayName);
   const online = 1 + [...remotes.current.values()].filter((r) => r.userId !== meId && performance.now() - r.receivedAt < ONLINE_MS).length;
   const lastId = messages.at(-1)?.id;
-  useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight }); }, [lastId, kb, collapsed]);
+  useEffect(() => {
+    list.current?.scrollTo({ top: list.current.scrollHeight });
+    // The strip's newest message is at its end (the left in Persian).
+    const el = strip.current;
+    if (el) el.scrollTo({ left: getComputedStyle(el).direction === 'rtl' ? -el.scrollWidth : el.scrollWidth, behavior: 'smooth' });
+  }, [lastId, kb, collapsed]);
   useLayoutEffect(() => {
     const el = field.current;
     if (!el) return;
@@ -77,12 +86,12 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
   return (
     // The visible part of the screen: all of it, or what is left above the keyboard (lib/viewport.ts).
     <section aria-label={t('title')}
-      className="pointer-events-none fixed inset-x-0 top-[var(--vv-top,0px)] z-40 flex h-[var(--vvh,100dvh)] flex-col gap-3 px-safe pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] text-white in-[.gc-kb]:pb-2 roomy:items-start roomy:justify-end roomy:pb-4">
+      className="pointer-events-none fixed inset-x-0 top-[var(--vv-top,0px)] z-40 flex h-[var(--vvh,100dvh)] flex-col gap-3 px-safe transition-[top,height] duration-300 ease-[cubic-bezier(0.2,0.85,0.25,1)] motion-reduce:transition-none in-[.gc-kb]:short:gap-2 in-[.gc-kb]:short:pt-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] text-white in-[.gc-kb]:pb-2 roomy:items-start roomy:justify-end roomy:pb-4">
       {/* Outside the chat: a tap closes it (the office buttons come back). */}
       <div aria-hidden className="pointer-events-auto absolute inset-0"
         onPointerDown={(e) => { e.preventDefault(); onClose(); }} />
 
-      <div className={clsx('pointer-events-auto relative flex min-h-0 w-full flex-col overflow-hidden rounded-[1.75rem]', glass,
+      <div className={clsx('pointer-events-auto relative flex min-h-0 w-full flex-col overflow-hidden rounded-[1.75rem] in-[.gc-kb]:short:hidden', glass,
         'max-h-[60%] short:w-[min(22rem,40vw)] short:max-h-[62%] in-[.gc-kb]:max-h-full roomy:w-[24rem] roomy:max-h-[min(28rem,100%)]')}>
         <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-white/10 ps-4 pe-1.5">
           <MessageCircle className="size-6 shrink-0 text-[#6fd6e3]" strokeWidth={1.75} />
@@ -104,7 +113,7 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
               const grouped = !!prev && prev.authorId === m.authorId && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_MS;
               const mine = m.authorId === meId;
               return (
-                <div key={m.id} className={clsx('flex gap-3', grouped ? 'mt-1.5' : 'mt-4 first:mt-0', sending && 'opacity-60')}>
+                <div key={m.id} className={clsx('flex gap-3', grouped ? 'mt-1.5' : 'mt-4 first:mt-0', i === messages.length - 1 && 'gc-pop', sending && 'opacity-60')}>
                   {grouped ? <span className="w-10 shrink-0" /> : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={`/models/thumbs/${author?.characterId ?? 'kaykit-mage'}.webp`} alt="" className="size-10 shrink-0 rounded-full bg-[#f6e3cf] object-cover ring-2 ring-white/25" />
@@ -134,6 +143,36 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
         )}
       </div>
 
+      {/* Phone sideways, keyboard up: the latest messages in one slim strip. */}
+      <div ref={strip} className={clsx('gc-pop pointer-events-auto relative hidden min-h-0 shrink-0 items-center gap-2 overflow-x-auto overscroll-contain scroll-smooth rounded-[1.75rem] px-2 py-1.5 [scrollbar-width:none] in-[.gc-kb]:short:flex', glass)}>
+        {messages.length === 0 && <p className="px-3 text-xs text-white/60">{t('empty')}</p>}
+        {messages.slice(-12).map((m, i, shown) => {
+          const mine = m.authorId === meId;
+          const author = byId(m.authorId);
+          const sending = m.id.startsWith(PENDING);
+          // One's own messages gather at the end, as in a messenger.
+          const firstMine = mine && !shown.slice(0, i).some((x) => x.authorId === meId);
+          const face = (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/models/thumbs/${author?.characterId ?? 'kaykit-mage'}.webp`} alt="" title={author?.displayName} className="size-9 shrink-0 rounded-full bg-[#f6e3cf] object-cover ring-2 ring-white/25" />
+          );
+          return (
+            <div key={m.id} className={clsx('flex shrink-0 items-center gap-1.5', firstMine && 'ms-auto', mine && 'flex-row-reverse', i === shown.length - 1 && 'gc-pop', sending && 'opacity-60')}>
+              {face}
+              <div className={clsx('flex max-w-[15rem] items-baseline gap-2 rounded-[1.1rem] px-3 py-1.5', mine ? 'bg-[#f3e2c4]/95 text-[#2b241e]' : 'bg-black/25 text-white')}>
+                <span dir="auto" className="min-w-0 truncate text-sm">{m.body || '📎'}</span>
+                <span className={clsx('shrink-0 text-[10px]', mine ? 'text-[#2b241e]/55' : 'text-white/50')} dir="ltr">{sending ? '…' : formatTime(locale, m.createdAt)}</span>
+              </div>
+            </div>
+          );
+        })}
+        {typingNames.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-black/25 px-3 py-2.5" title={to('typing', { name: typingNames.join(', ') })}>
+            {[0, 1, 2].map((d) => <span key={d} className="size-1.5 animate-pulse rounded-full bg-white/70" style={{ animationDelay: `${d * 200}ms` }} />)}
+          </span>
+        )}
+      </div>
+
       {/* Room between the card and the writing bar: part of "outside". */}
       <div className="min-h-0 flex-1 roomy:hidden" />
 
@@ -150,7 +189,9 @@ export function OfficeChat({ messages, profiles, meId, remotes, onSend, onTyping
         <div className={clsx('flex min-w-0 flex-1 items-end gap-1 rounded-[1.75rem] p-1', glass)}>
           <button type="button" aria-label={t('emoji')} aria-expanded={emojiOpen} onClick={() => setEmojiOpen((x) => !x)}
             className="flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-white hover:bg-white/10"><Smile className="size-7" strokeWidth={1.75} /></button>
+          {/* No word suggestions above the keyboard: they take a whole row of the little room left on a phone. */}
           <textarea ref={field} value={text} rows={1} dir="auto" enterKeyHint="send" placeholder={t('placeholder')} maxLength={4000}
+            autoComplete="off" autoCorrect="off" spellCheck={false}
             onChange={(e) => { setText(e.target.value); onTyping(!!e.target.value.trim()); }}
             onBlur={() => onTyping(false)}
             onKeyDown={(e) => {
