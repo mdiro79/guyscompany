@@ -2,8 +2,9 @@
 import { useEffect } from 'react';
 import { startPwa } from '@/lib/pwa';
 import { isEmbedded } from '@/lib/device';
+import { startViewport } from '@/lib/viewport';
 
 export function PwaSetup() {
-  useEffect(() => { if (!isEmbedded()) startPwa(); }, []);
+  useEffect(() => { startViewport(); if (!isEmbedded()) startPwa(); }, []);
   return null;
 }

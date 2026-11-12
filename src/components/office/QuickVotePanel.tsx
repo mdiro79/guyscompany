@@ -1,9 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import { Vote, X } from 'lucide-react';
 import { CHOICES, quickVote, tally, useQuickVote, type Choice } from '@/lib/board/vote';
+import { useKeyboardOpen } from '@/lib/viewport';
+import { KEYBOARD_DOCK, KEYBOARD_PANEL, useFocusInView } from './MeetingPanel';
 
 const FACE: Record<Choice, string> = { yes: '👍', no: '👎', unsure: '🤔' };
 const BAR: Record<Choice, string> = { yes: 'bg-[#22a559]', no: 'bg-[#d9443c]', unsure: 'bg-[#f6c544]' };
@@ -16,15 +18,20 @@ export function QuickVotePanel({ meId, names, open, onOpen }: { meId: string; na
   const counts = v ? tally(v) : null;
   const total = counts ? counts.yes + counts.no + counts.unsure : 0;
   const mine = v?.votes[meId];
+  const kb = useKeyboardOpen();
+  const panel = useRef<HTMLDivElement>(null);
+  useFocusInView(panel, kb);
   return (
     <>
       <button type="button" onClick={() => onOpen(!open)} aria-expanded={open}
-        className={clsx('relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95', v?.open ? 'bg-[#5b8def]' : 'bg-black/60 backdrop-blur')}>
+        className={clsx('gc-kb-hide relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95', v?.open ? 'bg-[#5b8def]' : 'bg-black/60 backdrop-blur')}>
         <Vote className="size-4" />{t('title')}
         {v?.open && !mine && <span className="absolute -top-1 -end-1 size-3 animate-pulse rounded-full bg-[#ff6b5b]" />}
       </button>
       {open && (
-        <div className="pointer-events-auto absolute top-full left-1/2 z-10 mt-2 w-[min(22rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl bg-black/85 p-3 text-sm shadow-xl backdrop-blur" role="dialog" aria-label={t('title')}>
+        <div ref={panel} role="dialog" aria-label={t('title')}
+          className={clsx('pointer-events-auto overflow-y-auto overscroll-contain rounded-2xl bg-black/85 text-sm shadow-xl backdrop-blur',
+            kb ? `${KEYBOARD_DOCK} ${KEYBOARD_PANEL} p-2` : 'absolute top-full left-1/2 z-10 mt-2 max-h-[calc(100dvh-8.5rem)] w-[min(22rem,calc(100vw-1.5rem))] -translate-x-1/2 p-3 short:max-h-[calc(100dvh-7.25rem)]')}>
           <div className="mb-2 flex items-center gap-2">
             <Vote className="size-5 text-[#9cc4ff]" /><h2 className="me-auto min-w-0 truncate font-bold" dir="auto">{v ? v.question || t('defaultQuestion') : t('title')}</h2>
             <button type="button" onClick={() => onOpen(false)} aria-label={t('close')} className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-white/10"><X className="size-4" /></button>

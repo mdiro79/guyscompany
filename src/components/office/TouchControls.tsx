@@ -47,7 +47,7 @@ export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
         }
       }}
       onPointerCancel={() => { stick.current = null; look.current = null; setKnob(null); input.forward = input.right = 0; }}>
-      {!lookOnly && <div className="pointer-events-none absolute bottom-8 left-6 flex size-32 short:bottom-4 short:size-28 items-center justify-center rounded-full border-2 border-white/40 bg-black/20"
+      {!lookOnly && <div className="pointer-events-none absolute bottom-[max(2rem,env(safe-area-inset-bottom))] left-[max(1.5rem,env(safe-area-inset-left))] flex size-32 short:bottom-[max(1rem,env(safe-area-inset-bottom))] short:size-28 items-center justify-center rounded-full border-2 border-white/40 bg-black/20"
         style={stick.current ? { left: stick.current.cx - 64, top: stick.current.cy - 64, bottom: 'auto' } : undefined}>
         <div className="size-14 rounded-full bg-white/70 shadow" style={{ transform: `translate(${knob?.x ?? 0}px, ${knob?.y ?? 0}px)` }} />
       </div>}

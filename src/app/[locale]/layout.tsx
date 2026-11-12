@@ -21,6 +21,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // An app, not a document: no zooming. Above all iOS must not zoom in when a field is tapped (and then
+  // stay zoomed, with buttons off screen).
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#f6f1ea' },

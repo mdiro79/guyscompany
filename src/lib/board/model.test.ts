@@ -103,3 +103,30 @@ describe('board model', () => {
     expect(tags[2]).toMatchObject({ x: 150, y: 110 });
   });
 });
+
+describe('live stroke points', () => {
+  const pts = (b: BoardItem[]) => (b[0] as Extract<BoardItem, { kind: 'stroke' }>).points;
+  it('adds only the new points, ignoring ones already there', () => {
+    let b = applyOp([], { t: 'put', item: stroke('a', [0, 0, 1, 1]) });
+    b = applyOp(b, { t: 'pts', id: 'a', from: 4, points: [2, 2, 3, 3] });
+    expect(pts(b)).toEqual([0, 0, 1, 1, 2, 2, 3, 3]);
+    // Sent again (overlap): nothing doubles.
+    b = applyOp(b, { t: 'pts', id: 'a', from: 6, points: [3, 3, 4, 4] });
+    expect(pts(b)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4]);
+  });
+  it('skips points after a gap and unknown strokes (the whole stroke follows at the end)', () => {
+    const b = applyOp([], { t: 'put', item: stroke('a', [0, 0]) });
+    expect(applyOp(b, { t: 'pts', id: 'a', from: 6, points: [9, 9] })).toBe(b);
+    expect(applyOp(b, { t: 'pts', id: 'x', from: 0, points: [9, 9] })).toBe(b);
+  });
+  it('cleans points from the network and lets others extend only their own strokes', () => {
+    expect(cleanOp({ t: 'pts', id: 'a', from: 2, points: [1, 2, 3] })).toEqual({ t: 'pts', id: 'a', from: 2, points: [1, 2] });
+    expect(cleanOp({ t: 'pts', id: 'a', from: 3, points: [1, 2] })).toBeNull();
+    expect(cleanOp({ t: 'pts', id: 'a', from: 2, points: ['x', 2] })).toBeNull();
+    const items = [{ ...stroke('mine', [0, 0]), by: 'u2' }, stroke('owners', [0, 0])];
+    const op = (id: string) => ({ t: 'pts' as const, id, from: 2, points: [1, 1] });
+    expect(mayEdit(items, op('mine'), 'u2', 'owner', true)).toBe(true);
+    expect(mayEdit(items, op('owners'), 'u2', 'owner', true)).toBe(false);
+    expect(mayEdit(items, op('mine'), 'u2', 'owner', false)).toBe(false);
+  });
+});

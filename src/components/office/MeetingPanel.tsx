@@ -9,6 +9,26 @@ import { endMeetingAction, startMeetingAction, updateMeetingAction } from '@/app
 import { clockText, meetingSeconds } from '@/lib/meetings';
 import type { Meeting, MeetingAttendance, MeetingNote, Project } from '@/lib/data/types';
 import { AttendanceList, MeetingForm, NoteComposer, NoteItem } from '@/components/meetings/parts';
+import { useKeyboardOpen } from '@/lib/viewport';
+
+/**
+ * Where a panel of the conference room goes while a phone's keyboard is open: small, in the top corner
+ * of what is still visible above the keyboard (not under it, and not in the middle of the view).
+ */
+export const KEYBOARD_DOCK = 'fixed z-50 top-[calc(var(--vv-top,0px)+0.375rem)] ltr:left-[max(0.375rem,env(safe-area-inset-left))] rtl:right-[max(0.375rem,env(safe-area-inset-right))]';
+export const KEYBOARD_PANEL = 'max-h-[calc(var(--vvh,100dvh)-0.75rem)] w-[min(24rem,calc(100vw-0.75rem))] landscape:w-[min(24rem,58vw)]';
+
+/** Keeps the field being typed in visible inside a scrolling panel once the keyboard has opened. */
+export function useFocusInView(panel: React.RefObject<HTMLElement | null>, kb: boolean) {
+  useEffect(() => {
+    if (!kb) return;
+    const id = setTimeout(() => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && panel.current?.contains(el)) el.scrollIntoView({ block: 'nearest' });
+    }, 120);
+    return () => clearTimeout(id);
+  }, [kb, panel]);
+}
 
 export interface OfficeMeeting { meeting: Meeting | null; attendance: MeetingAttendance[]; notes: MeetingNote[]; projects: Project[] }
 export type MeetingPanelMode = 'none' | 'start' | 'info' | 'notes';
@@ -31,13 +51,18 @@ export function MeetingPanel({ data, running, mode, onMode, presentNow }: {
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
   const notesRef = useRef<HTMLDivElement>(null);
+  const kb = useKeyboardOpen();
+  const dialog = useRef<HTMLDivElement>(null);
+  useFocusInView(dialog, kb);
   useEffect(() => { if (mode === 'none') { setEditing(false); setError(null); } }, [mode]);
   useEffect(() => { if (mode === 'notes') notesRef.current?.scrollIntoView({ block: 'nearest' }); }, [mode]);
   const project = running && data.projects.find((p) => p.id === running.projectId);
   const count = running ? new Set([...data.attendance.filter((a) => a.meetingId === running.id && a.joinedAt).map((a) => a.userId), ...present]).size : 0;
-  const panel = 'pointer-events-auto max-h-[calc(100dvh-8.5rem)] w-[min(26rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl bg-black/80 p-3 text-sm text-white shadow-xl backdrop-blur short:max-h-[calc(100dvh-4rem)]';
+  const panel = clsx('pointer-events-auto overflow-y-auto overscroll-contain rounded-2xl bg-black/80 text-sm text-white shadow-xl backdrop-blur',
+    kb ? `${KEYBOARD_PANEL} p-2` : 'max-h-[calc(100dvh-8.5rem)] w-[min(26rem,calc(100vw-1.5rem))] p-3 short:max-h-[calc(100dvh-7.25rem)]');
+  // While typing on a phone the title row and hints step aside: the visible part is small.
   const head = (title: string, icon: React.ReactNode) => (
-    <div className="mb-2 flex items-center gap-2">
+    <div className={clsx('mb-2 flex items-center gap-2', kb && 'hidden')}>
       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#c2417c]/30 text-[#ffb3d1]">{icon}</span>
       <span className="me-auto min-w-0 truncate font-semibold" dir="auto">{title}</span>
       <button type="button" onClick={() => onMode('none')} aria-label={t('cancel')} className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-white/10"><X className="size-4" /></button>
@@ -48,7 +73,7 @@ export function MeetingPanel({ data, running, mode, onMode, presentNow }: {
     <>
       {running ? (
         <button type="button" onClick={() => onMode(mode === 'none' ? 'info' : 'none')} aria-expanded={mode !== 'none'}
-          className="flex min-h-11 max-w-[min(20rem,60vw)] items-center gap-2 rounded-xl bg-[#c2417c] px-3 text-sm font-semibold shadow-lg transition-transform active:scale-95">
+          className="gc-kb-hide flex min-h-11 max-w-[min(20rem,60vw)] items-center gap-2 rounded-xl bg-[#c2417c] px-3 text-sm font-semibold shadow-lg transition-transform active:scale-95">
           <span className="size-2 shrink-0 animate-pulse rounded-full bg-white" />
           <span className="truncate" dir="auto">{running.title}</span>
           <span className="shrink-0 font-normal tabular-nums opacity-85" dir="ltr">{clockText(meetingSeconds(running, data.attendance, now))}</span>
@@ -56,17 +81,17 @@ export function MeetingPanel({ data, running, mode, onMode, presentNow }: {
         </button>
       ) : (
         <button type="button" onClick={() => onMode(mode === 'start' ? 'none' : 'start')}
-          className="flex min-h-11 items-center gap-2 rounded-xl bg-[#c2417c] px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95">
+          className="gc-kb-hide flex min-h-11 items-center gap-2 rounded-xl bg-[#c2417c] px-4 text-sm font-semibold shadow-lg transition-transform active:scale-95">
           <Users className="size-4" />{t('start')}
         </button>
       )}
 
       {mode !== 'none' && (
-        <div className="absolute top-full left-1/2 mt-2 -translate-x-1/2" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onMode('none'); } }}>
+        <div ref={dialog} className={kb ? KEYBOARD_DOCK : 'absolute top-full left-1/2 mt-2 -translate-x-1/2'} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onMode('none'); } }}>
           {!running ? (
             <div className={panel} role="dialog" aria-label={t('newMeeting')}>
               {head(t('newMeeting'), <Users className="size-4" />)}
-              <p className="mb-2 text-xs text-white/65">{t('startHint')}</p>
+              <p className={clsx('mb-2 text-xs text-white/65', kb && 'hidden')}>{t('startHint')}</p>
               <MeetingForm tone="dark" projects={data.projects} submitLabel={t('begin')} error={error} onCancel={() => onMode('none')}
                 onSubmit={async (f) => {
                   setError(null);
