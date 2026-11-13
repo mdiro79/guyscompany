@@ -35,6 +35,8 @@ let openings = 0;
 const STATE_BUFFER_LIMIT = 16 * 1024; // a pose that would queue behind this much is dropped (a newer one follows)
 const REBUILD_AFTER_MS = 30000; // a link that stays down this long is thrown away and built again
 
+const ICE_REFRESH_MS = 6 * 60 * 60 * 1000; // well inside the 24 h lifetime of relay credentials
+
 const STUN: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 
 // STUN plus the optional TURN relay, which the server hands out (see /api/turn).
@@ -64,6 +66,14 @@ export class Mesh {
     this.self = { tabId: this.room.tabId, userId, device };
     // Links are only created once the relay settings are known, so the first connection already has them.
     this.ready = loadIceServers().then((servers) => { this.ice = servers; });
+    // Relay credentials are temporary (24 h): fetch fresh ones regularly and hand them to existing links,
+    // which use them on their next ICE restart.
+    setInterval(() => {
+      void loadIceServers().then((servers) => {
+        this.ice = servers;
+        for (const p of this.peers.values()) { try { p.pc.setConfiguration({ ...p.pc.getConfiguration(), iceServers: servers }); } catch { /* closed */ } }
+      });
+    }, ICE_REFRESH_MS);
     this.room.on('rtc', (msg) => { void this.ready.then(() => this.onSignal(msg)); });
     this.room.onPresence((list) => { this.presence = list; void this.ready.then(() => this.syncPeers(list)); });
     // Stuck links (never connected, or dropped) get an ICE restart instead of staying silent forever.

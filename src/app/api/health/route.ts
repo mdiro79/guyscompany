@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isDemo, env, serverEnv, configProblems, databaseRegion } from '@/lib/env';
 import { describeDbError } from '@/lib/db-errors';
 import { store } from '@/lib/data';
+import { turnConfigured } from '@/lib/turn';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export async function GET() {
     databaseUrl: !!s.databaseUrl,
     jwtSecret: !!s.jwtSecret,
     cronSecret: !!process.env.CRON_SECRET,
-    turn: !!process.env.NEXT_PUBLIC_TURN_URLS,
+    turn: turnConfigured() ?? false,
     adminFromEnv: !!process.env.ADMIN_USERNAME,
   };
   const missing = configProblems();

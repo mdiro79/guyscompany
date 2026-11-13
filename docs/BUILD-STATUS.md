@@ -18,7 +18,7 @@ All stages of `BUILD-INSTRUCTIONS.md` are implemented on branch `claude/vibrant-
 ## Not verified here
 - Real Supabase/Vercel run: no keys in this environment. Setup steps are in `README.md` (`supabase-setup.sql` adds RLS, Realtime, office slots and the storage bucket).
 - Voice between different people and multiplayer between different users across networks (demo mode connects tabs of one browser only).
-- TURN quota: not checked live (provider sites are blocked here). Free options to evaluate: Cloudflare Realtime TURN and Metered Open Relay; set `NEXT_PUBLIC_TURN_*`.
+- TURN: live on Metered (Frankfurt relay, free plan, no card needed) via `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL`; confirmed working across different networks. Cloudflare Realtime TURN is also supported (`CLOUDFLARE_TURN_KEY_ID` + `CLOUDFLARE_TURN_API_TOKEN`, 24 h credentials refreshed every 6 h) but its free tier needs a bank card.
 
 ## After the build stages (see `docs/DECISIONS.md` for the details)
 | Addition | How it was checked |
