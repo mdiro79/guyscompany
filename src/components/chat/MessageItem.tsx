@@ -9,6 +9,7 @@ import { isAudio, isImage, tokenize, type MessageRow } from '@/lib/chat';
 import { formatBytes, formatTime } from '@/lib/format';
 import { DecisionGlyph } from '@/components/icons/glyphs';
 import { VoicePlayer } from './VoicePlayer';
+import { voiceSeconds } from './voice';
 
 const SWIPE_AT = 56; // px the bubble must travel to reply
 const LONG_PRESS_MS = 420;
@@ -170,7 +171,7 @@ export const MessageItem = memo(function MessageItem(p: ItemProps) {
               <Download className="size-4 text-muted" />
             </a>
           )}
-          {m.body && !p.card && (
+          {m.body && !p.card && !(audio && voiceSeconds(m) !== null) && (
             <span dir="auto" className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><Text body={m.body} /></span>
           )}
           {!p.card && (
