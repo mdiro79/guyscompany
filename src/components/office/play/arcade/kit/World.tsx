@@ -46,7 +46,7 @@ export interface Game3 {
   dispose?(): void;
 }
 
-const MAX_DT = 1 / 30, IDLE_MS = 2500, CAP = { box: 1400, ball: 500, disc: 500, cone: 160 };
+const MAX_DT = 1 / 30, IDLE_MS = 2500, CAP = { box: 3200, ball: 500, disc: 500, cone: 160 };
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export function WorldStage({ api, size, init, table = true }: {
@@ -144,7 +144,7 @@ export function WorldStage({ api, size, init, table = true }: {
         if (key === lastFit) return;
         lastFit = key;
         const elev = 1.18 - world.tilt * 0.5, dir = new THREE.Vector3(Math.sin(world.spin) * Math.cos(elev), Math.sin(elev), Math.cos(world.spin) * Math.cos(elev));
-        const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3((sx * FW) / 2, 0, (sz * FH) / 2));
+        const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => new THREE.Vector3((sx * FW * 1.07) / 2, 0, (sz * FH * 1.07) / 2));
         const fits = (dist: number) => {
           camera.position.copy(dir).multiplyScalar(dist); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(); camera.updateProjectionMatrix();
           return corners.every((c) => { v3.copy(c).project(camera); return Math.abs(v3.x) < 0.93 && Math.abs(v3.y) < 0.9; });

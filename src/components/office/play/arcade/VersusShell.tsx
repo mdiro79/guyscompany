@@ -55,9 +55,11 @@ export function VersusShell({ def, ctx, onBack }: { def: GameDef; ctx: ArcadeCtx
 
   const first = (r: Room | null) => ((r?.round ?? 0)) % (r?.seats.length ?? count);
   const open = (kind: 'bot' | 'team' | 'local') => {
-    const seats: Seat[] = [{ k: 'human', id: me }, ...Array.from({ length: count - 1 }, (): Seat => (kind === 'bot' ? { k: 'bot' } : kind === 'local' ? { k: 'local' } : { k: 'open' }))];
+    // A growing table starts with its host alone: whoever joins gets a new seat.
+    const grows = !!def.grow && kind === 'team';
+    const seats: Seat[] = [{ k: 'human', id: me }, ...(grows ? [] : Array.from({ length: count - 1 }, (): Seat => (kind === 'bot' ? { k: 'bot' } : kind === 'local' ? { k: 'local' } : { k: 'open' })))];
     const seed = newSeed();
-    arcadeNet.host(def.id, 'match', seats, kind === 'team' ? null : mod?.rules ? mod.rules.init(count, seed, 0) : null);
+    arcadeNet.host(def.id, 'match', seats, kind === 'team' ? null : mod?.rules ? mod.rules.init(count, seed, 0) : null, grows);
     sfx.start();
   };
   const startMatch = () => {
@@ -247,15 +249,18 @@ export function VersusShell({ def, ctx, onBack }: { def: GameDef; ctx: ArcadeCtx
                         <li key={i} className="flex min-h-12 items-center gap-2 rounded-xl bg-[var(--a-chip)] px-2">
                           {s.k === 'human' ? <Portrait person={ctx.people.find((p) => p.id === s.id)} size="size-8" ring={colors[i]} /> : <span className="flex size-8 items-center justify-center rounded-full" style={{ background: colors[i], color: '#14173a' }}>{s.k === 'bot' ? <Bot className="size-5" /> : i + 1}</span>}
                           <span className={clsx('me-auto truncate text-sm', s.k === 'open' && 'animate-pulse text-[var(--a-soft)]')}>{s.k === 'open' ? t('hub.seatOpen') : names[i]}{s.k === 'human' && s.id === room.host && ' ★'}</span>
-                          {room.host === me && i > 0 && s.k !== 'human' && (
-                            <button type="button" onClick={() => arcadeNet.setSeat(i, s.k === 'bot' ? { k: 'open' } : { k: 'bot' })} className="min-h-9 rounded-lg bg-[var(--a-chip)] px-3 text-xs hover:bg-[var(--a-chip2)]">{s.k === 'bot' ? t('hub.makeOpen') : t('hub.makeBot')}</button>
+                          {room.host === me && i > 0 && s.k !== 'human' && (room.grow
+                            ? <button type="button" onClick={() => arcadeNet.dropSeat(i)} className="min-h-9 rounded-lg bg-[var(--a-chip)] px-3 text-xs hover:bg-[var(--a-chip2)]">✕</button>
+                            : <button type="button" onClick={() => arcadeNet.setSeat(i, s.k === 'bot' ? { k: 'open' } : { k: 'bot' })} className="min-h-9 rounded-lg bg-[var(--a-chip)] px-3 text-xs hover:bg-[var(--a-chip2)]">{s.k === 'bot' ? t('hub.makeOpen') : t('hub.makeBot')}</button>
                           )}
                         </li>
                       ))}
                     </ol>
+                    {room.grow && <p className="text-center text-xs text-[var(--a-soft)]">{t('hub.growHint')}</p>}
+                    {room.grow && room.host === me && room.seats.length < max && <button type="button" onClick={() => arcadeNet.addBot()} className={clsx(btnSoft, 'min-h-11 text-sm')}><Bot className="size-4" />{t('hub.addBot')}</button>}
                     {hostGone ? <p className="text-center text-xs text-[var(--a-coral)]">{t('hub.hostLeft')}</p>
                       : room.host === me ? (
-                        <button type="button" onClick={startMatch} disabled={!mod || room.seats.some((s) => s.k === 'open')} className={btnGold}><Play className="size-5" />{room.seats.some((s) => s.k === 'open') ? t('hub.waitPlayers') : t('hub.startMatch')}</button>
+                        <button type="button" onClick={startMatch} disabled={!mod || (room.grow ? room.seats.length < 2 : room.seats.some((s) => s.k === 'open'))} className={btnGold}><Play className="size-5" />{(room.grow ? room.seats.length < 2 : room.seats.some((s) => s.k === 'open')) ? t('hub.waitPlayers') : t('hub.startMatch')}</button>
                       ) : <p className="text-center text-sm text-[var(--a-soft)]">{t('hub.waitHost')}</p>}
                     <button type="button" onClick={() => arcadeNet.leave()} className={clsx(btnSoft, 'min-h-11 text-sm')}>{t('hub.leave')}</button>
                   </>

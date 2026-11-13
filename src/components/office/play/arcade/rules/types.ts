@@ -32,7 +32,7 @@ export interface BoardProps<S, M> {
   t(key: string, values?: Record<string, string | number>): string;
 }
 
-export const SEAT_COLORS = ['#ff9a4d', '#4fd8cf', '#ffd23f', '#c89bff'];
+export const SEAT_COLORS = ['#ff9a4d', '#4fd8cf', '#ffd23f', '#c89bff', '#ff7eb6', '#7ec8ff'];
 
 /** Plays a whole game with the computer on every seat (used by the tests). Returns the final state. */
 export function playout<S, M>(rules: Rules<S, M>, n: number, seed: number, rnd: Rnd, maxMoves = 5000): { s: S; moves: number } {

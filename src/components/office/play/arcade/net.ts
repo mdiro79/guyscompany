@@ -20,6 +20,7 @@ export interface Room {
   seed: number; startAt: number; round: number;
   state: unknown; // the game's own state (see rules/); a real-time game keeps only its result here
   seq: number; t: number;
+  grow?: boolean; // anyone may still sit down while it gathers: the table gets another seat
 }
 export interface Live { score: number; done: boolean }
 export interface NetState { rooms: Room[]; mine: Room | null; live: Record<string, Live>; joining: string | null }
@@ -52,7 +53,7 @@ function emit() {
 const humans = (r: Room) => r.seats.flatMap((s) => (s.k === 'human' ? [s.id] : []));
 const hasMe = (r: Room) => humans(r).includes(me);
 /** Nobody else is (or can be) at the table: nothing needs to be sent. */
-const isLocal = (r: Room) => r.seats.every((s) => s.k !== 'open' && (s.k !== 'human' || s.id === me)) && r.mode === 'match';
+const isLocal = (r: Room) => r.seats.every((s) => s.k !== 'open' && (s.k !== 'human' || s.id === me)) && r.mode === 'match' && !(r.grow && r.status === 'lobby');
 const send = (r: Room) => { if (!isLocal(r)) mesh?.sendEvent({ type: 'ar-room', room: r }); };
 
 function validRoom(x: unknown): x is Room {
@@ -113,14 +114,14 @@ export const arcadeNet = {
   othersOnline: () => (mesh ? [...new Set(mesh.peersInfo().map((p) => p.userId))].filter((id) => id !== me) : []),
   /** Rooms I could join: still gathering, hosted by someone who is here. */
   invites: () => snap.rooms.filter((r) => r.status === 'lobby' && r.host !== me && !hasMe(r) && !dismissed.has(r.id) && present(r.host)
-    && (r.mode === 'race' ? r.seats.length < MAX_RACERS : r.seats.some((s) => s.k === 'open'))),
+    && (r.mode === 'race' || r.grow ? r.seats.length < MAX_RACERS : r.seats.some((s) => s.k === 'open'))),
   dismiss(id: string) { dismissed.add(id); emit(); },
 
   /** Opens a table. A match against the computer or on one device starts at once; otherwise it gathers players first. */
-  host(game: GameId, mode: Room['mode'], seats: Seat[], state: unknown = null): Room {
+  host(game: GameId, mode: Room['mode'], seats: Seat[], state: unknown = null, grow = false): Room {
     arcadeNet.leave();
-    const waiting = mode === 'race' || seats.some((s) => s.k === 'open');
-    const r: Room = { id: crypto.randomUUID(), game, mode, host: me, seats, status: waiting ? 'lobby' : 'play', seed: newSeed(), startAt: syncedNow(), round: waiting ? 0 : 1, state, seq: 1, t: syncedNow() };
+    const waiting = mode === 'race' || grow || seats.some((s) => s.k === 'open');
+    const r: Room = { id: crypto.randomUUID(), game, mode, host: me, seats, status: waiting ? 'lobby' : 'play', seed: newSeed(), startAt: syncedNow(), round: waiting ? 0 : 1, state, seq: 1, t: syncedNow(), grow: grow || undefined };
     rooms.set(r.id, r); mineId = r.id;
     send(r); emit();
     return r;
@@ -155,12 +156,15 @@ export const arcadeNet = {
     if (!r || r.host !== me || r.status !== 'lobby' || i <= 0 || i >= r.seats.length) return;
     commit({ seats: r.seats.map((s, j) => (j === i ? seat : s)) });
   },
+  /** Host of a growing table, while gathering: one more seat for the computer, or one seat fewer. */
+  addBot() { const r = snap.mine; if (r && r.grow && r.host === me && r.status === 'lobby' && r.seats.length < MAX_RACERS) commit({ seats: [...r.seats, { k: 'bot' }] }); },
+  dropSeat(i: number) { const r = snap.mine; if (r && r.grow && r.host === me && r.status === 'lobby' && i > 0 && r.seats[i] && r.seats[i].k !== 'human') commit({ seats: r.seats.filter((_, j) => j !== i) }); },
   /** Host: begins the match or the race. `state` is the match's first position. */
   start(state: unknown = null) {
     const r = snap.mine;
     if (!r || r.host !== me) return;
     live.delete(r.id); left.delete(r.id);
-    const seats = r.mode === 'race' ? r.seats.filter((s) => s.k === 'human' && !gone(r, s.id)) : r.seats;
+    const seats = r.mode === 'race' ? r.seats.filter((s) => s.k === 'human' && !gone(r, s.id)) : r.grow ? r.seats.filter((s) => s.k !== 'open') : r.seats;
     commit({ status: 'play', seats, seed: newSeed(), startAt: syncedNow() + (r.mode === 'race' ? 3800 : 0), round: r.round + 1, state });
   },
   /** A move was made: the match's new position (and whether that ends it). */
@@ -209,6 +213,7 @@ export function connectArcadeNet(m: Mesh | null, userId: string) {
       } else if (r.status === 'lobby') {
         const i = r.seats.findIndex((s) => s.k === 'open');
         if (i >= 0) commit({ seats: r.seats.map((s, j): Seat => (j === i ? { k: 'human', id: from.userId } : s)) });
+        else if (r.grow && r.seats.length < MAX_RACERS) commit({ seats: [...r.seats, { k: 'human', id: from.userId }] });
       }
     } else if (msg.type === 'ar-leave') {
       if (!humans(r).includes(from.userId)) return;

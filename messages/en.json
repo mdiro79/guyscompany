@@ -1049,7 +1049,9 @@
       "perGame": "Tables by game",
       "newRecord": "{name} set a record in {game}: {score}",
       "newWin": "{name} won a match of {game}",
-      "theme": "Look: light / dark / neon"
+      "theme": "Look: light / dark / neon",
+      "growHint": "Any teammate may join this table; the field grows with the number of players.",
+      "addBot": "Add a computer player"
     },
     "games": {
       "serpent": {

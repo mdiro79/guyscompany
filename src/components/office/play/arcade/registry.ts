@@ -9,6 +9,7 @@ export interface GameDef {
   three?: boolean; // drawn in 3D
   players?: [number, number]; // head-to-head: fewest and most
   realtime?: boolean; // both play at the same time (needs a live link; not on one shared device)
+  grow?: boolean; // as many as like may join the table while it gathers
   legacy?: boolean; // the old cabinet game
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   load: () => Promise<{ default: ComponentType<any>; rules?: unknown }>;
@@ -25,7 +26,7 @@ export const GAMES: GameDef[] = [
   def('archery', '🏹', '#ff9f43', () => import('./games/Archery'), { players: [2, 4] }),
   def('darts', '🎯', '#ff6b5e', () => import('./games/Darts'), { players: [2, 4] }),
   def('cannons', '💥', '#ff9f43', () => import('./games/Cannons'), { players: [2, 4] }),
-  def('trails', '⚡', '#9b6bff', () => import('./games/Trails'), { players: [2, 4], realtime: true }),
+  def('trails', '🎨', '#9b6bff', () => import('./games/Trails'), { players: [2, 6], realtime: true, grow: true }),
   def('four', '🔴', '#ff6b5e', () => import('./games/Four'), { players: [2, 2], three: true }),
   def('dice', '🎰', '#ffc93c', () => import('./games/Dice'), { players: [2, 4], three: true }),
   def('checkers', '⛃', '#c98a5a', () => import('./games/Checkers'), { players: [2, 2] }),

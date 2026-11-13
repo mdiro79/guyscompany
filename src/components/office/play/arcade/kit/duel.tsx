@@ -1,9 +1,8 @@
 'use client';
 import { useEffect, useMemo, useRef } from 'react';
-import { CanvasStage } from './Stage';
-import type { Game2D, GameApi } from './types';
+import { WorldStage, type Game3, type World } from './World';
+import type { GameApi } from './types';
 import { Fx, type G } from './fx';
-import { theme, type Palette } from './theme';
 import { arcadeNet } from '../net';
 import type { RtProps } from '../VersusShell';
 
@@ -18,11 +17,14 @@ export interface DuelSim {
   /** One step. `auth`: this device decides goals and powers (the host). A guest only predicts motion. */
   step(dt: number, inputs: (Pt | null)[], auth: boolean): void;
   snap(): unknown;
-  load(snap: unknown): void;
+  /** Takes the host's state; `me` is this device's seat, whose own paddle is left alone (it follows the hand at once). */
+  load(snap: unknown, me: number): void;
   /** The computer's target for a seat. */
   bot(seat: number, dt: number): Pt;
-  /** `view`: the seat whose side is drawn at the bottom. */
-  draw(g: G, p: Palette, t: number, view: number, names: string[], colors: string[]): void;
+  /** Puts the table and everything on it into the 3D world for this frame. */
+  render(w: World, t: number, names: string[], colors: string[]): void;
+  /** Texts over the picture (scores, names, "Goal!"). */
+  hud(g: G, w: World, t: number, names: string[], colors: string[]): void;
   winner(): number; // -1 while the match runs
 }
 export interface Control { pointer: Pt | null; left: boolean; right: boolean; up: boolean; down: boolean }
@@ -45,16 +47,17 @@ export function DuelStage({ rt, size, make, control }: {
     else if (m.k === 's') incoming.current = m.s;
   }), []);
   return (
-    <CanvasStage api={api} size={size} init={({ w, h }) => {
+    <WorldStage api={api} size={size} init={(w) => {
       const fx = new Fx(), sim = make(fx, true);
-      const seat = ref.current.seat, other = 1 - seat;
+      const seat = ref.current.seat, other = 1 - seat, [fw, fh] = size;
       const c: Control = { pointer: null, left: false, right: false, up: false, down: false };
-      let mine: Pt = { x: w / 2, y: seat === 0 ? h - 60 : 60 }, lastSend = 0, done = false, time = 0;
-      // The guest looks at the field turned around.
-      const toField = (x: number, y: number): Pt => (seat === 1 ? { x: w - x, y: h - y } : { x, y });
-      const game: Game2D = {
+      let mine: Pt = { x: fw / 2, y: seat === 0 ? fh - 60 : 60 }, lastSend = 0, done = false;
+      // Everyone looks at the table from their own end.
+      w.spin = seat === 1 ? Math.PI : 0;
+      w.tilt = 0.62;
+      const game: Game3 = {
         step(dt) {
-          time += dt; fx.step(dt);
+          fx.step(dt);
           const r = ref.current;
           if (r.room.status !== 'play') return;
           mine = control(c, seat, mine, dt);
@@ -66,7 +69,7 @@ export function DuelStage({ rt, size, make, control }: {
             const win = sim.winner();
             if (win >= 0 && !done) { done = true; arcadeNet.sendFast({ k: 's', s: sim.snap() }); r.finish([win]); }
           } else {
-            if (incoming.current) { try { sim.load(incoming.current); } catch { /* a damaged snapshot is skipped */ } incoming.current = null; }
+            if (incoming.current) { try { sim.load(incoming.current, seat); } catch { /* a damaged snapshot is skipped */ } incoming.current = null; }
             sim.step(dt, inputs, false);
           }
           const now = performance.now();
@@ -75,14 +78,15 @@ export function DuelStage({ rt, size, make, control }: {
             if (r.host) arcadeNet.sendFast({ k: 's', s: sim.snap() }); else arcadeNet.sendFast({ k: 'i', x: Math.round(mine.x), y: Math.round(mine.y) });
           }
         },
-        draw(g, t) {
-          const p = theme.get(), r = ref.current;
+        render(world, t) { const r = ref.current; sim.render(world, t, r.names, r.colors); },
+        hud(g, world, t) {
+          const r = ref.current;
           fx.begin(g);
-          sim.draw(g, p, t, seat, r.names, r.colors);
-          fx.draw(g, p);
-          fx.end(g, w, h);
+          sim.hud(g, world, t, r.names, r.colors);
+          fx.draw(g, world.pal);
+          fx.end(g, 4000, 4000);
         },
-        pointer(e) { c.pointer = e.type === 'up' && ref.current.phone ? null : toField(e.x, e.y); },
+        pointer(e) { c.pointer = e.type === 'up' && ref.current.phone ? null : { x: e.x, y: e.y }; },
         key(code, down) {
           // Left and right are as the player sees them.
           const flip = seat === 1;
