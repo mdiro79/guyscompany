@@ -187,6 +187,8 @@ export interface FocusItem {
 }
 
 export type { TodoCategory, TodoStats } from '@/lib/todo-game';
+export type { GameScore } from '@/lib/arcade';
+import type { GameScore } from '@/lib/arcade';
 import type { TodoCategory, TodoStats } from '@/lib/todo-game';
 
 export interface Todo {
@@ -433,6 +435,10 @@ export interface DataStore {
   saveStandup(authorId: string, day: string, text: Pick<Post, 'body' | 'did' | 'blockers'>): Promise<Post>;
   updatePost(id: string, patch: Partial<Pick<Post, 'pinned' | 'body'>>): Promise<void>;
   deletePost(id: string): Promise<void>;
+
+  // Game room records. `reportGame` adds a finished round in one step: best = max(best, score) + points.
+  listGameScores(): Promise<GameScore[]>;
+  reportGame(userId: string, game: string, d: { score: number; points: number; wins: number }): Promise<GameScore>;
 
   getRoom(id: string): Promise<Room | null>;
   updateRoom(id: string, patch: Partial<RoomSettings>): Promise<Room>;

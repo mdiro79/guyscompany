@@ -112,7 +112,8 @@
     "board": "Drawing board",
     "meetings": "Meetings & notes",
     "pulse": "Team pulse",
-    "insights": "Insights"
+    "insights": "Insights",
+    "arcade": "Arcade"
   },
   "meetings": {
     "title": "Meetings & notes",
@@ -880,12 +881,15 @@
     "use": {
       "arcade": "Press E to play",
       "jukebox": "Press E to pick the music",
-      "coffee": "Press E for a coffee"
+      "coffee": "Press E for a coffee",
+      "arcadeGame": "Press E to play {game}",
+      "board": "Press E to write on the board"
     },
     "useShort": {
       "arcade": "Play",
       "jukebox": "Music",
-      "coffee": "Coffee"
+      "coffee": "Coffee",
+      "board": "Board"
     },
     "map": {
       "title": "Office map",
@@ -967,7 +971,286 @@
       "title": "Notice board",
       "empty": "No announcements. Write one in Team pulse.",
       "standups": "Standups today: {done} of {all}"
-    }
+    },
+    "hub": {
+      "title": "Arcade",
+      "versus": "Head to head",
+      "solo": "Solo",
+      "league": "League",
+      "close": "Close",
+      "back": "All games",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "threeD": "3D",
+      "live": "Real-time",
+      "you": "you",
+      "beFirst": "No record yet",
+      "online": "{n} teammates online",
+      "nobody": "no teammate online",
+      "best": "My best",
+      "score": "Score",
+      "start": "Start",
+      "again": "Play again",
+      "pause": "Pause",
+      "resume": "Resume",
+      "paused": "Paused",
+      "howTo": "How to play",
+      "record": "New record!",
+      "top": "Top players",
+      "noScores": "Nobody has played yet. Set the first record!",
+      "loading": "Getting the game ready…",
+      "error": "This game ran into a problem. Go back to the list and try again.",
+      "race": "Race teammates",
+      "raceTag": "race",
+      "raceTitle": "Live race",
+      "raceHint": "In a race everyone plays the very same round at the same time and sees each other's score live.",
+      "raceStart": "Start the race",
+      "raceAgain": "Race again",
+      "raceNeed": "At least two players are needed; waiting for teammates to join…",
+      "raceWaitHost": "Waiting for {name} to start",
+      "raceWaiting": "Waiting for the others to finish…",
+      "raceCount": "Get ready…",
+      "raceGo": "Go!",
+      "raceWon": "You won! 🏆",
+      "raceWinner": "Winner: {name}",
+      "raceLeave": "Leave the race",
+      "invite": "{name} invites you to {game}",
+      "join": "Join",
+      "joining": "Joining…",
+      "ignore": "No",
+      "playersCount": "Players",
+      "vsBot": "Play the computer",
+      "vsTeam": "Play a teammate (online)",
+      "vsLocal": "Two players on this device",
+      "lobby": "The table",
+      "seatOpen": "Waiting for a teammate…",
+      "seatBot": "Computer",
+      "seatGuest": "Player {n}",
+      "makeBot": "Seat the computer",
+      "makeOpen": "Free the seat",
+      "startMatch": "Start the match",
+      "waitPlayers": "Waiting for the seats to fill…",
+      "waitHost": "Waiting for the host to start…",
+      "yourTurn": "Your turn",
+      "turnOf": "{name}'s turn",
+      "thinking": "The computer is thinking…",
+      "youWin": "You won! 🎉",
+      "youLose": "Not this time!",
+      "draw": "Draw",
+      "wins": "{name} won",
+      "rematch": "Rematch",
+      "waitRematch": "Waiting for the host to start a rematch…",
+      "leave": "Leave the table",
+      "left": "{name} left; the computer plays on",
+      "hostLeft": "The host left; this table is closed",
+      "pointsHint": "A win against a teammate: 3 points. Against the computer: 1. A draw with a teammate: 1.",
+      "leagueTitle": "Arcade league",
+      "leaguePoints": "league points",
+      "leagueHint": "In every game first place earns 5 league points, second 3, third 2 and fourth 1. Solo games rank by best score, head-to-head games by points from wins.",
+      "winsCol": "Wins",
+      "playsCol": "Played",
+      "perGame": "Tables by game",
+      "newRecord": "{name} set a record in {game}: {score}",
+      "newWin": "{name} won a match of {game}",
+      "theme": "Look: light / dark / neon",
+      "growHint": "Any teammate may join this table; the field grows with the number of players.",
+      "addBot": "Add a computer player"
+    },
+    "games": {
+      "serpent": {
+        "name": "Hungry Serpent",
+        "tag": "Eat, grow and don't bite yourself",
+        "how": "Steer the snake to the apples. The field's edges wrap around.\n• Eating in quick succession raises the multiplier up to ×5.\n• The gold star gives big points, the scissors cut your tail, and the ghost lets you pass through yourself for a few seconds.\n• Hitting your own body or a grumpy block ends the round.",
+        "keys": "Arrow keys or WASD",
+        "touch": "Swipe in the direction you want to go"
+      },
+      "bugs": {
+        "name": "Bug Squash",
+        "tag": "30 seconds: squash every bug you can",
+        "how": "Bugs pop up for a moment; hit them before they get away.\n• A golden bug is worth 5 and every 5 hits in a row give a bonus.\n• Leave the ✨ alone: it is a feature, not a bug, and costs 3 points.",
+        "keys": "Click the bugs with the mouse",
+        "touch": "Tap the bugs"
+      },
+      "breaker": {
+        "name": "Brick Pop",
+        "tag": "Keep the ball alive and pop the wall",
+        "how": "Bounce the ball off your paddle into the bricks and clear each level. You have 3 lives.\n• Dark bricks need two hits and 💣 bricks blow up their neighbours.\n• Hits in a row without touching the paddle multiply the points.\n• Catch the drops: wide paddle, extra balls, slow ball and an extra life.",
+        "keys": "Mouse or left/right keys; Space launches the ball",
+        "touch": "Drag to move the paddle; tap to launch",
+        "level": "Level {n}",
+        "launch": "Tap to launch"
+      },
+      "swarm": {
+        "name": "Star Swarm",
+        "tag": "Survive, power up and break the waves",
+        "how": "Your ship fires by itself at the nearest enemy; your job is to dodge.\n• Collect the blue shards to level up and pick one of three upgrades.\n• You have 3 hearts. The longer you last, the faster and bigger the waves.\n• Score: enemies destroyed and time survived.",
+        "keys": "Mouse or WASD/arrow keys; upgrades with 1, 2, 3",
+        "touch": "Drag on the screen and the ship follows your finger",
+        "pick": "Choose an upgrade",
+        "level": "Level {n}",
+        "upRate": "Faster fire",
+        "upDamage": "Stronger shots",
+        "upMulti": "More shots",
+        "upSpeed": "Quicker ship",
+        "upMagnet": "Bigger magnet",
+        "upBlades": "Orbiting blades",
+        "upHeal": "One more heart",
+        "upPierce": "Piercing shots"
+      },
+      "gems": {
+        "name": "Gem Cascade",
+        "tag": "Match the gems and set off chains",
+        "how": "Swap two neighbouring gems to line up three or more of a colour. You have 75 seconds.\n• A line of 4 clears that whole row or column; a line of 5 clears every gem of that colour.\n• Chain reactions multiply the points.\n• Lines of 4 or 5 add a little time.",
+        "keys": "Drag a gem towards its neighbour, or click two neighbouring gems",
+        "touch": "Swipe a gem towards its neighbour",
+        "time": "⏱ {n}",
+        "shuffle": "No moves left: shuffled!"
+      },
+      "circuit": {
+        "name": "Bright Circuit",
+        "tag": "Turn the pieces until everything lights up",
+        "how": "Tap a piece to turn it. Every piece must be connected to the power source ⚡ and glow.\n• Each solved circuit gives points and 12 more seconds, and the next one is bigger.\n• The faster you solve it, the more points. The round ends when time runs out.",
+        "keys": "Click: turn clockwise",
+        "touch": "Tap: turn clockwise",
+        "hud": "Circuit {n} · ⏱ {s}"
+      },
+      "stack": {
+        "name": "Sky Stack",
+        "tag": "Drop each block exactly on the tower",
+        "how": "A block slides back and forth above the tower; drop it at the right moment.\n• Whatever hangs over is cut off, so the next block is smaller.\n• A perfect drop cuts nothing and scores extra; several perfect drops in a row make the block grow again.\n• Miss the tower completely and the round is over.",
+        "keys": "Space or click",
+        "touch": "Tap the screen",
+        "perfect": "Perfect ×{n}"
+      },
+      "runner": {
+        "name": "Sky Sprint",
+        "tag": "Sprint along the cloud road without a scratch",
+        "how": "You run on three lanes and the speed keeps rising.\n• Pass beside the tall walls and jump over the low barriers.\n• Gold coins are worth 10 and a shield 🛡 forgives one crash.\n• Score: distance and coins.",
+        "keys": "Left/right: change lane · Up or Space: jump",
+        "touch": "Swipe left/right: change lane · tap or swipe up: jump"
+      },
+      "orbit": {
+        "name": "Orbit Hop",
+        "tag": "Leap from planet to planet",
+        "how": "Your comet circles a planet. Tap to fly off in the direction it is heading and get caught by the next planet.\n• Each new planet is worth 1; stars on the way are worth 3.\n• Don't stay too long: a planet's energy ring runs out.\n• Drift off into space and the round is over.",
+        "keys": "Space or click",
+        "touch": "Tap the screen"
+      },
+      "nard": {
+        "name": "Backgammon",
+        "tag": "The ancient board game of dice and wits",
+        "how": "Each player has 15 checkers to bring home and bear off.\n• Move a checker by the number on each die; doubles give four moves.\n• A point with two or more enemy checkers is closed. A single enemy checker can be hit; a hit checker must first re-enter in the opponent's home.\n• Once all 15 are in your home you may bear off. The first to bear off everything wins.\n• You must use both dice whenever that is possible.",
+        "keys": "Click a checker, then the point to move to",
+        "touch": "Tap a checker, then the point to move to",
+        "off": "Off",
+        "noMove": "No move possible; turn passed",
+        "undo": "Undo"
+      },
+      "four": {
+        "name": "Four in a Row",
+        "tag": "Drop your discs and line up four",
+        "how": "Take turns dropping a disc into one of the 7 columns; it falls to the bottom.\n• The first to get four of their discs in a row (across, down or diagonally) wins.\n• If the board fills up, it is a draw.",
+        "keys": "Click a column, or keys 1–7",
+        "touch": "Tap a column"
+      },
+      "hockey": {
+        "name": "Turbo Hockey",
+        "tag": "Fast and live, with special powers",
+        "how": "Knock the puck into the opponent's goal with your mallet. Both play at the same time and your mallet stays in your own half.\n• Power orbs appear in the middle; when the puck touches one, whoever hit the puck last gets the power:\n🔥 a blazing fast puck · ❄ the rival's mallet freezes · 🛡 a shield in front of your goal · ⭕ a giant mallet · 👻 an invisible puck\n• First to 7 goals wins.",
+        "keys": "Move the mouse",
+        "touch": "Drag your finger",
+        "goal": "Goal!"
+      },
+      "cannons": {
+        "name": "Cannon Clash",
+        "tag": "Angle, power, wind… and boom!",
+        "how": "Take turns to fire. Set the angle and the power, and mind the wind.\n• An explosion digs a crater and hurts cannons nearby: the closer, the more.\n• A cannon with no health left is out. The last one standing wins.",
+        "keys": "Left/right: angle · up/down: power · Space: fire (or drag on the screen)",
+        "touch": "Drag from your cannon and let go (like a slingshot), or use the buttons",
+        "fire": "Fire",
+        "angle": "Angle",
+        "power": "Power",
+        "wind": "Wind"
+      },
+      "checkers": {
+        "name": "Checkers",
+        "tag": "Jump, capture and get crowned",
+        "how": "Pieces move one square diagonally forward.\n• Jump over an enemy piece to capture it; capturing is compulsory and a multi-jump must be finished.\n• A piece that reaches the far row becomes a king and can also move backwards.\n• A player with no pieces or no move loses.",
+        "keys": "Click a piece, then the square to move to",
+        "touch": "Tap a piece, then the square to move to"
+      },
+      "trails": {
+        "name": "Paint Trails",
+        "tag": "Live and crowded: trap everyone in your paint",
+        "how": "Every player is a paint roller that never stops and leaves a trail. As many as like can join; the field grows with the number of players.\n• Hitting a wall or any trail (even your own) knocks you out. Trails have gaps now and then: slip through them.\n• Grab the powers: ⚡ speed · 👻 pass through paint · 🧽 all trails wiped · 🐌 everyone else slows down\n• The last one rolling wins the round. First to win 3 rounds takes the match.",
+        "keys": "Follow the mouse pointer, or turn with left/right (A/D); switch with the button at the bottom",
+        "touch": "Drag your finger on the screen; the roller turns that way",
+        "round": "Round {n}",
+        "modeMouse": "🖱 Follow pointer",
+        "modeKeys": "⌨ Keyboard",
+        "wonRound": "{name} wins the round",
+        "noWinner": "Nobody left!"
+      },
+      "reversi": {
+        "name": "Reversi",
+        "tag": "Outflank the enemy discs and flip them",
+        "how": "Place a disc so that one or more enemy discs are trapped in a straight line between it and another disc of yours; they flip to your colour.\n• Every move must flip at least one disc; with no move, your turn is skipped.\n• When nobody can move, the player with more discs wins.",
+        "keys": "Click one of the marked squares",
+        "touch": "Tap one of the marked squares"
+      },
+      "dice": {
+        "name": "Dice 10,000",
+        "tag": "Push your luck or bank your points",
+        "how": "Roll 6 dice. After each roll set aside at least one scoring die; then roll the rest again or bank this turn's points.\n• 1 = 100 and 5 = 50. Three of a kind = the number × 100 (three 1s = 1000); each extra matching die doubles it.\n• 1 to 6 in a row = 1500 and three pairs = 750.\n• If no die scores, this turn's points are lost. Set aside all 6 and you roll all 6 again.\n• The first to reach 5000 wins.",
+        "keys": "Click dice to set them aside",
+        "touch": "Tap dice to set them aside",
+        "roll": "Roll",
+        "bank": "Bank ({n})",
+        "keep": "Keep and roll",
+        "bust": "Bust!",
+        "turn": "This turn: {n}",
+        "pick": "Pick scoring dice",
+        "hot": "All six! Roll again"
+      },
+      "pong": {
+        "name": "Wizard Pong",
+        "tag": "The classic rally, now with sorcery",
+        "how": "Slide your paddle left and right to return the ball; it gets faster with every hit. If it passes your paddle, the rival scores.\n• The paddle's edge sends the ball back at a sharper angle.\n• Hit the ball into the power orbs:\n⭕ giant paddle · 🔥 fire shot · ⁂ three balls at once · ❄ the rival's paddle slows down · 🌀 a curving ball · 🔻 the rival's paddle shrinks\n• First to 7 points wins.",
+        "keys": "Mouse or left/right keys",
+        "touch": "Drag left and right",
+        "goal": "Point!"
+      },
+      "soccer": {
+        "name": "Flick Soccer",
+        "tag": "Pull back, let go, score",
+        "how": "Each team has 5 discs. On your turn pull one of your discs back and let go so it strikes the ball.\n• The further you pull, the harder the shot. Everything bounces off the walls.\n• If your disc touches a power star, your team's next shot is special: 🔥 fire shot (a very hard strike) · ⭕ giant disc · ❄ the rival's discs turn heavy and frozen for one turn.\n• After a goal the discs return to their places. The first team to score 3 goals wins.",
+        "keys": "Drag a disc back with the mouse and release",
+        "touch": "Pull a disc back and let go",
+        "goal": "Goal!",
+        "armed": "Special shot ready"
+      },
+      "darts": {
+        "name": "Golden Darts",
+        "tag": "Hold steady!",
+        "how": "You have 3 darts per turn and the match lasts 5 rounds. Aim where you like; the sight wobbles a little, so throw at the right moment.\n• Scoring is like real darts: the number of the wedge, outer ring ×2, middle ring ×3, bull 25 and 50.\n• The golden wedge doubles the score of that throw.\n• A bullseye (50) earns a bonus dart.\n• The highest total wins.",
+        "keys": "Move the sight with the mouse and click",
+        "touch": "Drag to aim; the dart flies when you lift your finger",
+        "round": "Round {n} of {all}",
+        "bonus": "Bonus dart!"
+      },
+      "archery": {
+        "name": "Sky Archer",
+        "tag": "Read the wind and hit the moving targets",
+        "how": "You have 3 arrows per turn and the match lasts 4 rounds. Draw the string and release; the further you draw, the flatter and faster the arrow flies.\n• The target slides left and right: its centre is worth 10 and each ring one less.\n• Balloons are worth 6 and the small golden apple 15.\n• The wind pushes the arrow; watch the flag.\n• The highest total wins.",
+        "keys": "Drag with the mouse and release",
+        "touch": "Pull and let go",
+        "round": "Round {n} of {all}",
+        "miss": "Miss"
+      }
+    },
+    "hall": "Arcade hall",
+    "zen": "Zen deck",
+    "lab": "Idea lab"
   },
   "emotes": {
     "smile": "Smile",

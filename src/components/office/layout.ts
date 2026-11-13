@@ -4,10 +4,10 @@
 
 export type Vec2 = [number, number];
 export interface Segment { a: Vec2; b: Vec2; kind: 'solid' | 'glass' | 'door' | 'obstacle'; slot?: number; color?: string }
-export type SeatArea = 'office' | 'conference' | 'cafe' | 'library' | 'game' | 'garden';
+export type SeatArea = 'office' | 'conference' | 'cafe' | 'library' | 'game' | 'garden' | 'zen' | 'lab';
 export interface Seat { id: string; pos: Vec2; facing: number; slot?: number; monitor?: { pos: [number, number, number]; facing: number }; area: SeatArea; exit?: Vec2 } // exit: where you stand up (default: a step behind the chair)
 // Something to use with E (or the phone's action button) that is not a seat or a door.
-export interface Station { id: string; kind: 'arcade' | 'jukebox' | 'coffee'; pos: Vec2; facing: number } // facing: the way its front points (rotation about Y, front = +Z)
+export interface Station { id: string; kind: 'arcade' | 'jukebox' | 'coffee' | 'board'; pos: Vec2; facing: number; game?: string } // game: the arcade game it opens (none: the list of games) // facing: the way its front points (rotation about Y, front = +Z)
 export interface Prop { model: string; pos: Vec2; rot: number; size: number; y?: number; h?: number } // h = target height (else uniform scale)
 export interface OfficeRoom { slot: number; min: Vec2; max: Vec2; door: { a: Vec2; b: Vec2 }; wallColor: 'orange' | 'teal' }
 export type Circle = { pos: Vec2; r: number };
@@ -37,6 +37,16 @@ export const GAME = { min: [-H, -OUT] as Vec2, max: [H, -H] as Vec2 };
 export const CAFE = { min: [-OUT, -H] as Vec2, max: [-H, H] as Vec2 };
 export const LIBRARY = { min: [H, -H] as Vec2, max: [OUT, H] as Vec2 };
 export const GAME_WALL = '#3f4178'; // deep indigo, so the neon and the screens stand out
+// Second expansion (owner request): the arcade hall behind the game room (through a wide archway in its
+// north wall), and two open-air places reached through gates in the garden's hedges: a zen deck to the
+// north and the idea lab to the south.
+export const HALL_DEPTH = 8;
+export const HALL = { min: [-H, -OUT - HALL_DEPTH] as Vec2, max: [H, -OUT] as Vec2 };
+export const HALL_ARCH = 2; // half the width of the archway
+export const HALL_WALL = '#2b2d5c';
+export const ZEN = { min: [-OUT - GARDEN_DEPTH, -OUT] as Vec2, max: [-OUT, -H] as Vec2 };
+export const LAB = { min: [-OUT - GARDEN_DEPTH, H] as Vec2, max: [-OUT, OUT] as Vec2 };
+export const GATE = { x: -21.2, half: 0.8 }; // the gap in the garden's north and south hedges
 
 const officeCx = (slot: number) => (slot % 2 === 1 ? -1 : 1) * (H + OUT) / 2;
 
@@ -76,7 +86,11 @@ export function buildWalls(): Segment[] {
   const w: Segment[] = [];
   // Outer shell (clockwise from north-west office). The north wall runs straight across: the notch between
   // the two north offices is the game room, behind a glass front with a door on the north corridor.
-  w.push(seg([-OUT, -OUT], [-H, -OUT]), { ...seg([-H, -OUT], [H, -OUT]), color: GAME_WALL }, seg([H, -OUT], [OUT, -OUT]));
+  w.push(seg([-OUT, -OUT], [-H, -OUT]), seg([H, -OUT], [OUT, -OUT]));
+  w.push({ ...seg([-H, -OUT], [-HALL_ARCH, -OUT]), color: GAME_WALL }, { ...seg([HALL_ARCH, -OUT], [H, -OUT]), color: GAME_WALL });
+  // The arcade hall behind the archway.
+  const hz = HALL.min[1];
+  w.push({ ...seg([-H, -OUT], [-H, hz]), color: HALL_WALL }, { ...seg([-H, hz], [H, hz]), color: HALL_WALL }, { ...seg([H, hz], [H, -OUT]), color: HALL_WALL });
   w.push(seg([-H, -OUT], [-H, -H]), seg([H, -H], [H, -OUT]));
   w.push(seg([-H, -H], [-DOOR_WIDTH / 2, -H], 'glass'), seg([DOOR_WIDTH / 2, -H], [H, -H], 'glass'));
   w.push(seg([OUT, -OUT], [OUT, -H]), seg([OUT, -H], [OUT, H]), seg([OUT, H], [OUT, OUT]), seg([OUT, OUT], [H, OUT]), seg([H, OUT], [H, SOUTH]));
@@ -84,9 +98,11 @@ export function buildWalls(): Segment[] {
   w.push(seg([-H, SOUTH], [-H, OUT]), seg([-H, OUT], [-OUT, OUT]), seg([-OUT, OUT], [-OUT, H]), seg([-OUT, -H], [-OUT, -OUT]));
   // The café looks onto the garden through glass, with a door in the middle.
   w.push(seg([-OUT, H], [-OUT, DOOR_WIDTH / 2], 'glass'), seg([-OUT, -DOOR_WIDTH / 2], [-OUT, -H], 'glass'));
-  // Garden hedge (drawn by the garden itself).
+  // Hedges (drawn by the garden itself): around the whole green strip west of the building, and between
+  // the garden and its two neighbours with a gate in each.
   const [gx0, gz0] = GARDEN.min, [gx1, gz1] = GARDEN.max;
-  w.push(seg([gx1, gz0], [gx0, gz0], 'obstacle'), seg([gx0, gz0], [gx0, gz1], 'obstacle'), seg([gx0, gz1], [gx1, gz1], 'obstacle'));
+  for (const z of [gz0, gz1]) w.push(seg([gx1, z], [GATE.x + GATE.half, z], 'obstacle'), seg([GATE.x - GATE.half, z], [gx0, z], 'obstacle'));
+  w.push(seg([gx1, -OUT], [gx0, -OUT], 'obstacle'), seg([gx0, -OUT], [gx0, OUT], 'obstacle'), seg([gx0, OUT], [gx1, OUT], 'obstacle'));
   // Glass porch outside the entrance (keeps people from walking off into the void).
   w.push(seg([-ENTRANCE_HALF, SOUTH], [-ENTRANCE_HALF, SOUTH + PORCH], 'glass'), seg([-ENTRANCE_HALF, SOUTH + PORCH], [ENTRANCE_HALF, SOUTH + PORCH], 'glass'), seg([ENTRANCE_HALF, SOUTH + PORCH], [ENTRANCE_HALF, SOUTH], 'glass'));
   // Office walls towards corridors are glass with a door; north offices' inner walls are exterior (solid shell).
@@ -256,15 +272,56 @@ export function gardenSeats(): Seat[] {
   return s;
 }
 
-export const allSeats = () => [...officeSeats(), ...conferenceSeats(), ...cafeSeats(), ...librarySeats(), ...gameSeats(), ...gardenSeats()];
+// ——— Arcade hall (behind the game room) ———
+// A cabinet for every solo game along the side walls, three play tables in the middle, a darts board and
+// an archery target on the back wall beside the league's big screen.
+export const HALL_CABINETS: { pos: Vec2; facing: number; game: string }[] = [
+  ...['serpent', 'breaker', 'swarm', 'gems', 'circuit'].map((game, i) => ({ pos: [-H + 0.5, -OUT - 1.4 - i * 1.4] as Vec2, facing: Math.PI / 2, game })),
+  ...['stack', 'runner', 'orbit', 'bugs'].map((game, i) => ({ pos: [H - 0.5, -OUT - 1.4 - i * 1.4] as Vec2, facing: -Math.PI / 2, game })),
+];
+export const HALL_TABLES: { pos: Vec2; game: string }[] = [{ pos: [-3.3, -OUT - 3.3], game: 'hockey' }, { pos: [3.3, -OUT - 3.3], game: 'pong' }, { pos: [0, -OUT - 5.4], game: 'soccer' }];
+export const HALL_TABLE_HALF: Vec2 = [0.62, 1.05];
+export const HALL_SCREEN = { x: 0, z: HALL.min[1] + 0.12, width: 5.4, height: 2.0, bottom: 0.75 };
+export const HALL_TARGETS: { pos: Vec2; game: string }[] = [{ pos: [-4.5, HALL.min[1] + 0.2], game: 'darts' }, { pos: [4.5, HALL.min[1] + 0.2], game: 'archery' }];
+export const NARD_TABLE: Vec2 = [4.7, -12.4]; // the backgammon table in the game room
+
+// ——— Zen deck (north of the garden) ———
+export const ZEN_POND = { pos: [-22.5, -12.3] as Vec2, r: 1.25 };
+export const ZEN_BENCH: Vec2 = [-22.5, -9.6]; // by the pond, looking at it
+export const ZEN_LANTERN: Vec2 = [-17.4, -11.1];
+export const ZEN_DECK = { pos: [-17.4, -11.1] as Vec2, half: [2.0, 2.9] as Vec2 };
+export const ZEN_BAMBOO: Vec2[] = [[-23.4, -14.4], [-21.0, -14.5], [-15.7, -14.4], [-23.4, -7.8], [-15.6, -7.7]];
+export function zenSeats(): Seat[] {
+  return around(ZEN_LANTERN, 1.2, [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4]).map((pos, i) => ({ id: `zen-${i}`, pos, facing: facingTo(pos, ZEN_LANTERN), area: 'zen' as const }));
+}
+
+// ——— Idea lab (south of the garden) ———
+export const LAB_TABLE = { pos: [-20.2, 11.4] as Vec2, half: [0.6, 1.2] as Vec2, height: 1.0 };
+export const LAB_BOARDS: Vec2[] = [[-OUT - 0.45, 9.4], [-OUT - 0.45, 12.6]]; // whiteboards along the building's wall, facing west
+export const LAB_POSTS: Vec2[] = [[-23.2, 8.0], [-23.2, 14.2], [-16.0, 8.0], [-16.0, 14.2]];
+export function labSeats(): Seat[] {
+  const [tx, tz] = LAB_TABLE.pos, s: Seat[] = [];
+  for (const side of [-1, 1]) for (const dz of [-0.6, 0.6]) {
+    const pos: Vec2 = [tx + side * (LAB_TABLE.half[0] + 0.45), tz + dz];
+    s.push({ id: `lab-${side < 0 ? 'w' : 'e'}${dz < 0 ? 'n' : 's'}`, pos, facing: facingTo(pos, [tx, pos[1]]), area: 'lab' });
+  }
+  return s;
+}
+
+export const allSeats = () => [...officeSeats(), ...conferenceSeats(), ...cafeSeats(), ...librarySeats(), ...gameSeats(), ...gardenSeats(), ...zenSeats(), ...labSeats()];
 
 // Notice kiosk in the reception, turned towards the entrance.
 export const NOTICE_KIOSK = { pos: [3.9, SOUTH - 5] as Vec2, rot: -Math.PI / 4 };
 
-// Things used with E: arcade cabinets, the jukebox and the coffee machine.
+// Things used with E: arcade cabinets and play tables, the jukebox, the coffee machine and the idea lab's whiteboards.
 export function stations(): Station[] {
   return [
     ...ARCADES.map((pos, i) => ({ id: `arcade-${i}`, kind: 'arcade' as const, pos, facing: Math.PI / 2 })),
+    ...HALL_CABINETS.map((c) => ({ id: `cab-${c.game}`, kind: 'arcade' as const, pos: c.pos, facing: c.facing, game: c.game })),
+    ...HALL_TABLES.map((t) => ({ id: `table-${t.game}`, kind: 'arcade' as const, pos: t.pos, facing: 0, game: t.game })),
+    ...HALL_TARGETS.map((t) => ({ id: `wall-${t.game}`, kind: 'arcade' as const, pos: t.pos, facing: 0, game: t.game })),
+    { id: 'table-nard', kind: 'arcade', pos: NARD_TABLE, facing: 0, game: 'nard' },
+    ...LAB_BOARDS.map((pos, i) => ({ id: `board-${i}`, kind: 'board' as const, pos, facing: -Math.PI / 2 })),
     { id: 'jukebox', kind: 'jukebox', pos: JUKEBOX, facing: -Math.PI / 2 },
     { id: 'coffee', kind: 'coffee', pos: COFFEE_MACHINE, facing: Math.PI / 2 },
   ];
@@ -282,6 +339,11 @@ const SOLID_BOXES: [number, number, number, number][] = [
   [GAME_SOFA[0], GAME_SOFA[1] + 0.12, 1.0, 0.36],
   [GAME_TV.x, -OUT + 0.3, 1.0, 0.22], // the TV cabinet
   ...GARDEN_BENCHES.map((b): [number, number, number, number] => [b.pos[0], b.pos[1] + (b.facing ? -0.12 : 0.12), 0.85, 0.2]),
+  ...HALL_CABINETS.map((c): [number, number, number, number] => [c.pos[0] + (c.pos[0] < 0 ? -0.1 : 0.1), c.pos[1], 0.38, 0.36]),
+  ...HALL_TABLES.map((t): [number, number, number, number] => [t.pos[0], t.pos[1], HALL_TABLE_HALF[0], HALL_TABLE_HALF[1]]),
+  [LAB_TABLE.pos[0], LAB_TABLE.pos[1], LAB_TABLE.half[0] - 0.08, LAB_TABLE.half[1] - 0.05],
+  [ZEN_BENCH[0], ZEN_BENCH[1], 0.7, 0.2],
+  ...LAB_BOARDS.map((p): [number, number, number, number] => [p[0] + 0.25, p[1], 0.08, 0.95]),
 ];
 
 // Floor guide lines (orange and teal) from the entrance to the conference door and each office door.
@@ -311,11 +373,12 @@ export function officeAt(x: number, z: number): OfficeRoom | null {
 export const inConference = (x: number, z: number) => Math.hypot(x, z) < CONF_RADIUS;
 
 const within = (r: { min: Vec2; max: Vec2 }, x: number, z: number) => x > r.min[0] && x < r.max[0] && z > r.min[1] && z < r.max[1];
-export type Area = 'office' | 'conference' | 'reception' | 'cafe' | 'library' | 'game' | 'garden' | 'corridor';
+export type Area = 'office' | 'conference' | 'reception' | 'cafe' | 'library' | 'game' | 'garden' | 'corridor' | 'hall' | 'zen' | 'lab';
 export function areaAt(x: number, z: number): Area {
   if (officeAt(x, z)) return 'office';
   if (inConference(x, z)) return 'conference';
-  if (x <= -OUT) return 'garden';
+  if (x <= -OUT) return z < -H ? 'zen' : z > H ? 'lab' : 'garden';
+  if (within(HALL, x, z)) return 'hall';
   if (within(GAME, x, z)) return 'game';
   if (within(CAFE, x, z)) return 'cafe';
   if (within(LIBRARY, x, z)) return 'library';
@@ -334,6 +397,9 @@ export function places(): Place[] {
     { id: 'library', pos: [H + 1.2, 0], yaw: -Math.PI / 2 },
     { id: 'game', pos: [0, -H - 1.3], yaw: 0 },
     { id: 'garden', pos: [-OUT - 1.6, 0], yaw: Math.PI / 2 },
+    { id: 'hall', pos: [0, -OUT - 1.4], yaw: 0 },
+    { id: 'zen', pos: [GATE.x, -H - 1.2], yaw: 0 },
+    { id: 'lab', pos: [GATE.x, H + 1.2], yaw: Math.PI },
     ...OFFICES.map((o): Place => ({ id: `office-${o.slot}`, pos: [(o.door.a[0] + o.door.b[0]) / 2, o.slot <= 2 ? -H + 1.3 : H - 1.3], yaw: o.slot <= 2 ? 0 : Math.PI })),
   ];
 }
@@ -430,6 +496,10 @@ export function propColliders(): Circle[] {
   c.push({ pos: FOUNTAIN.pos, r: FOUNTAIN.r });
   c.push({ pos: NOTICE_KIOSK.pos, r: 0.3 });
   for (const t of GARDEN_TREES) c.push({ pos: t, r: 0.32 });
+  c.push({ pos: NARD_TABLE, r: 0.48 }, { pos: ZEN_POND.pos, r: ZEN_POND.r }, { pos: ZEN_LANTERN, r: 0.3 });
+  for (const b of ZEN_BAMBOO) c.push({ pos: b, r: 0.22 });
+  for (const s of [...zenSeats(), ...labSeats()]) c.push({ pos: s.pos, r: 0.24 });
+  for (const p of LAB_POSTS) c.push({ pos: p, r: 0.14 });
   c.push({ pos: [-H + 0.5, SOUTH - 3.5], r: 0.35 }, { pos: [-H + 0.5, SOUTH - 2.9], r: 0.35 }); // bench
   for (const p of props()) if (p.y === undefined && SOLID[p.model]) c.push({ pos: p.pos, r: p.size * SOLID[p.model] });
   return c;

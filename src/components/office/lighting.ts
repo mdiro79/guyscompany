@@ -1,4 +1,4 @@
-import { OFFICES, RECEPTION_Z, SOUTH, H, OUT, type Vec2 } from './layout';
+import { OFFICES, RECEPTION_Z, SOUTH, H, OUT, HALL, type Vec2 } from './layout';
 
 // Base strengths of the general light, shared by the scene and the conference room's dimmer
 // (inside that room the general light follows its wall panel).
@@ -15,6 +15,8 @@ export const DOWNLIGHTS: Fixture[] = [
   { pos: [-MID, 0], intensity: 20, color: '#ffdcae' }, // café
   { pos: [MID, 0], intensity: 20, color: '#fff0dc' }, // library
   { pos: [0, -MID], intensity: 15, color: '#d9c8ff' }, // game room
+  { pos: [-3.3, (HALL.min[1] + HALL.max[1]) / 2], intensity: 16, color: '#e2d6ff' }, // arcade hall
+  { pos: [3.3, (HALL.min[1] + HALL.max[1]) / 2], intensity: 16, color: '#ffd9ef' },
   ...OFFICES.map((o): Fixture => ({ pos: [(o.min[0] + o.max[0]) / 2, (o.min[1] + o.max[1]) / 2], intensity: 24, color: o.wallColor === 'orange' ? '#ffd2a3' : '#ffe8cc' })),
 ];
 export const LIGHT_POOL = 4;

@@ -363,3 +363,15 @@ export const sharedNotes = pgTable('shared_notes', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('shared_notes_project_idx').on(t.projectId), check('shared_note_kind', sql`${t.kind} in ('note', 'idea')`)]);
+
+// Game room: each member's record per game. `best` is the high score of a solo game, or the league points
+// of a head-to-head game (3 per win against a teammate, 1 against the computer); `wins` counts won
+// matches and races, `plays` finished rounds.
+export const gameScores = pgTable('game_scores', {
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  game: text('game').notNull(),
+  best: integer('best').notNull().default(0),
+  plays: integer('plays').notNull().default(0),
+  wins: integer('wins').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.game] })]);

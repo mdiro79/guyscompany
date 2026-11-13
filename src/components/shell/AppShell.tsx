@@ -8,6 +8,9 @@ import { getMesh } from '@/lib/realtime/mesh';
 import { connectBoard } from '@/lib/board/sync';
 import { connectHands } from '@/lib/board/hands';
 import { connectQuickVote } from '@/lib/board/vote';
+import { connectArcadeNet } from '@/components/office/play/arcade/net';
+import { connectScores } from '@/components/office/play/arcade/scores';
+import { ArcadeInvites } from '@/components/office/play/arcade/Invites';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useLive, setLivePaused } from '@/lib/live';
@@ -28,6 +31,9 @@ function BoardSync({ userId }: { userId: string }) {
   useEffect(() => connectBoard(getMesh(userId, device), userId), [userId, device]);
   useEffect(() => connectHands(getMesh(userId, device), userId), [userId, device]);
   useEffect(() => connectQuickVote(getMesh(userId, device), userId), [userId, device]);
+  // Game room: tables, invitations and records travel on the same links, on every page.
+  useEffect(() => connectArcadeNet(getMesh(userId, device), userId), [userId, device]);
+  useEffect(() => connectScores(getMesh(userId, device), userId), [userId, device]);
   return null;
 }
 
@@ -60,7 +66,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
     const from = seenId ? messages.findIndex((m) => m.id === seenId) + 1 : 0;
     return messages.slice(from).filter((m) => m.authorId !== data.user.id).length;
   }, [messages, seenId, data.user.id]);
-  const fullBleed = pathname.startsWith('/office') || pathname.startsWith('/board');
+  const fullBleed = pathname.startsWith('/office') || pathname.startsWith('/board') || pathname.startsWith('/arcade');
   // Full-screen pages do not scroll at all (see lib/viewport.ts): they stay put like an installed app.
   useEffect(() => {
     document.documentElement.classList.toggle('gc-lock', fullBleed);
@@ -83,7 +89,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
     return () => window.removeEventListener('message', h);
   }, [embed]);
   if (embed) {
-    const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office' && n.href !== '/board');
+    const items = (data.user.role === 'admin' ? [...NAV, ADMIN_NAV] : NAV).filter((n) => n.href !== '/office' && n.href !== '/board' && n.href !== '/arcade');
     return (
       <ShellProvider value={data}>
         <div className="flex min-h-dvh flex-col">
@@ -111,6 +117,7 @@ export function AppShell({ data: server, notifications, messages, files, search,
       <PresenceProvider>
         <VoiceProvider>
           <BoardSync userId={data.user.id} />
+          <ArcadeInvites />
           {fullBleed ? children : (
             <div className={clsx('flex flex-col', chatPage ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
               {data.demo && <div className="bg-accent px-4 py-1 text-center text-xs text-white">{t('common.demoBanner')}</div>}

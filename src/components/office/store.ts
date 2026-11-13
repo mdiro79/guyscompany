@@ -4,9 +4,9 @@ import type { EmoteId } from './emotes';
 
 export type PanelMode = 'none' | 'monitor' | 'fullscreen';
 // What E (or the phone action button) would do right now.
-export type StationKind = 'arcade' | 'jukebox' | 'coffee';
-export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' } | { kind: 'station'; id: string; station: StationKind };
-// A panel over the office that takes the pointer: the arcade game, the jukebox or the map.
+export type StationKind = 'arcade' | 'jukebox' | 'coffee' | 'board';
+export type Interact = { kind: 'seat'; id: string } | { kind: 'door'; id: string; open: boolean; allowed: boolean } | { kind: 'guide' } | { kind: 'panel' } | { kind: 'station'; id: string; station: StationKind; game?: string };
+// A panel over the office that takes the pointer: the arcade (its list or one game), the jukebox or the map.
 export type Overlay = 'none' | 'arcade' | 'jukebox' | 'map';
 
 export interface OfficeUiState {

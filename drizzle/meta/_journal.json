@@ -64,6 +64,13 @@
       "when": 1794488302535,
       "tag": "0008_chat_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794556323454,
+      "tag": "0009_game_scores",
+      "breakpoints": true
     }
   ]
 }
