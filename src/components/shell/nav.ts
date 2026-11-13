@@ -1,4 +1,4 @@
-import { Home, FolderKanban, CheckSquare, MessageCircle, Users, CalendarDays, FileText, Settings, Shield, Box, Lightbulb, PenLine, NotebookPen, Activity, BarChart3 } from 'lucide-react';
+import { Home, FolderKanban, CheckSquare, MessageCircle, Users, CalendarDays, FileText, Settings, Shield, Box, Lightbulb, PenLine, NotebookPen, Activity, BarChart3, Gamepad2 } from 'lucide-react';
 
 export const NAV = [
   { href: '/', key: 'home', icon: Home },
@@ -11,6 +11,7 @@ export const NAV = [
   { href: '/calendar', key: 'calendar', icon: CalendarDays },
   { href: '/files', key: 'files', icon: FileText },
   { href: '/office', key: 'office', icon: Box },
+  { href: '/arcade', key: 'arcade', icon: Gamepad2 },
   { href: '/board', key: 'board', icon: PenLine },
   { href: '/meetings', key: 'meetings', icon: NotebookPen },
   { href: '/insights', key: 'insights', icon: BarChart3 },

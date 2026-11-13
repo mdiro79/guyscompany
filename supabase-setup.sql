@@ -47,6 +47,7 @@ alter table meeting_notes enable row level security;
 alter table shared_notes enable row level security;
 alter table posts enable row level security;
 alter table chat_reads enable row level security;
+alter table game_scores enable row level security;
 
 create policy "read" on profiles for select to authenticated using (public.is_member());
 create policy "read" on projects for select to authenticated using (public.is_member());
@@ -91,6 +92,9 @@ create policy "read" on shared_notes for select to authenticated using (public.i
 create policy "read" on posts for select to authenticated using (public.is_member());
 -- When each member last read each chat: only their own (the server works out "seen" ticks).
 create policy "read own" on chat_reads for select to authenticated using (user_id = auth.uid());
+
+-- Game room records: the whole team sees the tables.
+create policy "read" on game_scores for select to authenticated using (public.is_member());
 
 -- Realtime change events for live refresh (not meeting_attendance: its regular "still here" updates
 -- would refresh every page; the office shows who is in the room from the live connections instead).

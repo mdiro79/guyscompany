@@ -268,4 +268,14 @@ describe('db store', () => {
     await store.setTodoStats(A, { ...stats, xp: 150 });
     expect(await store.getTodoStats(A)).toEqual({ ...stats, xp: 150 });
   });
+
+  it('game room: records per member and game, added in one step', async () => {
+    expect(await store.listGameScores()).toEqual([]);
+    expect(await store.reportGame(A, 'serpent', { score: 40, points: 0, wins: 0 })).toMatchObject({ best: 40, plays: 1, wins: 0 });
+    expect(await store.reportGame(A, 'serpent', { score: 25, points: 0, wins: 1 })).toMatchObject({ best: 40, plays: 2, wins: 1 });
+    expect(await store.reportGame(A, 'serpent', { score: 90, points: 0, wins: 0 })).toMatchObject({ best: 90, plays: 3, wins: 1 });
+    await store.reportGame(B, 'four', { score: 0, points: 3, wins: 1 });
+    expect(await store.reportGame(B, 'four', { score: 0, points: 1, wins: 1 })).toMatchObject({ best: 4, plays: 2, wins: 2 });
+    expect((await store.listGameScores()).length).toBe(2);
+  });
 });

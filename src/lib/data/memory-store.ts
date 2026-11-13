@@ -1,11 +1,12 @@
 import type {
   DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
   Issue, IssueComment, ProjectIdea, Milestone, Meeting, MeetingAttendance, MeetingNote, SharedNote,
-  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post, ChatRead,
+  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post, ChatRead, GameScore,
 } from './types';
 import { MESSAGE_DEFAULTS, OFFICE_DEFAULTS, PROJECT_DEFAULTS } from './types';
 import { createSeed } from './seed';
 import { emptyCounters } from '@/lib/todo-game';
+import { applyDelta } from '@/lib/arcade';
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
@@ -34,6 +35,7 @@ export function createMemoryStore(): DataStore {
     attendance: [] as MeetingAttendance[],
     notes: [] as MeetingNote[],
     shared: [] as SharedNote[],
+    scores: [] as GameScore[],
     rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
     posts: seed.posts as Post[],
@@ -224,6 +226,14 @@ export function createMemoryStore(): DataStore {
       return clone(x);
     },
     async deleteSharedNote(id, authorId) { db.shared = db.shared.filter((n) => !(n.id === id && n.authorId === authorId)); },
+
+    async listGameScores() { return clone(db.scores); },
+    async reportGame(userId, game, d) {
+      let row = db.scores.find((x) => x.userId === userId && x.game === game);
+      if (!row) { row = { userId, game, best: 0, plays: 0, wins: 0, updatedAt: now() }; db.scores.push(row); }
+      Object.assign(row, applyDelta(row, d), { updatedAt: now() });
+      return clone(row);
+    },
 
     async getRoom(id) { const r = db.rooms.find((x) => x.id === id); return r ? clone(r) : null; },
     async updateRoom(id, patch) {
