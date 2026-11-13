@@ -1,6 +1,7 @@
 'use client';
 import { DuelStage, type Control, type DuelSim, type Pt } from '../kit/duel';
 import { Fx, label, write } from '../kit/fx';
+import { seatPills } from '../kit/board';
 import type { World } from '../kit/World';
 import { clamp } from '../kit/rng';
 import { buzz, sfx } from '../kit/sfx';
@@ -133,13 +134,8 @@ function createSim(fx: Fx, t: (k: string) => string): DuelSim {
     },
     hud(g, w, time, names, colors) {
       const p = w.pal;
-      for (const s of [0, 1]) {
-        const [x, y] = w.to2d(W / 2, s === 0 ? H * 0.72 : H * 0.28);
-        label(g, p, String(score[s]), x, y, 34 * Math.min(1.6, Math.max(0.7, w.scale)), colors[s]);
-        const [nx, ny] = w.to2d(W / 2, s === 0 ? H * 0.86 : H * 0.14);
-        write(g, p, names[s], nx, ny, 12, 700, p.soft, 160);
-        if (slow[s] > 0) { const [ix, iy] = w.to2d(px[s], lineY(s), 30); write(g, p, '❄', ix, iy, 20, 800); }
-      }
+      seatPills(g, p, [0, 1].map((s) => ({ name: names[s], value: String(score[s]), color: colors[s], active: false })));
+      for (const s of [0, 1]) if (slow[s] > 0) { const [ix, iy] = w.to2d(px[s], lineY(s), 30); write(g, p, '❄', ix, iy, 20, 800); }
       if (orb) { const [ox, oy] = w.to2d(orb.x, orb.y, 30); write(g, p, ICON[orb.kind], ox, oy, 16, 800); }
       const [cx, cy] = w.to2d(W / 2, H / 2, 10);
       if (flash > 0) { g.globalAlpha = Math.min(1, flash); label(g, p, t('goal'), cx, cy, 44, p.sun); g.globalAlpha = 1; }

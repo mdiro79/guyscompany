@@ -6,7 +6,7 @@ import { Fx, TAU, ball, label, rrect, scene, tile } from '../kit/fx';
 import { theme, type Palette } from '../kit/theme';
 import { sfx } from '../kit/sfx';
 import type { BoardProps } from '../rules/types';
-import { BAR, legal, mine, pips, type NardMove, type NardState } from '../rules/nard';
+import { BAR, legal, pips, type NardMove, type NardState } from '../rules/nard';
 
 export { rules } from '../rules/nard';
 
@@ -34,7 +34,7 @@ function spot(i: number, n: number, total: number): [number, number] {
 
 function create(get: () => Props): Game2D {
   const fx = new Fx();
-  let prev = get().s, sel = -2, time = 0, slide = 1, slideFrom: [number, number] = [0, 0], note = 0, shown = get().s.n, rollT = 1;
+  let prev = get().s, sel = -2, slide = 1, slideFrom: [number, number] = [0, 0], note = 0, shown = get().s.n, rollT = 1;
   // An own point of `who` seen as an own point of the viewer.
   const seen = (who: number, i: number) => (who === get().seat ? i : 23 - i);
   const place = (who: number, i: number): [number, number] => {
@@ -48,7 +48,7 @@ function create(get: () => Props): Game2D {
 
   return {
     step(dt) {
-      time += dt; fx.step(dt); slide = Math.min(1, slide + dt / 0.26); note = Math.max(0, note - dt); rollT = Math.min(1, rollT + dt / 0.5);
+      fx.step(dt); slide = Math.min(1, slide + dt / 0.26); note = Math.max(0, note - dt); rollT = Math.min(1, rollT + dt / 0.5);
       const s = get().s;
       if (s === prev) return;
       if (s.last && s.last !== prev.last) {
@@ -59,7 +59,7 @@ function create(get: () => Props): Game2D {
       sel = -2; prev = s;
     },
     draw(g, t) {
-      const p = theme.get(), { s, seat, canMove, colors, names } = get(), other = 1 - seat;
+      const p = theme.get(), { s, seat, colors, names } = get(), other = 1 - seat;
       fx.begin(g);
       scene(g, W, H, t, p);
       // Who is who, with pip counts (the distance still to travel).

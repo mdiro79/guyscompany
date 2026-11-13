@@ -28,5 +28,7 @@ All stages of `BUILD-INSTRUCTIONS.md` are implemented on branch `claude/vibrant-
 | Mesh: heartbeat, round trip, rebuild | `scripts/multi-test.cjs` (two browser profiles linked, events both ways) |
 | Quick vote, game table | unit tests with two module copies on a pretend mesh |
 | Team pulse, insights, task priority and steps | store tests on PGlite (migrations 0006, 0007), screenshots on phone and desktop |
+| Arcade: 21 games, league and records (`game_scores`, migration 0009), races, invitations, light/dark/neon | rule modules played to the end by the computer (`play/arcade/rules/rules.test.ts`), scoring tests (`src/lib/arcade.test.ts`), store test on PGlite, `scripts/arcade-play.cjs` screenshots of every game on desktop and phone |
+| Arcade hall, zen deck, idea lab | layout tests (archway, gates, every station reachable, map landing spots), `scripts/office-rooms.cjs`, `scripts/office-stats.cjs` (45 draw calls in the hall, under 190 anywhere) |
 
-Still not verified here: a real Supabase/Vercel run of the new migrations, sound of the jukebox by ear, and the office on a real phone's GPU (this environment renders in software).
+Still not verified here: a real Supabase/Vercel run of the new migrations, sound of the jukebox and the games by ear, the office and the 3D games on a real phone's GPU (this environment renders in software), and online matches between two real people on different networks (the mesh was tested between two browser profiles).

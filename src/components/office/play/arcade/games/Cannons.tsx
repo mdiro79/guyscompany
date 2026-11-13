@@ -25,7 +25,7 @@ export default function Cannons(props: Props) {
 
 function create(get: () => Props): Game2D {
   const fx = new Fx();
-  let prev = get().s, time = 0;
+  let prev = get().s;
   let shown = { h: prev.h, tanks: prev.tanks }; // what is on screen while a shell still flies
   let anim: { shot: Shot; i: number } | null = null;
   let aim: [number, number] = [...(prev.aim[Math.max(0, get().seat)] ?? [60, 60])] as [number, number], aimSeat = -1;
@@ -40,7 +40,7 @@ function create(get: () => Props): Game2D {
 
   return {
     step(dt) {
-      time += dt; fx.step(dt);
+      fx.step(dt);
       const { s, seat, canMove } = get();
       if (s !== prev) {
         if (s.shot && s.n !== prev.n) anim = { shot: s.shot, i: 0 }; else shown = { h: s.h, tanks: s.tanks };
