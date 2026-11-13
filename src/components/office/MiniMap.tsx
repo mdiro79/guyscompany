@@ -6,14 +6,14 @@ import { MapPin, Navigation, Smartphone, X } from 'lucide-react';
 import type { Mesh, LinkInfo } from '@/lib/realtime/mesh';
 import type { Office, Profile } from '@/lib/data/types';
 import { memberColor } from '@/lib/board/draw';
-import { OFFICES, H, OUT, SOUTH, CONF_RADIUS, GARDEN, areaAt, officeAt, places, type Area, type Place } from './layout';
+import { OFFICES, H, OUT, SOUTH, CONF_RADIUS, GARDEN, HALL, ZEN, LAB, areaAt, officeAt, places, type Area, type Place } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 
 // The office map: where everyone is, how good each person's link is, and a tap on a room (or on "go to"
 // next to a person) to walk there at once. Useful everywhere, essential on phones.
 
 const FRESH_MS = 5000;
-const ROOM_FILL: Record<string, string> = { cafe: '#e9c79c', library: '#b9cdb0', game: '#4a4c86', garden: '#9fd08a', reception: '#eadfcd', conference: '#f2b6ae' };
+const ROOM_FILL: Record<string, string> = { cafe: '#e9c79c', library: '#b9cdb0', game: '#4a4c86', hall: '#2f3170', garden: '#9fd08a', zen: '#ddd5c2', lab: '#b7dca6', reception: '#eadfcd', conference: '#f2b6ae' };
 
 export function MiniMap({ profiles, offices, meId, myPos, remotes, mesh, onGo, onClose }: {
   profiles: Profile[]; offices: Office[]; meId: string; myPos: [number, number]; remotes: React.RefObject<Map<string, RemoteAvatar>>;
@@ -64,8 +64,11 @@ export function MiniMap({ profiles, offices, meId, myPos, remotes, mesh, onGo, o
             <button type="button" onClick={onClose} aria-label={t('map.close')} className="flex size-11 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 short:hidden"><X className="size-5" /></button>
           </div>
           <p className="mb-2 text-xs text-white/65">{t('map.hint')}</p>
-          <svg viewBox={`${GARDEN.min[0] - 0.6} ${-OUT - 0.6} ${OUT - GARDEN.min[0] + 1.2} ${OUT + SOUTH + 1.2}`} className="w-full touch-manipulation select-none short:max-h-[calc(100dvh-7rem)]" direction="ltr">
+          <svg viewBox={`${GARDEN.min[0] - 0.6} ${HALL.min[1] - 0.6} ${OUT - GARDEN.min[0] + 1.2} ${SOUTH - HALL.min[1] + 1.2}`} className="w-full touch-manipulation select-none short:max-h-[calc(100dvh-7rem)]" direction="ltr">
             {room('garden', GARDEN.min[0], -H, GARDEN.max[0] - GARDEN.min[0], 2 * H, `🌳 ${t('garden')}`)}
+            {room('zen', ZEN.min[0], ZEN.min[1], ZEN.max[0] - ZEN.min[0], ZEN.max[1] - ZEN.min[1], `🪷 ${t('zen')}`)}
+            {room('lab', LAB.min[0], LAB.min[1], LAB.max[0] - LAB.min[0], LAB.max[1] - LAB.min[1], `💡 ${t('lab')}`)}
+            {room('hall', HALL.min[0], HALL.min[1], HALL.max[0] - HALL.min[0], HALL.max[1] - HALL.min[1], `🕹️ ${t('hall')}`, true)}
             {room('cafe', -OUT, -H, OUT - H, 2 * H, `☕ ${t('cafe')}`)}
             {room('library', H, -H, OUT - H, 2 * H, `📚 ${t('library')}`)}
             {room('game', -H, -OUT, 2 * H, OUT - H, `🎮 ${t('game')}`, true)}

@@ -4,12 +4,16 @@ import {
   WALL_HEIGHT, H, OUT, GAME_WALL, ARCADES, JUKEBOX, DANCE_FLOOR, GAME_TV, XO_TABLE, BEAN_BAGS,
   CAFE_BAR, CAFE_TABLES, CAFE_TABLE_RADIUS, CAFE_TABLE_HEIGHT, CAFE_STOOLS, WATER_COOLER,
   LIB_SHELVES, LIB_SHELF, LIB_TABLE, LIB_PODS, GARDEN, FOUNTAIN, GARDEN_TREES, GARDEN_BENCHES, NOTICE_KIOSK,
+  HALL, HALL_ARCH, HALL_CABINETS, HALL_TABLES, HALL_TABLE_HALF, HALL_SCREEN, HALL_TARGETS, NARD_TABLE,
+  ZEN, ZEN_POND, ZEN_BENCH, ZEN_LANTERN, ZEN_DECK, ZEN_BAMBOO, zenSeats, LAB, LAB_TABLE, LAB_BOARDS, LAB_POSTS, labSeats, GATE,
 } from '../layout';
+import { gameDef } from '../play/arcade/registry';
 
 // The furniture and decoration of the rooms around the "+", drawn from boxes, cylinders and spheres in
 // code and merged per room (batch.ts): no downloads, a few draw calls each.
 
 const rng = (seed: number) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const HALL_ACCENT = '#2b2d5c';
 const OAK = '#e2c59a', DARK = '#1c1d2b', TRIM = '#3a3330', ORANGE = '#f08a3c', TEAL = '#3fb3ad', WARM: [number, number, number] = [1.6, 1.35, 0.95];
 const rgb = (c: [number, number, number]) => `rgb(${c.map((v) => Math.round(Math.min(1, v) * 255)).join(',')})`;
 
@@ -45,6 +49,18 @@ export function buildGameRoom(b: Batch) {
   // Neon bars above the arcades.
   [['#ff4fa3', 1.7, 2.62], ['#35e0ff', 1.2, 2.44], ['#ffd23f', 0.8, 2.26]].forEach(([c, len, y]) => b.box([0.03, 0.035, len as number], [-H + 0.14, y as number, -9.35], c as string, 0, 'glow', 1.6));
 
+  // The archway to the arcade hall: a beam above it with a row of bulbs, and posts on both sides.
+  b.box([HALL_ARCH * 2 + 0.3, 0.45, 0.3], [0, WALL_HEIGHT - 0.22, -OUT], HALL_ACCENT);
+  for (const s of [-1, 1]) b.box([0.16, WALL_HEIGHT, 0.32], [s * (HALL_ARCH + 0.02), WALL_HEIGHT / 2, -OUT], HALL_ACCENT);
+  for (let i = 0; i < 9; i++) b.sphere(0.055, [-HALL_ARCH + 0.2 + i * ((HALL_ARCH * 2 - 0.4) / 8), WALL_HEIGHT - 0.48, -OUT + 0.17], i % 2 ? '#ffd23f' : '#ff7ab6', 8, 'glow', 1.6);
+  // The backgammon table: a square wooden box on a pedestal (its board is painted on top).
+  b.cyl(0.26, 0.3, 0.03, [NARD_TABLE[0], 0.015, NARD_TABLE[1]], TRIM, 16).cyl(0.06, 0.06, 0.66, [NARD_TABLE[0], 0.36, NARD_TABLE[1]], TRIM, 10);
+  b.box([0.86, 0.08, 0.68], [NARD_TABLE[0], 0.72, NARD_TABLE[1]], '#8a5a3a').box([0.8, 0.012, 0.62], [NARD_TABLE[0], 0.765, NARD_TABLE[1]], '#f2e2c4');
+  for (let i = 0; i < 12; i++) for (const s of [-1, 1]) {
+    const x = NARD_TABLE[0] - 0.36 + (i + 0.5) * 0.06 + (i >= 6 ? 0.0 : 0), c = i % 2 ? '#3d8f8f' : '#e07a5f';
+    b.slab([0.045, 0.004, 0.24], [x, 0.773, NARD_TABLE[1] + s * 0.18], [0, 0, 0], c);
+  }
+
   // Jukebox: a wooden body with a round top, a record window and a speaker (its light panel is drawn live).
   b.push([JUKEBOX[0], 0, JUKEBOX[1]], -Math.PI / 2);
   b.box([0.8, 1.0, 0.56], [0, 0.5, 0], '#7a4a2e');
@@ -77,9 +93,9 @@ export function buildGameRoom(b: Batch) {
     b.cyl(0.05, 0.035, 0.03, [H - 0.23, 1.585, -9.6 + d], c, 10).cyl(0.012, 0.012, 0.08, [H - 0.23, 1.64, -9.6 + d], c, 6).cyl(0.06, 0.03, 0.1, [H - 0.23, 1.73, -9.6 + d], c, 12);
   });
   // Posters on the north wall.
-  [[2.2, '#ff7a59'], [3.3, '#59c3ff'], [5.6, '#ffd166']].forEach(([x, c]) => {
-    b.box([0.78, 1.05, 0.03], [x as number, 1.7, zN], '#0f1018').box([0.68, 0.95, 0.035], [x as number, 1.7, zN + 0.004], c as string);
-    b.cyl(0.2, 0.2, 0.012, [x as number, 1.8, zN + 0.028], '#ffffff', 16, 'matte', 1, [Math.PI / 2, 0, 0]);
+  [[3.0, '#ff7a59'], [4.1, '#59c3ff'], [6.1, '#ffd166']].forEach(([x, c]) => {
+    b.box([0.78, 1.05, 0.03], [x as number, 1.5, zN], '#0f1018').box([0.68, 0.95, 0.035], [x as number, 1.5, zN + 0.004], c as string);
+    b.cyl(0.2, 0.2, 0.012, [x as number, 1.6, zN + 0.028], '#ffffff', 16, 'matte', 1, [Math.PI / 2, 0, 0]);
   });
 }
 
@@ -173,8 +189,17 @@ export function buildGarden(b: Batch) {
   // The land around the building, the lawn and its hedge.
   b.cyl(70, 70, 0.02, [0, -0.07, 0], '#b9d3a2', 40);
   b.box([w, 0.05, d], [cx, -0.025, 0], '#86bd6f');
-  b.box([0.5, 1.1, d + 1], [x0 - 0.25, 0.55, 0], '#4a8a4d');
-  for (const z of [z0 - 0.25, z1 + 0.25]) b.box([w + 0.5, 1.1, 0.5], [cx - 0.25, 0.55, z], '#4a8a4d');
+  // Hedges: around the whole green strip, and between the garden and its neighbours with a gate in each.
+  const [, zz0] = ZEN.min, [, lz1] = LAB.max;
+  b.box([0.5, 1.1, lz1 - zz0 + 1], [x0 - 0.25, 0.55, (zz0 + lz1) / 2], '#4a8a4d');
+  for (const z of [zz0 - 0.25, lz1 + 0.25]) b.box([w + 0.5, 1.1, 0.5], [cx - 0.25, 0.55, z], '#4a8a4d');
+  for (const z of [z0, z1]) {
+    const east = x1 - (GATE.x + GATE.half), west = GATE.x - GATE.half - x0;
+    b.box([east, 1.1, 0.5], [x1 - east / 2, 0.55, z], '#4a8a4d').box([west, 1.1, 0.5], [x0 + west / 2, 0.55, z], '#4a8a4d');
+    // A wooden arch over each gate.
+    for (const s of [-1, 1]) b.box([0.12, 2.3, 0.12], [GATE.x + s * (GATE.half + 0.06), 1.15, z], '#8a6243');
+    b.box([GATE.half * 2 + 0.4, 0.14, 0.2], [GATE.x, 2.3, z], '#8a6243');
+  }
   // Stone paths: from the door to the fountain, around it, and out to the benches.
   const fx = FOUNTAIN.pos[0];
   b.box([x1 - fx - 1.6, 0.014, 1.3], [(x1 + fx + 1.6) / 2, 0.007, 0], '#dcd2bf');
@@ -201,7 +226,8 @@ export function buildGarden(b: Batch) {
   const petals = ['#ff7aa2', '#ffd23f', '#ffffff', '#ff9a4d', '#c89bff'];
   for (let i = 0; i < 46; i++) {
     const side = i % 3;
-    const fxp = side === 0 ? x0 + 0.35 + r() * 0.5 : x0 + 0.5 + r() * (w - 1.6);
+    let fxp = side === 0 ? x0 + 0.35 + r() * 0.5 : x0 + 0.5 + r() * (w - 1.6);
+    if (side && Math.abs(fxp - GATE.x) < GATE.half + 0.3) fxp += GATE.half * 2 + 0.6; // keep the gates clear
     const fzp = side === 0 ? z0 + 0.6 + r() * (d - 1.2) : side === 1 ? z0 + 0.3 + r() * 0.45 : z1 - 0.3 - r() * 0.45;
     b.sphere(0.13, [fxp, 0.06, fzp], '#5c9a55', 6, 'matte', 1, [1, 0.6, 1]);
     b.sphere(0.055 + r() * 0.03, [fxp + (r() - 0.5) * 0.1, 0.17 + r() * 0.08, fzp + (r() - 0.5) * 0.1], petals[Math.floor(r() * petals.length)], 6);
@@ -224,4 +250,127 @@ export function buildGarden(b: Batch) {
 export function skyColors(y: number): [number, number, number] {
   const t = Math.max(0, Math.min(1, y));
   return [0.86 - 0.42 * t, 0.91 - 0.26 * t, 0.96 - 0.05 * t];
+}
+
+// ——— Arcade hall (behind the game room) ———
+export const CABINET_SCREEN = ARCADE_SCREEN;
+export function buildHall(b: Batch) {
+  const [x0, z0] = HALL.min, [x1, z1] = HALL.max, cz = (z0 + z1) / 2;
+  // Light strips along the walls under the ceiling, in a rainbow.
+  const rainbow = ['#ff5d73', '#ff9f43', '#ffc93c', '#3ccf91', '#4aa8ff', '#9b6bff'];
+  rainbow.forEach((c, i) => {
+    const len = (x1 - x0 - 0.4) / rainbow.length;
+    b.box([len, 0.05, 0.03], [x0 + 0.2 + len * (i + 0.5), WALL_HEIGHT - 0.14, z0 + 0.12], c, 0, 'glow', 1.5);
+  });
+  for (const s of [-1, 1]) b.box([0.03, 0.05, z1 - z0 - 0.4], [s * (H - 0.12), WALL_HEIGHT - 0.14, cz], s < 0 ? '#ff7ab6' : '#4aa8ff', 0, 'glow', 1.5);
+  // A cabinet for every solo game, painted in its own colour.
+  for (const c of HALL_CABINETS) { b.push([c.pos[0], 0, c.pos[1]], c.facing); arcade(b, gameDef(c.game)?.color ?? '#9b6bff'); b.pop(); }
+  // Play tables: air hockey (blue, walled), pong (pink, with a net) and flick soccer (a little pitch).
+  const [hx, hz] = HALL_TABLE_HALF;
+  for (const t of HALL_TABLES) {
+    const [x, z] = t.pos, color = gameDef(t.game)?.color ?? '#4aa8ff';
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box([0.08, 0.78, 0.08], [x + sx * (hx - 0.1), 0.39, z + sz * (hz - 0.1)], TRIM);
+    b.box([hx * 2, 0.12, hz * 2], [x, 0.84, z], color);
+    const top = t.game === 'soccer' ? '#7fd08a' : '#f6f2ea';
+    b.box([hx * 2 - 0.12, 0.012, hz * 2 - 0.12], [x, 0.906, z], top);
+    for (const s of [-1, 1]) b.box([0.05, 0.07, hz * 2], [x + s * (hx - 0.025), 0.935, z], color).box([hx * 2, 0.07, 0.05], [x, 0.935, z + s * (hz - 0.025)], color);
+    b.box([hx * 2 - 0.2, 0.004, 0.02], [x, 0.914, z], t.game === 'soccer' ? '#ffffff' : '#d9cfbd');
+    if (t.game === 'hockey') for (const s of [-1, 1]) { b.cyl(0.07, 0.07, 0.05, [x, 0.94, z + s * 0.62], s < 0 ? '#ff9f43' : '#22c1b4', 14); b.cyl(0.035, 0.035, 0.07, [x, 0.98, z + s * 0.62], DARK, 10); }
+    if (t.game === 'hockey') b.cyl(0.04, 0.04, 0.012, [x + 0.12, 0.918, z - 0.1], DARK, 12);
+    if (t.game === 'pong') { b.box([hx * 2 - 0.1, 0.1, 0.012], [x, 0.96, z], '#ffffff'); for (const s of [-1, 1]) b.box([0.22, 0.03, 0.05], [x + 0.1 * s, 0.93, z + s * 0.85], s < 0 ? '#ff9f43' : '#22c1b4'); b.sphere(0.025, [x - 0.12, 0.94, z + 0.3], '#ffc93c', 8); }
+    if (t.game === 'soccer') {
+      b.cyl(0.14, 0.14, 0.004, [x, 0.914, z], '#ffffff', 20);
+      for (const s of [-1, 1]) { b.box([0.36, 0.06, 0.03], [x, 0.94, z + s * (hz - 0.06)], '#ffffff'); for (const d of [-0.25, 0, 0.25]) b.cyl(0.05, 0.05, 0.03, [x + d, 0.925, z + s * 0.5], s < 0 ? '#ff9f43' : '#22c1b4', 12); }
+      b.sphere(0.028, [x, 0.94, z], '#ffffff', 8);
+    }
+  }
+  // The league's big screen on the back wall (painted live) with a frame and a marquee of bulbs.
+  const sc = HALL_SCREEN;
+  b.box([sc.width + 0.2, sc.height + 0.2, 0.08], [sc.x, sc.bottom + sc.height / 2, sc.z - 0.04], '#14151c');
+  for (let i = 0; i < 14; i++) b.sphere(0.05, [sc.x - sc.width / 2 + (i + 0.5) * (sc.width / 14), sc.bottom + sc.height + 0.22, sc.z + 0.02], i % 2 ? '#ffd23f' : '#ffffff', 8, 'glow', 1.6);
+  // Darts board and archery target on the back wall, with an oche line and a mat in front.
+  for (const t of HALL_TARGETS) {
+    const [x, z] = t.pos, y = 1.62;
+    b.box([1.0, 1.0, 0.04], [x, y, z - 0.12], '#2b2440');
+    if (t.game === 'darts') {
+      b.cyl(0.4, 0.4, 0.05, [x, y, z - 0.08], '#2b2440', 28, 'matte', 1, [Math.PI / 2, 0, 0]);
+      [[0.36, '#3ccf91'], [0.33, '#fff6e6'], [0.22, '#ff6b5e'], [0.19, '#fff6e6'], [0.05, '#3ccf91'], [0.02, '#ff6b5e']].forEach(([r, c], i) => b.cyl(r as number, r as number, 0.01, [x, y, z - 0.05 + i * 0.003], c as string, 28, 'matte', 1, [Math.PI / 2, 0, 0]));
+      for (let k = 0; k < 10; k++) b.slab([0.012, 0.66, 0.004], [x, y, z - 0.03], [0, 0, (k / 10) * Math.PI], '#2b2440');
+    } else {
+      [[0.42, '#ffffff'], [0.33, '#2b2440'], [0.25, '#4aa8ff'], [0.16, '#ff6b5e'], [0.07, '#ffc93c']].forEach(([r, c], i) => b.cyl(r as number, r as number, 0.01, [x, y, z - 0.07 + i * 0.004], c as string, 28, 'matte', 1, [Math.PI / 2, 0, 0]));
+      b.slab([0.02, 0.02, 0.5], [x + 0.08, y + 0.05, z + 0.12], [0.3, 0.2, 0], '#8a6243');
+    }
+    b.box([1.2, 0.006, 0.08], [x, 0.006, z + 2.0], '#ffc93c').box([1.6, 0.006, 1.6], [x, 0.004, z + 1.2], t.game === 'darts' ? '#3b2f5a' : '#2f4a3b');
+  }
+  // Sofa cushions under the big screen for the audience.
+}
+
+// ——— Zen deck (north of the garden) ———
+export function buildZen(b: Batch) {
+  const [x0, z0] = ZEN.min, [x1, z1] = ZEN.max, w = x1 - x0, d = z1 - z0;
+  b.box([w, 0.05, d], [(x0 + x1) / 2, -0.025, (z0 + z1) / 2], '#e3dccb'); // raked gravel
+  for (let i = 1; i < 12; i++) b.box([w - 0.4, 0.004, 0.025], [(x0 + x1) / 2, 0.002, z0 + i * (d / 12)], '#cfc6b2');
+  // Deck around the lantern
+  const [dx, dz] = ZEN_DECK.pos, [hx, hz] = ZEN_DECK.half;
+  b.box([hx * 2, 0.12, hz * 2], [dx, 0.06, dz], '#b98a5c');
+  for (let i = 0; i < Math.floor(hz * 2 / 0.3); i++) b.box([hx * 2, 0.004, 0.012], [dx, 0.122, dz - hz + 0.3 * (i + 1)], '#8a6243');
+  // Stone lantern with a warm light inside
+  const [lx, lz] = ZEN_LANTERN;
+  b.cyl(0.26, 0.3, 0.12, [lx, 0.18, lz], '#b8b2a6', 6).cyl(0.08, 0.1, 0.5, [lx, 0.49, lz], '#b8b2a6', 8).box([0.36, 0.08, 0.36], [lx, 0.78, lz], '#b8b2a6');
+  b.box([0.28, 0.24, 0.28], [lx, 0.94, lz], '#ffd9a0', 0, 'glow', 1.7).box([0.5, 0.06, 0.5], [lx, 1.09, lz], '#9f998e').cyl(0.02, 0.18, 0.18, [lx, 1.21, lz], '#9f998e', 4);
+  // Cushions around it
+  for (const s of zenSeats()) b.cyl(0.3, 0.3, 0.12, [s.pos[0], 0.18, s.pos[1]], '#9b6bff', 14).cyl(0.22, 0.22, 0.02, [s.pos[0], 0.25, s.pos[1]], '#b593ff', 14);
+  // Pond with a stone rim, lily pads and a little bridge of stepping stones
+  const [px, pz] = ZEN_POND.pos;
+  b.cyl(ZEN_POND.r + 0.15, ZEN_POND.r + 0.2, 0.14, [px, 0.05, pz], '#a9a39a', 28).cyl(ZEN_POND.r, ZEN_POND.r, 0.02, [px, 0.115, pz], '#5fb7c9', 28);
+  [[0.5, 0.3], [-0.6, -0.2], [0.1, -0.7]].forEach(([ox, oz]) => b.cyl(0.18, 0.18, 0.012, [px + ox, 0.13, pz + oz], '#5fa35c', 12).sphere(0.05, [px + ox + 0.05, 0.15, pz + oz], '#ff9de2', 8));
+  // Stepping stones from the gate to the deck
+  for (let i = 0; i < 6; i++) { const k = i / 5; b.cyl(0.24, 0.26, 0.05, [GATE.x + (ZEN_DECK.pos[0] - ZEN_DECK.half[0] - 0.3 - GATE.x) * k, 0.03, z1 - 0.6 - k * 2.6], '#cfc6b6', 10); }
+  // Bamboo clumps
+  ZEN_BAMBOO.forEach((p, i) => {
+    for (let k = 0; k < 4; k++) {
+      const h = 2.4 + ((i * 7 + k * 3) % 5) * 0.25, ox = (k % 2 ? 0.12 : -0.1) + k * 0.03, oz = k > 1 ? 0.12 : -0.1;
+      b.cyl(0.035, 0.04, h, [p[0] + ox, h / 2, p[1] + oz], '#6fae5a', 6);
+      for (let n = 1; n < 4; n++) b.cyl(0.045, 0.045, 0.03, [p[0] + ox, (h / 4) * n, p[1] + oz], '#4f8a45', 6);
+      b.sphere(0.32, [p[0] + ox, h + 0.1, p[1] + oz], '#7fbf6a', 7, 'matte', 1, [1, 0.5, 1]);
+    }
+  });
+  // A low wooden bench by the pond
+  b.box([1.4, 0.08, 0.4], [ZEN_BENCH[0], 0.42, ZEN_BENCH[1]], '#b98a5c');
+  for (const s of [-1, 1]) b.box([0.08, 0.4, 0.36], [ZEN_BENCH[0] + s * 0.6, 0.2, ZEN_BENCH[1]], '#8a6243');
+}
+
+// ——— Idea lab (south of the garden) ———
+export function buildLab(b: Batch) {
+  const [x0, z0] = LAB.min, [x1, z1] = LAB.max;
+  b.box([x1 - x0, 0.05, z1 - z0], [(x0 + x1) / 2, -0.025, (z0 + z1) / 2], '#86bd6f');
+  // A wooden deck under the table
+  const [tx, tz] = LAB_TABLE.pos;
+  b.box([4.2, 0.1, 5.0], [tx, 0.05, tz], '#c9a179');
+  for (let i = 1; i < 14; i++) b.box([4.2, 0.004, 0.012], [tx, 0.102, tz - 2.5 + i * (5 / 14)], '#a77f58');
+  // The standing table and its stools
+  const [hx, hz] = LAB_TABLE.half, ty = LAB_TABLE.height;
+  b.box([hx * 2, 0.06, hz * 2], [tx, ty - 0.03, tz], '#f3ead9');
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box([0.06, ty - 0.06, 0.06], [tx + sx * (hx - 0.08), (ty - 0.06) / 2 + 0.1, tz + sz * (hz - 0.1)], TRIM);
+  [['#ffc93c', -0.6], ['#ff7eb6', -0.2], ['#4aa8ff', 0.3], ['#3ccf91', 0.7]].forEach(([c, d]) => b.box([0.12, 0.006, 0.12], [tx + ((d as number) * 0.4), ty + 0.004, tz + (d as number)], c as string, (d as number) * 2));
+  b.cyl(0.05, 0.04, 0.1, [tx + 0.25, ty + 0.05, tz - 0.8], '#ffffff', 10);
+  for (const s of labSeats()) { b.cyl(0.2, 0.2, 0.06, [s.pos[0], 0.72, s.pos[1]], ORANGE, 14).cyl(0.03, 0.03, 0.62, [s.pos[0], 0.4, s.pos[1]], '#8a8f98', 8).cyl(0.2, 0.22, 0.03, [s.pos[0], 0.11, s.pos[1]], TRIM, 14); }
+  // Whiteboards on the building's wall with sticky notes, and a marker tray
+  LAB_BOARDS.forEach((p, i) => {
+    const x = p[0] + 0.38, z = p[1];
+    b.box([0.06, 1.25, 1.9], [x, 1.45, z], '#d9dde2').box([0.02, 1.15, 1.8], [x - 0.04, 1.45, z], '#ffffff');
+    b.box([0.1, 0.04, 1.2], [x - 0.07, 0.85, z], '#8a8f98');
+    const notes = ['#ffc93c', '#ff7eb6', '#4aa8ff', '#3ccf91', '#ffc93c', '#9b6bff'];
+    notes.forEach((c, k) => b.box([0.01, 0.16, 0.16], [x - 0.055, 1.75 - Math.floor(k / 3) * 0.24 - (i ? 0.1 : 0), z - 0.55 + (k % 3) * 0.32 + (i ? 0.2 : 0)], c, 0.05 * (k - 2)));
+    for (let k = 0; k < 4; k++) b.box([0.01, 0.012, 0.5 + (k % 2) * 0.3], [x - 0.055, 1.25 - k * 0.07, z + 0.2], '#4f6a8a');
+  });
+  // Posts with string lights over the deck
+  LAB_POSTS.forEach((p) => b.cyl(0.05, 0.06, 2.6, [p[0], 1.3, p[1]], '#8a6243', 8));
+  const ring = [LAB_POSTS[0], LAB_POSTS[2], LAB_POSTS[3], LAB_POSTS[1], LAB_POSTS[0]];
+  for (let s = 0; s < 4; s++) {
+    const a = ring[s], c = ring[s + 1], n = Math.round(Math.hypot(c[0] - a[0], c[1] - a[1]) / 0.6);
+    for (let i = 1; i < n; i++) { const t = i / n; b.sphere(0.045, [a[0] + (c[0] - a[0]) * t, 2.5 - Math.sin(t * Math.PI) * 0.3, a[1] + (c[1] - a[1]) * t], i % 3 === 0 ? '#9fe8ff' : i % 3 === 1 ? '#ffd9a0' : '#ffb3c7', 6, 'glow', 1.5); }
+  }
+  // Planters with herbs along the hedge
+  for (let i = 0; i < 4; i++) { const x = x0 + 1.2 + i * 2.1; b.box([1.2, 0.4, 0.45], [x, 0.2, z1 - 0.6], '#c98a5a'); for (let k = 0; k < 4; k++) b.sphere(0.18, [x - 0.45 + k * 0.3, 0.48, z1 - 0.6], k % 2 ? '#5fa35c' : '#78b867', 7); }
 }

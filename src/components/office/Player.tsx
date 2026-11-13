@@ -11,6 +11,8 @@ import { tour, guide, me, pointAt, startTourFor, GUIDE_SPEED, PLAYER_DELAY } fro
 import type { RemoteAvatar } from './useOfficeNet';
 import { syncedNow } from '@/lib/realtime/room';
 import { tabletHit } from './tablet';
+import { arcadeView } from './play/arcade/view';
+import { isGameId } from '@/lib/arcade';
 
 export interface Pose { x: number; z: number; yaw: number; pitch: number; moving: number; seatId: string | null; t: number }
 
@@ -227,7 +229,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         if (d >= 1.7 || !ahead(st.pos, d)) continue;
         // Looking straight at it wins over a chair that happens to be nearer.
         const facing = ((st.pos[0] - pos.current[0]) * fx + (st.pos[1] - pos.current[1]) * fz) / (d || 1);
-        cand.push({ i: { kind: 'station', id: st.id, station: st.kind }, d: facing > 0.75 ? d * 0.45 : d });
+        cand.push({ i: { kind: 'station', id: st.id, station: st.kind, ...(st.game ? { game: st.game } : {}) }, d: facing > 0.75 ? d * 0.45 : d });
       }
       const gd = Math.hypot(guide.pos[0] - pos.current[0], guide.pos[1] - pos.current[1]);
       if (guide.seated && gd < 2.4 && ahead(guide.pos, gd)) cand.push({ i: { kind: 'guide' }, d: gd });
@@ -259,7 +261,13 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         document.exitPointerLock?.();
         officeUi.set({ roomPanel: true });
       } else if (interact?.kind === 'station') {
-        if (interact.station !== 'coffee') { document.exitPointerLock?.(); officeUi.set({ overlay: interact.station, emoteWheel: false }); }
+        if (interact.station === 'board') { document.exitPointerLock?.(); officeUi.set({ board: 'mine', emoteWheel: false }); }
+        else if (interact.station !== 'coffee') {
+          document.exitPointerLock?.();
+          // A cabinet or a play table opens its own game; the old cabinets open the list of games.
+          if (interact.station === 'arcade') arcadeView.set({ game: isGameId(interact.game) ? interact.game : null });
+          officeUi.set({ overlay: interact.station, emoteWheel: false });
+        }
         officeUi.set({ used: { station: interact.station, at: Date.now() } });
       } else if (interact?.kind === 'guide') {
         startTourFor(offRef.current.offices, offRef.current.viewerId);

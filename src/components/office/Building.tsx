@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
 import { DOORS, doorAngles, isDoorOpen } from './doors';
-import { buildWalls, OFFICES, WALL_HEIGHT, H, OUT, SOUTH, PORCH, CONF_RADIUS, GAME, CAFE, LIBRARY, guideLines, type DoorDef, type Segment } from './layout';
+import { buildWalls, OFFICES, WALL_HEIGHT, H, OUT, SOUTH, PORCH, CONF_RADIUS, GAME, CAFE, LIBRARY, HALL, guideLines, type DoorDef, type Segment } from './layout';
 import { wallWash } from './textures';
 import { confGlass } from './conferenceGlass';
 import { Batch, batchMaterials } from './batch';
@@ -41,7 +41,7 @@ function floorTexture() {
 
 const footprint = () => {
   const s = new THREE.Shape();
-  const pts: [number, number][] = [[-OUT, -OUT], [OUT, -OUT], [OUT, OUT], [H, OUT], [H, SOUTH], [0.9, SOUTH], [0.9, SOUTH + PORCH], [-0.9, SOUTH + PORCH], [-0.9, SOUTH], [-H, SOUTH], [-H, OUT], [-OUT, OUT]];
+  const pts: [number, number][] = [[-OUT, -OUT], [-H, -OUT], [-H, HALL.min[1]], [H, HALL.min[1]], [H, -OUT], [OUT, -OUT], [OUT, OUT], [H, OUT], [H, SOUTH], [0.9, SOUTH], [0.9, SOUTH + PORCH], [-0.9, SOUTH + PORCH], [-0.9, SOUTH], [-H, SOUTH], [-H, OUT], [-OUT, OUT]];
   pts.forEach(([x, z], i) => (i ? s.lineTo(x, -z) : s.moveTo(x, -z)));
   s.closePath();
   return s;
@@ -124,7 +124,7 @@ function buildShell() {
   // Floor finishes of the rooms around the "+": dark carpet in the game room, warm wood in the café, sage carpet in the library.
   const finish = (r: { min: [number, number]; max: [number, number] }, color: string) =>
     rest.box([r.max[0] - r.min[0] - 0.16, 0.006, r.max[1] - r.min[1] - 0.16], [(r.min[0] + r.max[0]) / 2, 0.003, (r.min[1] + r.max[1]) / 2], color);
-  finish(GAME, '#2c2e52'); finish(CAFE, '#c9a179'); finish(LIBRARY, '#a9bba2');
+  finish(GAME, '#2c2e52'); finish(HALL, '#26284a'); finish(CAFE, '#c9a179'); finish(LIBRARY, '#a9bba2');
   // Porch floor outside the entrance.
   rest.box([1.8, 0.008, PORCH], [0, 0.004, SOUTH + PORCH / 2], '#9c8f7d');
   const built = (m: Map<string, Batch>) => Object.fromEntries([...m].map(([k, b]) => [k, b.build().matte!]));

@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Mesh } from '@/lib/realtime/mesh';
 import { syncedNow } from '@/lib/realtime/room';
-import { JUKEBOX, GAME, type Vec2 } from '../layout';
+import { JUKEBOX, GAME, HALL, type Vec2 } from '../layout';
 import { music, STYLES } from './music';
 
 // The jukebox in the game room: which style plays is the same for everyone (newest choice wins, sent
@@ -22,7 +22,7 @@ const emit = () => listeners.forEach((l) => l());
 try { muted = typeof localStorage !== 'undefined' && localStorage.getItem(MUTE_KEY) === '1'; } catch { /* storage blocked */ }
 
 function volumeAt(p: Vec2) {
-  const inRoom = p[0] > GAME.min[0] && p[0] < GAME.max[0] && p[1] > GAME.min[1] && p[1] < GAME.max[1];
+  const inRoom = p[0] > GAME.min[0] && p[0] < GAME.max[0] && p[1] > HALL.min[1] && p[1] < GAME.max[1]; // the game room and the arcade hall behind it
   if (inRoom) return 0.5;
   const d = Math.hypot(p[0] - JUKEBOX[0], p[1] - JUKEBOX[1]);
   return 0.3 * Math.max(0, Math.min(1, 1 - (d - 6) / 12));

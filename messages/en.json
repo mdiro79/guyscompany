@@ -881,12 +881,15 @@
     "use": {
       "arcade": "Press E to play",
       "jukebox": "Press E to pick the music",
-      "coffee": "Press E for a coffee"
+      "coffee": "Press E for a coffee",
+      "arcadeGame": "Press E to play {game}",
+      "board": "Press E to write on the board"
     },
     "useShort": {
       "arcade": "Play",
       "jukebox": "Music",
-      "coffee": "Coffee"
+      "coffee": "Coffee",
+      "board": "Board"
     },
     "map": {
       "title": "Office map",
@@ -1244,7 +1247,10 @@
         "round": "Round {n} of {all}",
         "miss": "Miss"
       }
-    }
+    },
+    "hall": "Arcade hall",
+    "zen": "Zen deck",
+    "lab": "Idea lab"
   },
   "emotes": {
     "smile": "Smile",

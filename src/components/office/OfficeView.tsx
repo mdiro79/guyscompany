@@ -24,14 +24,13 @@ import { officeAt, inConference, allSeats, onDanceFloor, SPAWN, CONF_SCREEN } fr
 import { MiniMap } from './MiniMap';
 import type { Notice } from './rooms/Rooms';
 import { QuickVotePanel } from './QuickVotePanel';
-import { ArcadeGame } from './play/ArcadeGame';
 import { JukeboxPanel } from './play/JukeboxPanel';
 import { XoPanel } from './play/XoPanel';
 import { FocusTimer, useFocusTimer, clock } from './play/FocusTimer';
 import { connectJukebox, jukebox } from './play/jukebox';
 import { connectXo } from './play/xo';
-import { connectScores } from './play/scores';
 import { music } from './play/music';
+import { GAME_IDS, isGameId } from '@/lib/arcade';
 import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, type TabletButton } from './tablet';
@@ -54,6 +53,8 @@ import { LocaleSwitch } from '@/components/ui/LocaleSwitch';
 
 // The drawing board is a separate chunk, loaded the first time it is opened.
 const BoardApp = dynamic(() => import('@/components/board/BoardApp').then((m) => m.BoardApp), { ssr: false });
+// The arcade (twenty games) is its own chunk too, loaded the first time a cabinet or table is used.
+const Arcade = dynamic(() => import('./play/arcade/Arcade').then((m) => m.Arcade), { ssr: false });
 
 // Shown while the 3D code downloads; the scene then reports real model progress from where this leaves off.
 function SceneLoading() {
@@ -122,7 +123,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   const roomLabels = useMemo(() => ({
     cafe: t('cafe'), library: t('library'), game: t('game'), garden: t('garden'), quiet: t('quiet'),
     noticeTitle: t('notice.title'), noticeEmpty: t('notice.empty'), noticeStandups: t('notice.standups', { done: notice.standups, all: notice.members }), notice,
-    arcadeTitle: t('arcade.title'), arcadePress: isPhone ? t('arcade.tap') : t('arcade.press'), scores: t('arcade.scores'), noScores: t('arcade.noScores'), xoTitle: t('xo.title'), rtl: locale === 'fa',
+    arcadeTitle: t('hub.title'), arcadePress: isPhone ? t('arcade.tap') : t('arcade.press'), scores: t('hub.leagueTitle'), noScores: t('arcade.noScores'), xoTitle: t('xo.title'), rtl: locale === 'fa',
+    hall: t('hall'), zen: t('zen'), lab: t('lab'), points: t('hub.leaguePoints'), games: Object.fromEntries(GAME_IDS.map((g) => [g, t(`games.${g}.name`)])),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [locale, t, isPhone, JSON.stringify(notice)]);
   const tabletLabels = useMemo(() => ({
@@ -186,10 +188,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   const [preloadMonitor, setPreloadMonitor] = useState(false);
   useEffect(() => { const id = setTimeout(() => setPreloadMonitor(true), MONITOR_PRELOAD_MS); return () => clearTimeout(id); }, []);
   useEffect(() => connectDoors(mesh), [mesh]);
-  // Game room: the jukebox's style, the game table and the arcade's best scores are shared live.
+  // Game room: the jukebox's style and the game table are shared live (the arcade's tables and records are
+  // connected on every page, see AppShell).
   useEffect(() => connectJukebox(mesh), [mesh]);
   useEffect(() => connectXo(mesh), [mesh]);
-  useEffect(() => connectScores(mesh, user.id), [mesh, user.id]);
   // The music follows where I stand (louder in the game room, silent far away).
   useEffect(() => { jukebox.listen(myPos); }, [myPos]);
   useEffect(() => () => jukebox.listen(null), []);
@@ -474,14 +476,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       : it.kind === 'seat' ? t('pressE')
         : it.kind === 'guide' ? t('pressTalk')
           : it.kind === 'panel' ? t('pressPanel')
-          : it.kind === 'station' ? t(`use.${it.station}`)
+          : it.kind === 'station' ? (it.game && isGameId(it.game) ? t('use.arcadeGame', { game: t(`games.${it.game}.name`) }) : t(`use.${it.station}`))
           : !it.allowed ? t('noAccess') : it.open ? t('pressClose') : t('pressOpen');
   const action = ui.seatId ? { icon: Hand, label: t('stand') }
     : !it ? null
       : it.kind === 'seat' ? { icon: Armchair, label: t('sit') }
         : it.kind === 'guide' ? { icon: MessageSquare, label: t('talk') }
           : it.kind === 'panel' ? { icon: SlidersHorizontal, label: t('roomControls') }
-          : it.kind === 'station' ? { icon: it.station === 'arcade' ? Gamepad2 : it.station === 'jukebox' ? Music : Coffee, label: t(`useShort.${it.station}`) }
+          : it.kind === 'station' ? { icon: it.station === 'arcade' ? Gamepad2 : it.station === 'jukebox' ? Music : it.station === 'board' ? PenLine : Coffee, label: t(`useShort.${it.station}`) }
           : !it.allowed ? { icon: Lock, label: t('noAccess'), disabled: true }
             : { icon: it.open ? DoorClosed : DoorOpen, label: it.open ? t('closeDoor') : t('openDoor') };
 
@@ -713,7 +715,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} split={split} onSplit={setSplit} onClose={() => officeUi.set({ board: 'none' })} />}
 
       {/* Game room, library pod and the map */}
-      {ui.overlay === 'arcade' && <ArcadeGame people={profiles.map((p) => ({ id: p.id, name: p.displayName }))} meId={user.id} onClose={closeOverlay} />}
+      {ui.overlay === 'arcade' && <Arcade onClose={closeOverlay} />}
       {ui.overlay === 'jukebox' && !ui.seatId && (
         <div className="gc-hud absolute top-[4.25rem] end-safe z-30 short:top-14"><JukeboxPanel onClose={closeOverlay} /></div>
       )}

@@ -114,3 +114,43 @@ describe('door rules', async () => {
     expect(doorAllowed(doors().find((d) => d.id === 'conf')!, locked, 'guest', [])).toBe(true);
   });
 });
+
+describe('second expansion: arcade hall, zen deck and idea lab', async () => {
+  const { stations, GATE, LAB, HALL, places } = await import('./layout');
+  const segs = [...walls, ...leaves(['game', 'conf'])];
+  // Walks a straight line in small steps and reports whether anything pushed the walker aside.
+  const clear = (a: Vec2, b: Vec2) => {
+    for (let k = 0; k <= 1; k += 0.01) {
+      const p: Vec2 = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+      if (moved(p, PLAYER_RADIUS, segs) > 0.01) return `blocked at ${p}`;
+    }
+    return 'clear';
+  };
+  it('the archway leads from the game room into the hall, and the gates from the garden out', () => {
+    expect(clear([0, -12.6 - 0.5], [0, -18.8])).toBe('clear'); // up to the soccer table in the middle of the hall
+    expect(clear([-1.6, -18.8], [-1.6, HALL.min[1] + 0.9])).toBe('clear'); // and past it to the big screen
+    expect(areaAt(0, -18)).toBe('hall');
+    expect(clear([GATE.x, -3], [GATE.x, -8])).toBe('clear');
+    expect(clear([GATE.x, -8], [-19.1, -9.0])).toBe('clear'); // along the stepping stones to the deck
+    expect(clear([GATE.x, 3], [GATE.x, 9.8])).toBe('clear');
+    expect(clear([GATE.x, 9.8], [LAB.max[0] - 1.2, 9.8])).toBe('clear'); // to the whiteboards
+    expect(areaAt(GATE.x, -10)).toBe('zen');
+    expect(areaAt(GATE.x, 10)).toBe('lab');
+    // Walls still hold: no way out of the hall through its side walls, nor past the hedge beside a gate.
+    expect(moved([-H - 0.05, -18], PLAYER_RADIUS, segs)).toBeGreaterThan(0.1);
+    expect(moved([GATE.x + GATE.half + 0.4, -H], PLAYER_RADIUS, segs)).toBeGreaterThan(0.1);
+  });
+  it('every station has a free spot within reach in front of it', () => {
+    for (const st of stations()) {
+      const ok = [0.8, 1.0, 1.2, 1.4].some((d) => [0, 0.5, -0.5, 1, -1].some((turn) => {
+        const a = st.facing + turn;
+        const p: Vec2 = [st.pos[0] + Math.sin(a) * d, st.pos[1] + Math.cos(a) * d];
+        return moved(p, PLAYER_RADIUS, segs) < 0.01;
+      }));
+      expect(ok, st.id).toBe(true);
+    }
+  });
+  it('the map lands on free ground in every place', () => {
+    for (const p of places()) expect(moved(p.pos, PLAYER_RADIUS, segs), p.id).toBeLessThan(0.01);
+  });
+});
