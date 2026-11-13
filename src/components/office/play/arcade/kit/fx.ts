@@ -170,3 +170,16 @@ export function halo(g: G, x: number, y: number, r: number, color: string, alpha
 }
 /** 0→1 with a little overshoot: things that appear "pop" into place. */
 export const spring = (t: number) => { const k = clamp(t, 0, 1); return 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2; };
+
+/**
+ * Effects for a game drawn on the 3D table: the game gives table coordinates and they are placed where
+ * that point is on the screen (set `proj` to the stage's `to2d` every frame).
+ */
+export class TableFx extends Fx {
+  proj: (x: number, y: number, z?: number) => [number, number] = (x, y) => [x, y];
+  z = 6;
+  burst(x: number, y: number, color: string, n?: number, speed?: number, size?: number, life?: number, gravity?: number) { const [a, b] = this.proj(x, y, this.z); super.burst(a, b, color, n, speed, size, life, gravity); }
+  confetti(x: number, y: number, colors: string[], n?: number, speed?: number) { const [a, b] = this.proj(x, y, this.z); super.confetti(a, b, colors, n, speed); }
+  pop(x: number, y: number, color: string, r?: number) { const [a, b] = this.proj(x, y, this.z); super.pop(a, b, color, r); }
+  text(x: number, y: number, text: string, color?: string, size?: number) { const [a, b] = this.proj(x, y, this.z); super.text(a, b, text, color, size); }
+}

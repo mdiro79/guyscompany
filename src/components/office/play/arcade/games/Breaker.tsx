@@ -1,8 +1,7 @@
 'use client';
-import { CanvasStage } from '../kit/Stage';
-import type { Game2D, GameApi } from '../kit/types';
-import { Fx, ball, hsl, label, scene, tile } from '../kit/fx';
-import { theme } from '../kit/theme';
+import { WorldStage, type Game3 } from '../kit/World';
+import type { GameApi } from '../kit/types';
+import { TableFx, hsl, label, write } from '../kit/fx';
 import { clamp, rng } from '../kit/rng';
 import { buzz, sfx } from '../kit/sfx';
 
@@ -20,11 +19,11 @@ const DROP_COLOR: Record<Drop['kind'], string> = { W: '#4aa8ff', M: '#ffc93c', S
 const DROP_ICON: Record<Drop['kind'], string> = { W: '↔', M: '⁂', S: '◷', L: '♥' };
 
 export default function Breaker({ api }: { api: GameApi }) {
-  return <CanvasStage api={api} size={[W, H]} init={() => create(api)} />;
+  return <WorldStage api={api} size={[W, H]} init={(w) => { w.tilt = 0.22; return create(api); }} />;
 }
 
-function create(api: GameApi): Game2D {
-  const r = rng(api.seed), fx = new Fx();
+function create(api: GameApi): Game3 {
+  const r = rng(api.seed), fx = new TableFx();
   let bricks: Brick[] = [], balls: Ball[] = [], drops: Drop[] = [];
   let px = W / 2, level = 0, lives = 3, score = 0, combo = 0, wide = 0, slow = 0, over = 0, ended = false, banner = 0;
   const keys = { left: false, right: false };
@@ -147,30 +146,39 @@ function create(api: GameApi): Game2D {
       }
       if (!bricks.length) {
         score += 100 * level; api.score(score);
-        fx.confetti(W / 2, H / 2, ['#ffc93c', '#3ccf91', '#4aa8ff', '#ff7eb6'], 40, 320); sfx.great();
+        fx.confetti(W / 2, H / 2, ['#ffc93c', '#3ccf91', '#4aa8ff', '#ff7eb6'], 50, 360); sfx.great();
         build();
       }
     },
-    draw(g, t) {
-      const p = theme.get();
-      fx.begin(g);
-      scene(g, W, H, t, p);
+    render(w, t) {
+      const p = w.pal;
+      fx.proj = w.to2d;
+      w.box(W / 2, H / 2, W, H, 4, p.paper, { z: -4 });
+      const rim = p.dark ? '#4a3f78' : '#f0e2c8';
+      for (const x of [-5, W + 5]) w.box(x, H / 2, 10, H + 20, 14, rim);
+      w.box(W / 2, -5, W + 20, 10, 14, rim);
+      // A dashed line where the paddle lives
+      for (let i = 0; i < 12; i++) w.box(15 + i * 30, PY + 24, 14, 1.5, 0.3, p.line.startsWith('rgba') ? (p.dark ? '#5a4f85' : '#e2d6c2') : p.line);
       for (const b of bricks) {
-        const [x, y] = brickRect(b);
-        const color = b.kind === 3 ? p.orange : hsl(b.hue, 78, b.kind === 2 && b.hp === 2 ? 48 : 64);
-        tile(g, p, x, y, BW, BH, 5, color, 2, 2);
-        if (b.kind === 2 && b.hp === 2) { g.strokeStyle = p.ink; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + 8, y + BH - 5); g.lineTo(x + BW - 8, y + BH - 5); g.stroke(); }
-        if (b.kind === 3) label(g, p, '💣', x + BW / 2, y + BH / 2 + 1, 11, p.white);
+        const [x, y] = brickRect(b), strong = b.kind === 2 && b.hp === 2;
+        const color = b.kind === 3 ? p.orange : hsl(b.hue, 78, strong ? 48 : 64);
+        w.box(x + BW / 2, y + BH / 2, BW - 1.5, BH - 1.5, strong ? 16 : 11, color);
+        if (b.kind === 3) w.ball(x + BW / 2, y + BH / 2, 5, p.dark ? '#0e0a1c' : '#2b2440', 11);
       }
-      for (const d of drops) { ball(g, p, d.x, d.y, 10, DROP_COLOR[d.kind], 2, 2); label(g, p, DROP_ICON[d.kind], d.x, d.y + 1, 11, p.white); }
-      // Paddle
-      const w = pw();
-      tile(g, p, px - w / 2, PY, w, 11, 6, wide > 0 ? p.sky : p.coral, 2, 3);
-      for (const b of balls) ball(g, p, b.x, b.y, R + 1, slow > 0 ? p.mint : p.sun, 2, 2);
-      if (balls.some((b) => b.stuck) && !over && Math.floor(t * 2) % 2 === 0) label(g, p, api.t('launch'), W / 2, PY - 60, 14, p.white, W - 30);
-      if (banner > 0) { g.globalAlpha = Math.min(1, banner); label(g, p, api.t('level', { n: level }), W / 2, H / 2 + 40, 30, p.sun); g.globalAlpha = 1; }
+      for (const d of drops) w.ball(d.x, d.y, 9, DROP_COLOR[d.kind], 5 + Math.sin(t * 6 + d.x) * 2);
+      const pw2 = pw();
+      w.box(px, PY + 5, pw2, 11, 10, wide > 0 ? p.sky : p.coral);
+      w.box(px, PY + 3, pw2 - 8, 3, 2, '#ffffff', { z: 10 });
+      for (const b of balls) w.ball(b.x, b.y, R + 1, slow > 0 ? p.mint : p.sun, 1);
+    },
+    hud(g, w, t) {
+      const p = w.pal;
+      fx.begin(g);
+      for (const d of drops) { const [x, y] = w.to2d(d.x, d.y, 26); write(g, p, DROP_ICON[d.kind], x, y, 14, 800, p.text); }
+      if (balls.some((b) => b.stuck) && !over && Math.floor(t * 2) % 2 === 0) { const [x, y] = w.to2d(W / 2, PY - 70, 0); label(g, p, api.t('launch'), x, y, 15, p.white, 300); }
+      if (banner > 0) { const [x, y] = w.to2d(W / 2, H / 2 + 40, 20); g.globalAlpha = Math.min(1, banner); label(g, p, api.t('level', { n: level }), x, y, 32, p.sun); g.globalAlpha = 1; }
       fx.draw(g, p);
-      fx.end(g, W, H);
+      fx.end(g, 4000, 4000);
     },
     pointer(p) { if (p.type !== 'up') px = clamp(p.x, pw() / 2, W - pw() / 2); },
     tap() { launch(); },

@@ -85,7 +85,7 @@ export function WorldStage({ api, size, init, table = true }: {
       sun.castShadow = soft;
       sun.shadow.mapSize.set(1024, 1024);
       Object.assign(sun.shadow.camera, { left: -span * 0.75, right: span * 0.75, top: span * 0.75, bottom: -span * 0.75, near: 1, far: span * 4 });
-      sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6;
+      sun.shadow.bias = -0.0005; sun.shadow.normalBias = span * 0.004; // scaled to the field, so small boards get no stripes
       scene.add(hemi, sun, sun.target);
       // The table everything stands on.
       const tableMat = new THREE.MeshLambertMaterial({ color: pal.paper2 });

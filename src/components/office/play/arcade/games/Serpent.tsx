@@ -1,7 +1,7 @@
 'use client';
-import { CanvasStage } from '../kit/Stage';
-import type { Dir, Game2D, GameApi } from '../kit/types';
-import { Fx, TAU, ball, label, scene, shape, star, tile } from '../kit/fx';
+import { WorldStage, type Game3 } from '../kit/World';
+import type { Dir, GameApi } from '../kit/types';
+import { Fx } from '../kit/fx';
 import { theme } from '../kit/theme';
 import { rng } from '../kit/rng';
 import { buzz, sfx } from '../kit/sfx';
@@ -19,10 +19,10 @@ const KEYS: Record<string, Dir> = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down'
 const COMBO_S = 2.6, MAX_BLOCKS = 16;
 
 export default function Serpent({ api }: { api: GameApi }) {
-  return <CanvasStage api={api} size={[W, H]} init={() => create(api)} />;
+  return <WorldStage api={api} size={[W, H]} init={(w) => { w.tilt = 0.22; return create(api); }} />;
 }
 
-function create(api: GameApi): Game2D {
+function create(api: GameApi): Game3 {
   const r = rng(api.seed), fx = new Fx();
   const snake: P[] = [{ x: 9, y: 14 }, { x: 9, y: 15 }, { x: 9, y: 16 }];
   let dir = DIRS.up;
@@ -42,6 +42,9 @@ function create(api: GameApi): Game2D {
   };
   let fruit = freeCell(3);
   const px = (p: P) => [p.x * C + C / 2, p.y * C + C / 2] as const;
+  // Where a cell is on the screen (for effects drawn over the 3D picture).
+  let proj: (x: number, y: number, z?: number) => [number, number] = (x, y) => [x, y];
+  const at = (p: P, z = 6) => proj(...px(p), z);
   const hud = () => api.hud(`×${combo}${ghost > 0 ? ' 👻' : ''}`);
   hud();
 
@@ -50,7 +53,7 @@ function create(api: GameApi): Game2D {
     sfx.boom(); buzz(80);
     fx.shake(9, 0.5); fx.blink('#ff6b5e', 0.45);
     const c = theme.get();
-    snake.forEach((s, i) => { if (i % 2 === 0) fx.confetti(...px(s), [c.mint, c.sun, c.white], 4, 170); });
+    snake.forEach((s, i) => { if (i % 2 === 0) fx.confetti(...at(s), [c.mint, c.sun, c.white], 4, 170); });
   };
 
   const tick = () => {
@@ -68,18 +71,18 @@ function create(api: GameApi): Game2D {
       combo = time - lastEat < COMBO_S ? Math.min(5, combo + 1) : 1;
       lastEat = time;
       score += 10 * combo;
-      fx.burst(...px(head), '#ff6b5e', 10, 150, 3); fx.pop(...px(head), '#ff6b5e', 16);
-      fx.text(px(head)[0], px(head)[1] - 14, `+${10 * combo}`, combo > 1 ? '#ffc93c' : '#ffffff', 14 + combo * 2);
+      fx.burst(...at(head), '#ff6b5e', 10, 150, 3); fx.pop(...at(head), '#ff6b5e', 16);
+      fx.text(at(head)[0], at(head)[1] - 16, `+${10 * combo}`, combo > 1 ? '#ffc93c' : '#ffffff', 14 + combo * 2);
       sfx.point(combo * 2 + (eaten % 5)); buzz(8);
       fruit = freeCell(2);
       if (eaten % 4 === 0 && !bonus) { const k = r(); bonus = { ...freeCell(4), kind: k < 0.45 ? 'gold' : k < 0.75 ? 'cut' : 'ghost', ttl: 7 }; }
-      if (eaten % 6 === 0 && blocks.size < MAX_BLOCKS) { const b = freeCell(6); blocks.add(b.y * COLS + b.x); fx.pop(...px(b), '#9b6bff', 18); }
+      if (eaten % 6 === 0 && blocks.size < MAX_BLOCKS) { const b = freeCell(6); blocks.add(b.y * COLS + b.x); fx.pop(...at(b), '#9b6bff', 22); }
     } else if (grow > 0) grow--;
     else snake.pop();
     if (bonus && head.x === bonus.x && head.y === bonus.y) {
-      const [bx, by] = px(bonus);
+      const [bx, by] = at(bonus, 10);
       if (bonus.kind === 'gold') { score += 50 * combo; fx.text(bx, by - 14, `+${50 * combo}`, '#ffc93c', 20); fx.confetti(bx, by, ['#ffc93c', '#ff9f43', '#ffffff'], 18); }
-      else if (bonus.kind === 'cut') { const n = Math.min(5, snake.length - 3); for (let i = 0; i < n; i++) { const s = snake.pop()!; fx.burst(...px(s), '#4aa8ff', 6, 120, 2.5); } score += 20; fx.text(bx, by - 14, '✂', '#4aa8ff', 22); }
+      else if (bonus.kind === 'cut') { const n = Math.min(5, snake.length - 3); for (let i = 0; i < n; i++) { const s = snake.pop()!; fx.burst(...at(s), '#4aa8ff', 6, 120, 2.5); } score += 20; fx.text(bx, by - 14, '✂', '#4aa8ff', 22); }
       else { ghost = 6; fx.text(bx, by - 14, '👻', '#ffffff', 22); fx.pop(bx, by, '#ffffff', 26); }
       sfx.great(); buzz(20);
       bonus = null;
@@ -104,67 +107,66 @@ function create(api: GameApi): Game2D {
       acc += dt * (7 + Math.min(7, eaten * 0.16));
       while (acc >= 1 && !dead) { acc -= 1; tick(); }
     },
-    draw(g, t) {
-      const p = theme.get();
-      fx.begin(g);
-      scene(g, W, H, t, p);
-      // Thorn blocks
-      for (const b of blocks) {
-        const x = (b % COLS) * C, y = Math.floor(b / COLS) * C;
-        tile(g, p, x + 2, y + 2, C - 4, C - 4, 5, p.grape, 2, 2);
-        g.fillStyle = p.ink; g.fillRect(x + 6, y + 8, 2.5, 2.5); g.fillRect(x + 11.5, y + 8, 2.5, 2.5); g.fillRect(x + 7, y + 13, 6, 1.5);
+    render(w, t) {
+      const p = w.pal;
+      proj = w.to2d;
+      // The field: stripes of two greens, a rim around it.
+      for (let r = 0; r < ROWS; r++) w.box(W / 2, r * C + C / 2, W, C, 4, r % 2 ? (p.dark ? '#2e5c4a' : '#bfe6b5') : (p.dark ? '#2a5444' : '#b2dea8'), { z: -4 });
+      const rim = p.dark ? '#4a3f78' : '#f0e2c8';
+      for (const x of [-4, W + 4]) w.box(x, H / 2, 8, H + 16, 6, rim);
+      for (const y of [-4, H + 4]) w.box(W / 2, y, W, 8, 6, rim);
+      // Grumpy blocks
+      for (const b of blocks) { const x = (b % COLS) * C + C / 2, y = Math.floor(b / COLS) * C + C / 2; w.box(x, y, C - 3, C - 3, 15, p.grape); w.box(x, y, C - 7, C - 7, 2, p.dark ? '#7a52d6' : '#b593ff', { z: 15 }); }
+      // Apple with a leaf, and the bonus floating above its cell
+      const [fxp, fyp] = px(fruit), bob = 2 + Math.sin(t * 5) * 1.5;
+      w.ball(fxp, fyp, 7, p.coral, bob);
+      w.box(fxp + 2, fyp - 2, 6, 3, 1.5, p.mint, { z: bob + 14, rot: 0.6 });
+      if (bonus && !(bonus.ttl < 2 && Math.floor(t * 8) % 2 === 0)) {
+        const [bx, by] = px(bonus);
+        w.disc(bx, by, 8, 0.4, p.dark ? '#00000055' : '#00000022', 0.05);
+        w.ball(bx, by, 8, bonus.kind === 'gold' ? p.sun : bonus.kind === 'cut' ? p.sky : p.white, 6 + Math.sin(t * 6) * 2);
       }
-      // Fruit (an apple with a leaf) and the bonus
-      const [fxp, fyp] = px(fruit), bob = Math.sin(t * 5) * 1.2;
-      ball(g, p, fxp, fyp + bob, 7, p.coral, 2, 2);
-      g.fillStyle = p.mint; g.beginPath(); g.ellipse(fxp + 3, fyp - 8 + bob, 4, 2, -0.6, 0, TAU); g.fill(); g.strokeStyle = p.ink; g.lineWidth = 1.2; g.stroke();
-      if (bonus) {
-        const [bx, by] = px(bonus), blinkOut = bonus.ttl < 2 && Math.floor(t * 8) % 2 === 0;
-        if (!blinkOut) {
-          if (bonus.kind === 'gold') shape(g, p, p.sun, () => star(g, bx, by, 10, t * 2), 2, 2);
-          else { ball(g, p, bx, by, 8.5, bonus.kind === 'cut' ? p.sky : p.white, 2, 2); label(g, p, bonus.kind === 'cut' ? '✂' : '👻', bx, by + 1, 10, p.white); }
-          g.strokeStyle = p.ink; g.lineWidth = 2; g.beginPath(); g.arc(bx, by, 13, -Math.PI / 2, -Math.PI / 2 + TAU * (bonus.ttl / 7)); g.stroke();
-        }
-      }
-      // The snake: one thick line through its cells, sliding between grid steps, with an ink edge.
+      // The snake: a bead on every cell and a link between neighbours; the head slides between cells.
       if (!dead || dead < 0.12) {
         const k = dead ? 1 : Math.min(1, acc);
-        g.lineCap = 'round'; g.lineJoin = 'round';
-        const path = (dy = 0) => {
-          g.beginPath();
-          const [hx, hy] = px(snake[0]);
-          g.moveTo(hx - dir.x * C * (1 - k), hy - dir.y * C * (1 - k) + dy);
-          for (let i = 1; i < snake.length; i++) {
-            const a = snake[i - 1], b = snake[i];
-            let [x, y] = px(b);
-            const jump = Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 1;
-            if (i === snake.length - 1 && !jump && grow <= 0) { x += (a.x - b.x) * C * k; y += (a.y - b.y) * C * k; }
-            if (jump) g.moveTo(x, y + dy); else g.lineTo(x, y + dy);
-          }
-        };
-        g.globalAlpha = ghost > 0 ? 0.5 + Math.sin(t * 14) * 0.15 : 1;
-        g.strokeStyle = p.shadow; g.lineWidth = C - 3; path(3); g.stroke();
-        g.strokeStyle = p.ink; g.lineWidth = C - 3; path(); g.stroke();
-        g.strokeStyle = ghost > 0 ? p.white : p.mint; g.lineWidth = C - 7; path(); g.stroke();
-        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 3; g.setLineDash([2, 12]); path(-3); g.stroke(); g.setLineDash([]);
-        g.globalAlpha = 1;
-        // Head with eyes and a tongue
-        const [hx, hy] = px(snake[0]), ox = hx - dir.x * C * (1 - k), oy = hy - dir.y * C * (1 - k);
-        if (Math.floor(t * 2) % 3 === 0) { g.strokeStyle = p.coral; g.lineWidth = 2; g.beginPath(); g.moveTo(ox + dir.x * 9, oy + dir.y * 9); g.lineTo(ox + dir.x * 15, oy + dir.y * 15); g.stroke(); }
-        ball(g, p, ox, oy, 10, ghost > 0 ? p.white : p.mint, 2, 0);
-        for (const s of [-1, 1]) {
-          const ex = ox + dir.x * 3 + dir.y * s * 4.5, ey = oy + dir.y * 3 + dir.x * s * 4.5;
-          g.fillStyle = '#ffffff'; g.beginPath(); g.arc(ex, ey, 3.4, 0, TAU); g.fill();
-          g.fillStyle = p.ink; g.beginPath(); g.arc(ex + dir.x * 1.2, ey + dir.y * 1.2, 1.7, 0, TAU); g.fill();
+        const body = ghost > 0 ? p.white : p.mint, body2 = ghost > 0 ? '#e6e6ff' : p.teal;
+        const spots = snake.map((c, i) => {
+          let [x, y] = px(c);
+          if (i === 0) { x -= dir.x * C * (1 - k); y -= dir.y * C * (1 - k); }
+          else if (i === snake.length - 1 && grow <= 0) { const a = snake[i - 1]; if (Math.abs(a.x - c.x) + Math.abs(a.y - c.y) === 1) { x += (a.x - c.x) * C * k; y += (a.y - c.y) * C * k; } }
+          return [x, y] as const;
+        });
+        for (let i = 1; i < spots.length; i++) {
+          const [x0, y0] = spots[i - 1], [x1, y1] = spots[i], len = Math.hypot(x1 - x0, y1 - y0);
+          if (len > C * 1.5) continue; // through the edge
+          w.box((x0 + x1) / 2, (y0 + y1) / 2, len, C * 0.62, C * 0.55, i % 2 ? body : body2, { rot: Math.atan2(y1 - y0, x1 - x0) });
         }
+        spots.forEach(([x, y], i) => { if (i) w.ball(x, y, C * 0.4 - Math.min(3, i * 0.05), i % 2 ? body : body2); });
+        const [hx, hy] = spots[0];
+        w.ball(hx, hy, C * 0.52, body);
+        for (const sd of [-1, 1]) {
+          const ex = hx + dir.x * 4 + dir.y * sd * 5, ey = hy + dir.y * 4 + dir.x * sd * 5;
+          w.ball(ex, ey, 3.4, '#ffffff', C * 0.62);
+          w.ball(ex + dir.x * 1.6, ey + dir.y * 1.6, 1.7, p.dark ? '#0e0a1c' : '#2b2440', C * 0.62 + 2.2);
+        }
+        if (Math.floor(t * 2) % 3 === 0) w.box(hx + dir.x * 13, hy + dir.y * 13, dir.x ? 8 : 2, dir.y ? 8 : 2, 1, p.coral, { z: 4 });
       }
-      // Combo timer
+    },
+    hud(g, w, t) {
+      const p = w.pal;
+      fx.begin(g);
+      if (bonus && !(bonus.ttl < 2 && Math.floor(t * 8) % 2 === 0)) {
+        const [bx, by] = w.to2d(...px(bonus), 24);
+        g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '16px serif';
+        g.fillText(bonus.kind === 'gold' ? '★' : bonus.kind === 'cut' ? '✂' : '👻', bx, by);
+        g.strokeStyle = p.ink; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (bonus.ttl / 7)); g.stroke();
+      }
       if (combo > 1 && !dead) {
-        const left = Math.max(0, 1 - (time - lastEat) / COMBO_S);
-        g.fillStyle = p.sun; g.fillRect(0, H - 4, W * left, 4);
+        const left = Math.max(0, 1 - (time - lastEat) / COMBO_S), Wc = g.canvas.clientWidth, Hc = g.canvas.clientHeight;
+        g.fillStyle = p.sun; g.fillRect(0, Hc - 5, Wc * left, 5);
       }
       fx.draw(g, p);
-      fx.end(g, W, H);
+      fx.end(g, 4000, 4000);
     },
     key(code, down) { if (down && KEYS[code]) turn(KEYS[code]); },
     swipe: turn,

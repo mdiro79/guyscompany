@@ -35,6 +35,7 @@ const [base, out, game, steps = 'start,wait:2500,shot:play'] = process.argv.slic
       else if (cmd === 'hold') { await page.keyboard.down(a); await page.waitForTimeout(Number(b) || 300); await page.keyboard.up(a); }
       else if (cmd === 'tap' || cmd === 'move') { const box = await stage().boundingBox(); if (box) { const x = box.x + box.width * Number(a), y = box.y + box.height * Number(b); if (cmd === 'move') await page.mouse.move(x, y); else if (phone) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y); } await page.waitForTimeout(150); }
       else if (cmd === 'click') { await page.locator(`[role=dialog] button:has-text("${a}")`).first().click().catch((e) => errors.push('click failed: ' + a)); await page.waitForTimeout(500); }
+      else if (cmd === 'pdrag') { const [x0, y0, x1, y1] = [a, b, ...s.split(':').slice(3)].map(Number); await page.mouse.move(x0, y0); await page.mouse.down(); for (let i = 1; i <= 10; i++) { await page.mouse.move(x0 + ((x1 - x0) * i) / 10, y0 + ((y1 - y0) * i) / 10); await page.waitForTimeout(30); } await page.mouse.up(); await page.waitForTimeout(200); }
       else if (cmd === 'shot') await shot(a);
       else if (cmd === 'eval') console.log('eval', JSON.stringify(await page.evaluate(a)));
     }
