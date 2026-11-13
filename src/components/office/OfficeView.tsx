@@ -622,7 +622,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
       {/* Team chat */}
       {ui.chat && !working && (
-        <OfficeChat messages={team.messages} profiles={profiles} meId={user.id} remotes={net.remotes} onSend={team.send} onTyping={net.sendTyping} onClose={closeChat}
+        <OfficeChat messages={team.messages} profiles={profiles} meId={user.id} remotes={net.remotes} onSend={(body, fileId, replyTo) => team.send(body, fileId ?? null, { replyToId: replyTo ?? null })} onTyping={net.sendTyping} onClose={closeChat}
           focusKey={isPhone ? 0 : chatFocus} />
       )}
       {preview && !ui.chat && !working && !touring && !ui.roomPanel && (

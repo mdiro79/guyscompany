@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { MessageCircle, Maximize2, Paperclip, Send, Smile, Download, FileText, Users, SmilePlus, Reply } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Avatar } from '@/components/ui/Avatar';
+import { VoicePlayer, voiceSeconds } from './voice';
 import { formatBytes, formatTime } from '@/lib/format';
 import { MAX_FILE_BYTES } from '@/lib/limits';
 import { uploadFile } from '@/lib/upload';
@@ -82,16 +83,20 @@ export function ChatPanel({ channel = 'team', messages: saved, files, title, cla
                   <span className="text-[11px] text-muted" dir={sending ? undefined : 'ltr'}>{sending ? t('sending') : formatTime(locale, m.createdAt)}</span>
                 </div>
                 {m.replyToId && (() => { const r = messages.find((x) => x.id === m.replyToId); return r ? (
-                  <div className="mt-1 flex items-center gap-1.5 border-s-2 border-brand ps-2 text-xs text-muted"><Reply className="size-3 shrink-0" /><span className="truncate" dir="auto">{byId(r.authorId)?.displayName}: {r.body || '📎'}</span></div>
+                  <div className="mt-1 flex items-center gap-1.5 border-s-2 border-brand ps-2 text-xs text-muted"><Reply className="size-3 shrink-0" /><span className="truncate" dir="auto">{byId(r.authorId)?.displayName}: {voiceSeconds(r) !== null ? '🎤' : r.body || '📎'}</span></div>
                 ) : null; })()}
                 {m.kind === 'system' ? null : m.body && (m.kind === 'task' || m.kind === 'issue') ? (
                   <Link href={`/chat?c=${encodeURIComponent(channel)}&m=${m.id}`} className="mt-1 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-2">
                     <span aria-hidden>{m.kind === 'task' ? '✅' : '🐞'}</span><span className="min-w-0 flex-1 truncate font-medium" dir="auto">{m.body}</span>
                   </Link>
+                ) : voiceSeconds(m) !== null && m.fileId ? (
+                  <div className={clsx('mt-1 inline-flex rounded-2xl rounded-ss-md px-3 py-2', mine ? 'bg-brand text-brand-ink' : 'bg-[#4a453f] text-white', sending && 'opacity-60')}>
+                    <VoicePlayer fileId={m.fileId} seconds={voiceSeconds(m)!} />
+                  </div>
                 ) : m.body && (
                   <div dir="auto" className={clsx('mt-1 whitespace-pre-wrap break-words rounded-2xl rounded-ss-md px-3 py-2 text-sm leading-6', mine ? 'bg-brand-soft' : 'bg-surface-2', sending && 'opacity-60')}>{m.body}</div>
                 )}
-                {file && (
+                {file && voiceSeconds(m) === null && (
                   <a href={`/api/files/${file.id}`} className="mt-1 flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:bg-surface-2">
                     <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand"><FileText className="size-5" /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium" dir="ltr">{file.name}</span><span className="text-xs text-brand">{formatBytes(locale, file.size)}</span></span>

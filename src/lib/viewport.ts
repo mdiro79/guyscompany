@@ -14,6 +14,12 @@ let started = false;
 let tallest = 0; // tallest visible height seen in this orientation (the height without a keyboard)
 let width = 0;
 const listeners = new Set<() => void>();
+// The keyboard's height last time, per orientation: when a field is tapped again the page moves to where
+// the keyboard will end up at once, together with the keyboard's own slide, instead of after it (iOS
+// reports the new size only once the keyboard is fully up).
+const guesses = new Map<'portrait' | 'landscape', number>();
+let predictedUntil = 0;
+const orientation = () => (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
 
 const TYPES_WITHOUT_KEYBOARD = new Set(['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'file', 'color', 'image', 'hidden']);
 function typing(el: Element | null) {
@@ -37,14 +43,35 @@ function update() {
   // Turning the phone changes the width: start measuring the full height again.
   if (Math.abs(w - width) > 40) { width = w; tallest = 0; }
   tallest = Math.max(tallest, unzoomed, root.clientHeight);
+  const isTyping = typing(document.activeElement);
+  const keyboard = tallest - unzoomed;
+  if (isTyping && keyboard > 120) { guesses.set(orientation(), keyboard); predictedUntil = 0; }
+  // The keyboard is still sliding in: keep the predicted size until it reports its real one.
+  else if (isTyping && performance.now() < predictedUntil) return;
   root.style.setProperty('--vvh', `${Math.round(h)}px`);
   root.style.setProperty('--vv-top', `${Math.round(vv ? vv.offsetTop : 0)}px`);
-  const next = typing(document.activeElement) && tallest - unzoomed > 120;
+  setOpen(isTyping && keyboard > 120);
+}
+
+function setOpen(next: boolean) {
   if (next === open) return;
   open = next;
-  root.classList.toggle('gc-kb', open);
+  document.documentElement.classList.toggle('gc-kb', open);
   listeners.forEach((l) => l());
   if (!open) { settle(); setTimeout(settle, 350); }
+}
+
+// A field was just tapped: move to where the keyboard will be (if it was seen before in this orientation).
+function predict() {
+  const guess = guesses.get(orientation());
+  if (open || !guess || !typing(document.activeElement)) return;
+  predictedUntil = performance.now() + 900;
+  const root = document.documentElement;
+  root.style.setProperty('--vvh', `${Math.round(Math.max(120, tallest - guess))}px`);
+  root.style.setProperty('--vv-top', '0px');
+  setOpen(true);
+  // No keyboard came after all (e.g. a hardware keyboard): look again once the prediction runs out.
+  setTimeout(update, 950);
 }
 
 /** Starts tracking the visible part of the screen (once, from the root layout). */
@@ -58,7 +85,7 @@ export function startViewport() {
   vv?.addEventListener('scroll', soon);
   window.addEventListener('resize', soon);
   window.addEventListener('orientationchange', () => { setTimeout(() => { update(); settle(); }, 300); });
-  document.addEventListener('focusin', soon);
+  document.addEventListener('focusin', () => { predict(); soon(); });
   // Focus moves (or leaves) only after the event: look a moment later.
   document.addEventListener('focusout', () => setTimeout(update, 60));
   // The browser scrolled a page that must not scroll (e.g. to show a field, then kept it there).

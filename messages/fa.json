@@ -482,7 +482,20 @@
     "online": "{n} نفر آنلاین",
     "collapse": "جمع کردن پیام‌ها",
     "expand": "نمایش پیام‌ها",
-    "openFull": "باز کردن صفحه‌ی گفتگو"
+    "openFull": "باز کردن صفحه‌ی گفتگو",
+    "reply": "پاسخ",
+    "replyTo": "پاسخ به {name}",
+    "cancelReply": "لغو پاسخ",
+    "voice": "پیام صوتی",
+    "record": "ضبط پیام صوتی",
+    "recording": "در حال ضبط",
+    "cancelRecording": "لغو ضبط",
+    "sendVoice": "ارسال پیام صوتی",
+    "micDenied": "اجازه‌ی میکروفون داده نشده است",
+    "voiceFailed": "پیام صوتی ارسال نشد",
+    "play": "پخش",
+    "pause": "توقف",
+    "closeMenu": "بستن"
   },
   "todos": {
     "title": "کارهای شخصی",
