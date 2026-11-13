@@ -63,6 +63,7 @@ export class Fx {
     if (this.shakeT > 0) g.translate((Math.random() - 0.5) * this.shakeAmp * 2, (Math.random() - 0.5) * this.shakeAmp * 2);
   }
   draw(g: G, p: Palette) {
+    if (p.neon) g.globalCompositeOperation = 'lighter';
     for (const o of this.pops) {
       const k = 1 - o.life;
       g.globalAlpha = o.life; g.strokeStyle = o.color; g.lineWidth = 4 * o.life + 1;
@@ -74,6 +75,7 @@ export class Fx {
       if (q.square) { g.save(); g.translate(q.x, q.y); g.rotate(q.rot); g.fillRect(-q.size / 2, -q.size / 3, q.size, q.size * 0.66); g.restore(); }
       else { g.beginPath(); g.arc(q.x, q.y, q.size, 0, TAU); g.fill(); }
     }
+    g.globalCompositeOperation = 'source-over';
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
     for (const f of this.floats) {
       // Pops in a little larger, then floats up and fades.
@@ -96,6 +98,16 @@ export function scene(g: G, w: number, h: number, t: number, p: Palette, dots = 
   const bg = g.createLinearGradient(0, 0, 0, h);
   bg.addColorStop(0, p.bg0); bg.addColorStop(1, p.bg1);
   g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  if (p.neon) {
+    // Neon: a faint grid drifting over the dark.
+    g.strokeStyle = p.line; g.lineWidth = 1;
+    const s = 32, off = (t * 8) % s;
+    g.beginPath();
+    for (let x = -s + off; x < w + s; x += s) { g.moveTo(x, 0); g.lineTo(x, h); }
+    for (let y = -s + off; y < h + s; y += s) { g.moveTo(0, y); g.lineTo(w, y); }
+    g.stroke();
+    return;
+  }
   const m = Math.max(w, h);
   p.blobs.forEach((c, i) => {
     const a = t * (0.05 + i * 0.013) + i * 1.9;
@@ -112,6 +124,12 @@ export function rrect(g: G, x: number, y: number, w: number, h: number, r: numbe
 
 /** Fills the shape made by `path` with a drop shadow underneath and an ink outline around it. */
 export function shape(g: G, p: Palette, color: string, path: () => void, outline = 2, drop = 3) {
+  if (p.neon) {
+    // Neon: the shape glows in its own colour and has a thin bright rim.
+    g.save(); g.shadowColor = color; g.shadowBlur = 10; g.fillStyle = color; path(); g.fill(); g.restore();
+    if (outline) { g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1; path(); g.stroke(); }
+    return;
+  }
   if (drop) { g.save(); g.translate(0, drop); g.fillStyle = p.shadow; path(); g.fill(); g.restore(); }
   g.fillStyle = color; path(); g.fill();
   if (outline) { g.strokeStyle = p.ink; g.lineWidth = outline; g.lineJoin = 'round'; path(); g.stroke(); }
@@ -130,6 +148,7 @@ export function tile(g: G, p: Palette, x: number, y: number, w: number, h: numbe
 /** Text with an ink outline, readable on anything. */
 export function label(g: G, p: Palette, text: string, x: number, y: number, px: number, color = '#ffffff', maxWidth?: number) {
   g.font = FONT(px); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  if (p.neon) { g.save(); g.shadowColor = color; g.shadowBlur = px * 0.6; g.fillStyle = color; g.fillText(text, x, y, maxWidth); g.restore(); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillText(text, x, y, maxWidth); return; }
   g.strokeStyle = p.ink; g.lineWidth = Math.max(3, px * 0.2);
   g.strokeText(text, x, y, maxWidth); g.fillStyle = color; g.fillText(text, x, y, maxWidth);
 }

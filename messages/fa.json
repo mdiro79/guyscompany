@@ -1049,7 +1049,7 @@
       "perGame": "جدول هر بازی",
       "newRecord": "{name} در «{game}» رکورد زد: {score}",
       "newWin": "{name} در «{game}» برنده شد",
-      "theme": "روشن / تیره"
+      "theme": "ظاهر: روشن / تیره / نئونی"
     },
     "games": {
       "serpent": {

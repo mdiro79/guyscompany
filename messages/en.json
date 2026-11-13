@@ -1049,7 +1049,7 @@
       "perGame": "Tables by game",
       "newRecord": "{name} set a record in {game}: {score}",
       "newWin": "{name} won a match of {game}",
-      "theme": "Light / dark"
+      "theme": "Look: light / dark / neon"
     },
     "games": {
       "serpent": {
