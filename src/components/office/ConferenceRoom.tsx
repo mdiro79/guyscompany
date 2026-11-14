@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import * as THREE from 'three';
@@ -294,18 +294,22 @@ export interface Person { id: string; name: string }
 const colorOf = (people: Person[], id: string) => memberColor(people.map((p) => p.id), id);
 const clock = (ms: number) => { const s = Math.ceil(Math.abs(ms) / 1000); return `${ms < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] }) {
+// The picture of the meeting screen: painted once, shown on the wall screen and on the smart screen over the table.
+interface ScreenPicture { tex: THREE.CanvasTexture; cv: HTMLCanvasElement }
+function makeScreenPicture(maxAnisotropy: number): ScreenPicture {
+  const cv = document.createElement('canvas');
+  [cv.width, cv.height] = SCREEN_PX;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  // Sharp at an angle too (the smart screen is often seen slightly from the side).
+  tex.anisotropy = Math.min(16, maxAnisotropy);
+  return { tex, cv };
+}
+
+function Screen({ labels, people, picture: { tex, cv } }: { labels: MeetingLabels; people: Person[]; picture: ScreenPicture }) {
   const voice = useVoice();
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
-  const { tex, cv } = useMemo(() => {
-    const cv = document.createElement('canvas');
-    [cv.width, cv.height] = SCREEN_PX;
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-    return { tex, cv };
-  }, []);
   // The meeting page (the running meeting's name, purpose and time), or the presenter's current page live
   // while someone presents: with the name of whoever wrote each part next to it, the page number, the
   // countdown and raised hands. Painted at most once a
@@ -364,13 +368,12 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
     Promise.all([document.fonts.load(`650 64px ${fam}`), document.fonts.load(`400 32px ${fam}`)]).then(() => schedule(true), () => {});
     return () => { live = false; offBoards(); offHands(); offVote(); clearInterval(tick); cancelAnimationFrame(raf); clearTimeout(wait); };
   }, [cv, tex, labels, people]);
-  useEffect(() => () => tex.dispose(), [tex]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;
   return (
     <group position={[0, bottom + h / 2, z]}>
       <mesh material={mat.dark}><boxGeometry args={[w + 0.1, h + 0.1, 0.06]} /></mesh>
       <mesh position-z={0.031}><planeGeometry args={[w, h]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
-      <ScreenLasers people={people} />
+      <ScreenLasers people={people} w={w} h={h} z={0.036} />
     </group>
   );
 }
@@ -378,11 +381,10 @@ function Screen({ labels, people }: { labels: MeetingLabels; people: Person[] })
 // Laser pointers on the presented board: a glowing dot per person, in their colour, moved every frame
 // (cheaper than repainting the screen).
 const LASER_DOTS = 4;
-function ScreenLasers({ people }: { people: Person[] }) {
+function ScreenLasers({ people, w, h, z, scale = 1 }: { people: Person[]; w: number; h: number; z: number; scale?: number }) {
   const dots = useRef<(THREE.Mesh | null)[]>([]);
   const mats = useMemo(() => Array.from({ length: LASER_DOTS }, () => new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, toneMapped: false, depthWrite: false })), []);
   const glowMats = useMemo(() => mats.map(() => new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, opacity: 0.3, toneMapped: false, depthWrite: false })), [mats]);
-  const { width: w, height: h } = CONF_SCREEN;
   useFrame(() => {
     const who = presentation().userId;
     const list = who ? lasersOn(who) : [];
@@ -391,7 +393,7 @@ function ScreenLasers({ people }: { people: Person[] }) {
       const l = list[i];
       d.visible = !!l;
       if (!l) return;
-      d.position.set((l.x / BOARD_W - 0.5) * w, (0.5 - l.y / BOARD_H) * h, 0.036);
+      d.position.set((l.x / BOARD_W - 0.5) * w, (0.5 - l.y / BOARD_H) * h, z);
       const c = colorOf(people, l.by);
       mats[i].color.set(c); glowMats[i].color.set(c);
       const fade = Math.max(0, 1 - Math.max(0, performance.now() - l.at - 600) / 900);
@@ -402,7 +404,7 @@ function ScreenLasers({ people }: { people: Person[] }) {
   return (
     <>
       {mats.map((m, i) => (
-        <mesh key={i} ref={(el) => { dots.current[i] = el; }} visible={false} renderOrder={2} material={m}>
+        <mesh key={i} ref={(el) => { dots.current[i] = el; }} visible={false} renderOrder={4} material={m} scale={scale}>
           <circleGeometry args={[0.022, 20]} />
           <mesh position-z={-0.001} material={glowMats[i]}><circleGeometry args={[0.055, 24]} /></mesh>
         </mesh>
@@ -434,6 +436,9 @@ function Ceiling() {
 
 export function ConferenceRoom({ labels, people, lowQuality }: { labels: MeetingLabels; people: Person[]; lowQuality: boolean }) {
   const m = textured();
+  const { gl } = useThree();
+  const picture = useMemo(() => makeScreenPicture(gl.capabilities.getMaxAnisotropy()), [gl]);
+  useEffect(() => () => picture.tex.dispose(), [picture]);
   const seats = useMemo(() => conferenceSeats(), []);
   const mySeat = useOfficeUi((u) => u.seatId);
   return (
@@ -446,7 +451,8 @@ export function ConferenceRoom({ labels, people, lowQuality }: { labels: Meeting
           <LiveTablet />
         </group>
       ))}
-      <Screen labels={labels} people={people} />
+      <Screen labels={labels} people={people} picture={picture} />
+      <HoloScreen picture={picture} people={people} />
       <TabletInput />
       <Credenza />
       <Ceiling />
@@ -519,6 +525,111 @@ function WallPanel() {
       {active && <mesh position-z={-0.004}><planeGeometry args={[0.25, 0.35]} /><meshBasicMaterial color="#5fe0cf" toneMapped={false} transparent opacity={0.85} /></mesh>}
       <mesh material={mat.frame}><boxGeometry args={[0.21, 0.31, 0.022]} /></mesh>
       <mesh position-z={0.0115}><planeGeometry args={[0.18, 0.27]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
+    </group>
+  );
+}
+
+// ——— Smart screen over the table ———
+// A large floating copy of the meeting screen above the middle of the table, like a hologram but sharp: the
+// same picture as the wall screen (presentations, pictures, the meeting page), so small writing can be read
+// without zooming. Everyone sees it turned towards themselves (it is drawn on each device for its own
+// camera), a little in front of the middle of the table. It is turned on and off from the seat tablet
+// ("Smart screen", kept per device) and shows only inside the conference room.
+
+const HOLO_W = 2.2, HOLO_H = HOLO_W * (BOARD_H / BOARD_W); // 16:9, like the screen
+const HOLO_BOTTOM = CONF_TABLE_HEIGHT + 0.24;
+const HOLO_TOWARD = 0.35; // metres from the middle of the table towards the viewer
+const HOLO_CYAN = new THREE.Color('#5fe6ff');
+const useHoloOn = () => useSyncExternalStore(tablet.subscribe, () => tablet.get().holo, () => false);
+
+// Soft fade along v (0 at the emitter, 1 at the screen) for the light beam.
+const holoTextures = (() => {
+  let made: { beam: THREE.CanvasTexture } | null = null;
+  return () => {
+    if (made) return made;
+    const beamCv = document.createElement('canvas');
+    beamCv.width = 64; beamCv.height = 128;
+    const g = beamCv.getContext('2d')!;
+    const v = g.createLinearGradient(0, 128, 0, 0);
+    v.addColorStop(0, 'rgba(255,255,255,0.9)'); v.addColorStop(0.5, 'rgba(255,255,255,0.25)'); v.addColorStop(1, 'rgba(255,255,255,0.05)');
+    g.fillStyle = v; g.fillRect(0, 0, 64, 128);
+    // darker towards the sides of the beam
+    const hz = g.createLinearGradient(0, 0, 64, 0);
+    hz.addColorStop(0, 'rgba(0,0,0,1)'); hz.addColorStop(0.3, 'rgba(0,0,0,0)'); hz.addColorStop(0.7, 'rgba(0,0,0,0)'); hz.addColorStop(1, 'rgba(0,0,0,1)');
+    g.globalCompositeOperation = 'destination-out'; g.fillStyle = hz; g.fillRect(0, 0, 64, 128);
+    return (made = { beam: new THREE.CanvasTexture(beamCv) });
+  };
+})();
+
+// A trapezoid from the emitter (narrow, at the bottom) to the screen's lower edge.
+function beamGeometry(bottomW: number, topW: number, height: number, back: number) {
+  const g = new THREE.BufferGeometry();
+  const p = [-bottomW / 2, 0, -back, bottomW / 2, 0, -back, topW / 2, height, 0, -topW / 2, height, 0];
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  return g;
+}
+
+function HoloScreen({ picture, people }: { picture: ScreenPicture; people: Person[] }) {
+  const on = useHoloOn();
+  const inRoom = useOfficeUi((u) => u.inConference);
+  const show = on && inRoom;
+  const group = useRef<THREE.Group>(null);
+  const panel = useRef<THREE.Group>(null);
+  const beam = useRef<THREE.Mesh>(null);
+  const grow = useRef(0); // 0..1 while it switches on (and back while it switches off)
+  const { camera } = useThree();
+  const tx = holoTextures();
+  const parts = useMemo(() => ({
+    // Fully solid once on, so the picture is as sharp and true in colour as the wall screen.
+    content: new THREE.MeshBasicMaterial({ map: picture.tex, toneMapped: false, transparent: true }),
+    glass: new THREE.MeshBasicMaterial({ color: HOLO_CYAN, transparent: true, opacity: 0.22, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending }),
+    edge: new THREE.MeshBasicMaterial({ color: HOLO_CYAN.clone().multiplyScalar(1.6), toneMapped: false, transparent: true, depthWrite: false }),
+    beam: new THREE.MeshBasicMaterial({ map: tx.beam, color: HOLO_CYAN, transparent: true, opacity: 0.32, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    emitter: new THREE.MeshBasicMaterial({ color: HOLO_CYAN.clone().multiplyScalar(1.4), toneMapped: false }),
+  }), [picture, tx]);
+  const beamGeo = useMemo(() => beamGeometry(0.22, HOLO_W * 0.92, HOLO_BOTTOM - CONF_TABLE_HEIGHT + 0.02, HOLO_TOWARD), []);
+  useEffect(() => () => { Object.values(parts).forEach((m) => m.dispose()); beamGeo.dispose(); }, [parts, beamGeo]);
+  useFrame((_, dt) => {
+    const g = group.current, p = panel.current;
+    if (!g || !p) return;
+    grow.current = Math.max(0, Math.min(1, grow.current + (show ? dt : -dt) * 3.2));
+    const k = grow.current;
+    g.visible = k > 0;
+    if (!k) return;
+    // Towards the viewer: a little in front of the middle of the table, turned to face them.
+    const cx = camera.position.x, cz = camera.position.z, d = Math.hypot(cx, cz) || 1;
+    g.position.set((cx / d) * HOLO_TOWARD, 0, (cz / d) * HOLO_TOWARD);
+    g.rotation.y = Math.atan2(cx, cz);
+    // The screen tilts a little so it faces the eyes, seated or standing.
+    const y = HOLO_BOTTOM + HOLO_H / 2;
+    p.position.y = y;
+    p.rotation.x = -Math.atan2(camera.position.y - y, Math.max(0.5, d - HOLO_TOWARD)) * 0.6;
+    // Switching on: it unfolds from the emitter with a short flicker.
+    const flicker = k < 1 ? 0.75 + 0.25 * Math.sin(performance.now() / 18) : 1;
+    p.scale.set(0.2 + 0.8 * k, k * k, 1);
+    parts.content.opacity = k < 1 ? 0.9 * k * flicker : 1;
+    parts.edge.opacity = k;
+    parts.glass.opacity = 0.22 * k;
+    if (beam.current) beam.current.scale.set(0.2 + 0.8 * k, k, 1);
+    parts.beam.opacity = 0.32 * k * flicker;
+  });
+  const E = 0.012; // edge thickness
+  return (
+    <group ref={group} visible={false}>
+      {/* the emitter in the middle of the planter, and the light rising from it to the screen */}
+      <mesh position={[0, CONF_TABLE_HEIGHT + 0.004, -HOLO_TOWARD]} rotation-x={-Math.PI / 2} material={parts.emitter}><ringGeometry args={[0.07, 0.11, 40]} /></mesh>
+      <mesh ref={beam} position-y={CONF_TABLE_HEIGHT - 0.01} material={parts.beam} geometry={beamGeo} renderOrder={2} />
+      <group ref={panel}>
+        {/* a glowing glass rim, its bright edges and the picture itself */}
+        <mesh position-z={-0.004} material={parts.glass} renderOrder={2}><planeGeometry args={[HOLO_W + 0.06, HOLO_H + 0.06]} /></mesh>
+        <mesh material={parts.content} renderOrder={3}><planeGeometry args={[HOLO_W, HOLO_H]} /></mesh>
+        {([[0, HOLO_H / 2 + E, HOLO_W + 4 * E, E], [0, -HOLO_H / 2 - E, HOLO_W + 4 * E, E], [HOLO_W / 2 + E, 0, E, HOLO_H + 2 * E], [-HOLO_W / 2 - E, 0, E, HOLO_H + 2 * E]] as const).map(([x, y, w, h], i) => (
+          <mesh key={i} position={[x, y, 0.001]} material={parts.edge} renderOrder={4}><planeGeometry args={[w, h]} /></mesh>
+        ))}
+        <ScreenLasers people={people} w={HOLO_W} h={HOLO_H} z={0.006} scale={0.75} />
+      </group>
     </group>
   );
 }

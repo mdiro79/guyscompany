@@ -37,6 +37,21 @@ const REBUILD_AFTER_MS = 30000; // a link that stays down this long is thrown aw
 
 const ICE_REFRESH_MS = 6 * 60 * 60 * 1000; // well inside the 24 h lifetime of relay credentials
 
+// Voice at a higher bitrate than the browser's default (about 32 kb/s) and first in line on the network:
+// clearer speech, still tiny next to a four-person mesh's capacity. Encodings exist once a link is set up.
+const VOICE_BITRATE = 64_000;
+function tuneVoice(sender: RTCRtpSender | null) {
+  if (!sender) return;
+  try {
+    const p = sender.getParameters();
+    const e = p.encodings?.[0];
+    if (!e || e.maxBitrate === VOICE_BITRATE) return;
+    e.maxBitrate = VOICE_BITRATE;
+    e.priority = 'high'; e.networkPriority = 'high';
+    void sender.setParameters(p).catch(() => {});
+  } catch { /* not ready yet: tried again when the link connects */ }
+}
+
 const STUN: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 
 // STUN plus the optional TURN relay, which the server hands out (see /api/turn).
@@ -168,6 +183,7 @@ export class Mesh {
     for (const p of this.peers.values()) {
       const sameUser = p.info.userId === this.self.userId;
       void p.sender?.replaceTrack(sameUser ? null : track);
+      tuneVoice(p.sender);
     }
   }
 
@@ -231,6 +247,7 @@ export class Mesh {
       } finally { peer.makingOffer = false; }
     };
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') tuneVoice(peer.sender);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') pc.restartIce();
       if (pc.connectionState === 'closed') this.peers.delete(info.tabId);
       this.emitPeers();

@@ -4,6 +4,7 @@ import { useShell } from '@/components/shell/ShellContext';
 import { getMesh, type PeerInfo } from '@/lib/realtime/mesh';
 import { useDevice, isEmbedded } from '@/lib/device';
 import { VoiceCtx, type MicDevice, type VoiceState } from './VoiceContext';
+import { cleanMic, MIC_CONSTRAINTS, type CleanMic } from '@/lib/voice/clean-mic';
 
 interface RemoteAudio { el: HTMLAudioElement; source: MediaStreamAudioSourceNode; gain: GainNode; analyser: AnalyserNode; userId: string }
 
@@ -26,7 +27,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [otherDeviceMic, setOtherDeviceMic] = useState<MicDevice | null>(null);
   const ctx = useRef<AudioContext | null>(null);
-  const stream = useRef<MediaStream | null>(null);
+  const mic = useRef<CleanMic | null>(null);
   const localAnalyser = useRef<AnalyserNode | null>(null);
   const remotes = useRef(new Map<string, RemoteAudio>());
   const levels = useRef<Record<string, number>>({});
@@ -39,17 +40,19 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     return ctx.current;
   };
 
-  // Browsers keep the audio engine suspended until the page is touched; without this remote voices stay silent.
+  // Browsers keep the audio engine suspended until the page is touched (and phones pause it in the
+  // background); without this remote voices stay silent, and so does one's own cleaned microphone.
   useEffect(() => {
-    const wake = () => { if (ctx.current && ctx.current.state === 'suspended') void ctx.current.resume(); };
+    const wake = () => { if (ctx.current && ctx.current.state !== 'running' && ctx.current.state !== 'closed') void ctx.current.resume().catch(() => {}); };
     window.addEventListener('pointerdown', wake);
     window.addEventListener('keydown', wake);
-    return () => { window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
+    document.addEventListener('visibilitychange', wake);
+    return () => { window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); document.removeEventListener('visibilitychange', wake); };
   }, []);
 
   const stopMic = useCallback(() => {
-    stream.current?.getTracks().forEach((t) => t.stop());
-    stream.current = null;
+    mic.current?.close();
+    mic.current = null;
     localAnalyser.current = null;
     mesh?.setLocalTrack(null);
     setMicOn(false);
@@ -58,13 +61,16 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const startMic = useCallback(async () => {
     if (!mesh) return;
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      stream.current = s;
+      const s = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS });
       const a = audio();
+      // Handling noise filtered out, speech kept clear (see clean-mic.ts); the raw track if that fails.
+      const clean = await cleanMic(a, s).catch(() => null);
+      mic.current?.close();
+      mic.current = clean ?? { track: s.getAudioTracks()[0], level: a.createMediaStreamSource(s), close: () => s.getTracks().forEach((t) => t.stop()) };
       const an = a.createAnalyser(); an.fftSize = 512;
-      a.createMediaStreamSource(s).connect(an);
+      mic.current.level.connect(an);
       localAnalyser.current = an;
-      mesh.setLocalTrack(s.getAudioTracks()[0]);
+      mesh.setLocalTrack(mic.current.track);
       mesh.sendEvent({ type: 'mic-claim', userId: user.id, device: thisDevice });
       setError(null);
       setMicOn(true);

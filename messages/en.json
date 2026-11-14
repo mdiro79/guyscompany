@@ -231,7 +231,9 @@
     "addPage": "New page",
     "deletePage": "Delete this page",
     "confirmDeletePage": "Delete this page and everything on it?",
-    "lowerHand": "Lower {name}'s hand"
+    "lowerHand": "Lower {name}'s hand",
+    "zoomReset": "Show the whole board",
+    "pinchHint": "Two fingers on a picture resize it; elsewhere they zoom"
   },
   "top": {
     "focusMode": "Focus Mode",
@@ -844,7 +846,8 @@
       "notes": "Notes",
       "meeting": "Meeting",
       "startMeeting": "Start meeting",
-      "stand": "Stand up"
+      "stand": "Stand up",
+      "holo": "Smart screen"
     },
     "room": {
       "title": "Conference room panel",

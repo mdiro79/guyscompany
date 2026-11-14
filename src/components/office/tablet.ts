@@ -6,22 +6,23 @@ import { drawIcon, type IconName } from './icons';
 // (click with the crosshair or the cursor, tap on phones). Only the tablet at one's own seat is live;
 // the others show the same screen at rest. What the buttons do is wired up by the office view.
 
-export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'notes' | 'react' | 'look' | 'lights' | 'meeting' | 'stand';
-export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'notes', 'react', 'look', 'lights', 'meeting', 'stand'];
+export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'holo' | 'notes' | 'react' | 'look' | 'lights' | 'meeting' | 'stand';
+export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'holo', 'notes', 'react', 'look', 'lights', 'meeting', 'stand'];
 
 export interface TabletLabels {
   title: string; idle: string; presenting: string; // "{name}" is replaced
   raiseHand: string; lowerHand: string; micOn: string; micOff: string; board: string; present: string; stopPresent: string; view: string;
-  react: string; look: string; lightPresent: string; stand: string; hands: string; notes: string; meeting: string; startMeeting: string; rtl: boolean;
+  react: string; look: string; lightPresent: string; holo: string; stand: string; hands: string; notes: string; meeting: string; startMeeting: string; rtl: boolean;
 }
 
 export interface TabletState {
   hand: boolean; mic: boolean; presenting: 'me' | 'other' | null; presenterName: string; dimmed: boolean; hands: number;
+  holo: boolean; // the smart screen over the table (one's own choice, kept on this device)
   hover: TabletButton | null; flash: TabletButton | null; labels: TabletLabels | null;
   meeting: string | null; meetingClock: string; // the running meeting's name and how long it has run
 }
 
-let state: TabletState = { hand: false, mic: false, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null, meeting: null, meetingClock: '' };
+let state: TabletState = { hand: false, mic: false, holo: true, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null, meeting: null, meetingClock: '' };
 const listeners = new Set<() => void>();
 let onPress: ((b: TabletButton) => void) | null = null;
 
@@ -42,10 +43,20 @@ export const tablet = {
   },
 };
 
+// The smart screen over the conference table is on unless this device turned it off.
+const HOLO_KEY = 'gc-holo';
+export function loadHolo() {
+  try { tablet.set({ holo: localStorage.getItem(HOLO_KEY) !== 'off' }); } catch { /* storage blocked: stays on */ }
+}
+export function setHolo(on: boolean) {
+  tablet.set({ holo: on });
+  try { localStorage.setItem(HOLO_KEY, on ? 'on' : 'off'); } catch { /* storage blocked */ }
+}
+
 // ——— Layout and painting (canvas pixels) ———
 
 export const TABLET_PX: [number, number] = [1024, 640];
-const HEADER = 96, PAD = 24, GAP = 16, COLS = 5;
+const HEADER = 96, PAD = 22, GAP = 14, COLS = 6;
 
 /** Where each button sits on the screen; the order follows the reading direction. */
 export function buttonRects(rtl: boolean) {
@@ -79,6 +90,7 @@ function look(s: TabletState, id: TabletButton): { icon: IconName; label: string
     case 'react': return { icon: 'smile', label: l.react, color: '#f08a3c', on: false };
     case 'look': return { icon: 'shareScreen', label: l.look, color: '#3fb3ad', on: false };
     case 'lights': return { icon: 'sun', label: l.lightPresent, color: '#e0a526', on: s.dimmed };
+    case 'holo': return { icon: 'holo', label: l.holo, color: '#19a7c9', on: s.holo };
     case 'stand': return { icon: 'logOut', label: l.stand, color: '#7d8597', on: false };
     case 'notes': return { icon: 'notebook', label: l.notes, color: '#0f9d9a', on: false };
     case 'meeting': return { icon: 'users', label: s.meeting ? l.meeting : l.startMeeting, color: '#c2417c', on: !!s.meeting };
@@ -128,7 +140,7 @@ export function paintTablet(c: HTMLCanvasElement, s: TabletState, live: boolean)
     g.beginPath(); g.arc(cx, cy, 52, 0, Math.PI * 2);
     g.fillStyle = on ? 'rgba(255,255,255,0.22)' : b.color; g.fill();
     drawIcon(g, b.icon, cx, cy, 58, '#ffffff', 2.2);
-    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = font(rtl, 600, 26);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = font(rtl, 600, 23);
     g.fillText(b.label, cx, r.y + r.h - 36, r.w - 14);
   }
   g.direction = 'ltr';

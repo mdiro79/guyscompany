@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addPoint, applyOp, cleanItem, cleanOp, inverseOps, itemAt, moveItem, fitImage, mayEdit, nameTags, onPage, MAX_ITEMS, type BoardItem } from './model';
+import { addPoint, applyOp, cleanItem, cleanOp, inverseOps, itemAt, moveItem, fitImage, mayEdit, nameTags, onPage, scaleItem, MAX_ITEMS, type BoardItem } from './model';
 
 const stroke = (id: string, points: number[]): BoardItem => ({ id, kind: 'stroke', color: '#1f2328', size: 4, points });
 
@@ -128,5 +128,27 @@ describe('live stroke points', () => {
     expect(mayEdit(items, op('mine'), 'u2', 'owner', true)).toBe(true);
     expect(mayEdit(items, op('owners'), 'u2', 'owner', true)).toBe(false);
     expect(mayEdit(items, op('mine'), 'u2', 'owner', false)).toBe(false);
+  });
+});
+
+describe('pinch to resize', () => {
+  const img: BoardItem = { id: 'p', kind: 'image', x: 100, y: 100, w: 400, h: 200, fileId: 'f1' };
+  it('grows a picture around the pinch point and keeps its shape', () => {
+    const s = scaleItem(img, 2, 300, 200) as Extract<BoardItem, { kind: 'image' }>;
+    expect(s).toMatchObject({ w: 800, h: 400, x: -100, y: 0 });
+    expect(cleanItem(s)).not.toBeNull();
+  });
+  it('stops at the sizes the board accepts', () => {
+    const big = scaleItem(img, 50, 0, 0) as Extract<BoardItem, { kind: 'image' }>;
+    expect(big.w).toBeLessThanOrEqual(3200); expect(big.h).toBeLessThanOrEqual(1800);
+    expect(big.w / big.h).toBeCloseTo(2);
+    const small = scaleItem(img, 0.01, 0, 0) as Extract<BoardItem, { kind: 'image' }>;
+    expect(small.h).toBe(40);
+  });
+  it('scales text size within limits and leaves strokes alone', () => {
+    const tx: BoardItem = { id: 't', kind: 'text', x: 10, y: 10, text: 'hi', color: '#1f2328', size: 56 };
+    expect((scaleItem(tx, 10, 10, 10) as Extract<BoardItem, { kind: 'text' }>).size).toBe(160);
+    const st: BoardItem = { id: 's', kind: 'stroke', color: '#1f2328', size: 4, points: [0, 0, 5, 5] };
+    expect(scaleItem(st, 3, 0, 0)).toBe(st);
   });
 });

@@ -4,14 +4,14 @@ import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import {
   Pen, Highlighter, Eraser, Type, ImagePlus, Move, Undo2, Redo2, Trash2, X, Cast, MonitorUp, Loader2, Eye, Columns2, Maximize2,
-  ChevronLeft, ChevronRight, FilePlus2, FileX2, Users, Lock, Timer, Hand, Crosshair,
+  ChevronLeft, ChevronRight, FilePlus2, FileX2, Users, Lock, Timer, Hand, Crosshair, ZoomOut,
 } from 'lucide-react';
 import { useShell } from '@/components/shell/ShellContext';
 import { uploadFile } from '@/lib/upload';
 import { BoardPainter, memberColor } from '@/lib/board/draw';
 import { useKeyboardOpen } from '@/lib/viewport';
 import {
-  BOARD_COLORS, BOARD_H, BOARD_W, MAX_PAGES, PEN_SIZES, TEXT_SIZES, addPoint, fitImage, itemAt, mayEdit, moveItem, onPage, type BoardItem, type BoardOp,
+  BOARD_COLORS, BOARD_H, BOARD_W, MAX_PAGES, PEN_SIZES, TEXT_SIZES, addPoint, fitImage, itemAt, mayEdit, moveItem, onPage, scaleItem, type BoardItem, type BoardOp,
 } from '@/lib/board/model';
 import {
   boardBusy, boardOf, boardOp, canRedo, canUndo, deletePage, goToPage, insertPage, isHot, lasersOn, pointLaser, present, recordStep, redo, setTimer, shareDrawing,
@@ -24,6 +24,8 @@ type Tool = 'pen' | 'highlighter' | 'eraser' | 'text' | 'move' | 'laser';
 const newId = () => crypto.randomUUID().slice(0, 12);
 const SEND_EVERY = 50; // ms between live updates of a stroke or a drag (skipped while the link is busy)
 const TIMERS = [3, 5, 10, 15];
+const MAX_ZOOM = 5;
+const MAX_CANVAS_PX = 4096; // the sharpest the board is drawn while zoomed in
 const clock = (ms: number) => { const s = Math.ceil(Math.abs(ms) / 1000); return `${ms < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 // Pictures are scaled down (longest side 1600 px) before upload so the board stays quick to share.
@@ -42,6 +44,13 @@ async function shrink(file: File): Promise<File> {
 }
 
 interface TextEdit { id: string; x: number; y: number; value: string; color: string; size: number }
+// The board's view: zoomed `z` times, moved by (x, y) screen pixels (1, 0, 0: the whole board).
+interface View { z: number; x: number; y: number }
+// Two fingers on the board: they resize a picture or text of one's own (`item`), or zoom and move the view.
+interface Pinch {
+  ids: [number, number]; d0: number; mid0: [number, number]; // screen pixels when the second finger landed
+  view0: View; item: BoardItem | null; before: BoardItem[]; scaled?: BoardItem; sent: number;
+}
 
 // Laser pointers on the board shown here, as glowing dots that fade when they stop moving.
 function LaserDots({ owner, color, box }: { owner: string; color: (id: string) => string; box: { w: number; h: number } }) {
@@ -100,6 +109,8 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   const [edit, setEdit] = useState<TextEdit | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState(false); // how to resize a picture, shown a moment after adding one
+  useEffect(() => { if (!hint) return; const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, [hint]);
   const [menu, setMenu] = useState<null | 'color' | 'page' | 'timer'>(null);
   const kb = useKeyboardOpen();
   const [painter] = useState(() => new BoardPainter());
@@ -113,6 +124,15 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   // A stroke goes out once whole (`live`), then only its new points (`sentLen`: how many numbers the others have).
   const gesture = useRef<{ pointer: number; before: BoardItem[]; item: BoardItem | null; moved?: BoardItem; start: [number, number]; sent: number; erased: string[]; live?: boolean; sentLen?: number } | null>(null);
   const [frame, setFrame] = useState({ w: 0, h: 0 });
+  const stage = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<View>({ z: 1, x: 0, y: 0 });
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const touches = useRef(new Map<number, [number, number]>()); // fingers on the board (screen pixels)
+  const pinch = useRef<Pinch | null>(null);
+  // The zoom the board is drawn for: follows the view once a pinch ends (redrawing during it would stutter).
+  const [sharpZoom, setSharpZoom] = useState(1);
+  useEffect(() => { if (!pinch.current) setSharpZoom(view.z); }, [view.z]);
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -140,13 +160,14 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   const paint = useCallback(() => {
     const c = canvas.current;
     if (!c || !box.w) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (c.width !== Math.round(box.w * dpr)) { c.width = Math.round(box.w * dpr); c.height = Math.round(box.h * dpr); }
+    // Zoomed in, the board is drawn with more pixels so small writing and pictures stay sharp.
+    const px = Math.min(MAX_CANVAS_PX, Math.round(box.w * Math.min(window.devicePixelRatio || 1, 2) * sharpZoom));
+    if (c.width !== px) { c.width = px; c.height = Math.round((px * BOARD_H) / BOARD_W); }
     const list = draft ? [...items.filter((i) => i.id !== draft.id), draft] : items;
     const hot = (id: string) => id === draft?.id || isHot(id);
     painter.paint(c.getContext('2d')!, list, c.width / BOARD_W, () => rerender((n) => n + 1), { grid: !readOnly, tags, hot });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, draft, box, readOnly, tags, tick, painter]);
+  }, [items, draft, box, readOnly, tags, tick, painter, sharpZoom]);
   useEffect(() => { const id = requestAnimationFrame(paint); return () => cancelAnimationFrame(id); }, [paint]);
   // Web fonts load after the first paint; repaint when they are ready so text uses them.
   useEffect(() => { document.fonts?.ready.then(() => rerender((n) => n + 1), () => {}); }, []);
@@ -157,7 +178,22 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
     const r = canvas.current!.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * BOARD_W, ((e.clientY - r.top) / r.height) * BOARD_H];
   };
-  const toScreen = (x: number, y: number) => ({ left: (x / BOARD_W) * box.w, top: (y / BOARD_H) * box.h });
+  // Where a board point is over the board area (the view's zoom and offset included).
+  const toScreen = (x: number, y: number) => ({ left: (x / BOARD_W) * box.w * view.z + view.x, top: (y / BOARD_H) * box.h * view.z + view.y });
+  // The view kept inside the board: zoomed in, the board always fills the area.
+  const clampView = useCallback((v: View): View => {
+    const z = Math.min(MAX_ZOOM, Math.max(1, v.z));
+    if (z === 1) return { z, x: 0, y: 0 };
+    return { z, x: Math.min(0, Math.max(box.w - box.w * z, v.x)), y: Math.min(0, Math.max(box.h - box.h * z, v.y)) };
+  }, [box]);
+  // Zooms by `k` keeping the screen point (sx, sy) where it is.
+  const zoomAt = useCallback((v0: View, k: number, sx: number, sy: number, dx = 0, dy = 0) => {
+    const r = stage.current?.getBoundingClientRect();
+    if (!r) return v0;
+    const lx = sx - r.left, ly = sy - r.top;
+    const z = Math.min(MAX_ZOOM, Math.max(1, v0.z * k)), f = z / v0.z;
+    return clampView({ z, x: lx - (lx - v0.x) * f + dx, y: ly - (ly - v0.y) * f + dy });
+  }, [clampView]);
   // What I may change here: everything on my board, only my own items on a shared one.
   const mine = (i: BoardItem | null) => !!i && mayEdit(board.items, { t: 'del', id: i.id }, user.id, owner, true);
   const op = (o: BoardOp, record = true) => boardOp(o, record, owner);
@@ -172,8 +208,32 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
     setEdit(null);
   };
 
+  // A second finger: what the first one started is undone, and the two fingers resize or zoom instead.
+  const startPinch = () => {
+    const [[a, pa], [b, pb]] = [...touches.current.entries()];
+    const g = gesture.current;
+    if (g) {
+      gesture.current = null;
+      if (g.live && g.item) op({ t: 'del', id: g.item.id }, false); // a stroke already sent: take it back
+      else if (g.moved) op({ t: 'put', item: g.before.find((i) => i.id === g.moved!.id) ?? g.moved }, false);
+      setDraft(null);
+    }
+    const mid: [number, number] = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2];
+    // A picture or text of one's own under either finger (or between them) is resized; otherwise the view zooms.
+    const resizable = readOnly ? [] : items.filter((i) => i.kind !== 'stroke' && mine(i));
+    const at = (p: [number, number]) => { const [x, y] = toBoard({ clientX: p[0], clientY: p[1] }); return itemAt(resizable, x, y, 24); };
+    const item = at(mid) ?? at(pa) ?? at(pb);
+    pinch.current = { ids: [a, b], d0: Math.max(10, Math.hypot(pa[0] - pb[0], pa[1] - pb[1])), mid0: mid, view0: viewRef.current, item, before: boardOf(owner).items, sent: 0 };
+  };
+
   const down = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     setMenu(null);
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, [e.clientX, e.clientY]);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      if (touches.current.size === 2 && !pinch.current) { if (edit) commitText(); startPinch(); return; }
+      if (pinch.current || touches.current.size > 2) return;
+    }
     if (readOnly || gesture.current || !e.isPrimary) return;
     const [x, y] = toBoard(e);
     if (tool === 'laser') { e.currentTarget.setPointerCapture(e.pointerId); pointLaser(owner, [x, y]); return; }
@@ -207,6 +267,26 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   };
 
   const move = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) touches.current.set(e.pointerId, [e.clientX, e.clientY]);
+    const p = pinch.current;
+    if (p) {
+      if (!p.ids.includes(e.pointerId)) return;
+      const pa = touches.current.get(p.ids[0]), pb = touches.current.get(p.ids[1]);
+      if (!pa || !pb) return;
+      const k = Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) / p.d0;
+      const mid: [number, number] = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2];
+      if (p.item) {
+        // The picture grows around where the fingers first met and follows them as they move.
+        const [cx, cy] = toBoard({ clientX: p.mid0[0], clientY: p.mid0[1] }), [mx, my] = toBoard({ clientX: mid[0], clientY: mid[1] });
+        const scaled = moveItem(scaleItem(p.item, k, cx, cy), mx - cx, my - cy);
+        p.scaled = scaled;
+        setDraft(scaled);
+        const now = performance.now();
+        if (now - p.sent > SEND_EVERY && !boardBusy(owner)) { p.sent = now; op({ t: 'put', item: scaled }, false); }
+      } else setView(zoomAt(p.view0, k, p.mid0[0], p.mid0[1], mid[0] - p.mid0[0], mid[1] - p.mid0[1]));
+      return;
+    }
+    if (e.pointerType === 'touch' && touches.current.size > 1) return;
     // The laser follows the mouse without a press, and a finger or pen while it touches.
     if (tool === 'laser' && !readOnly) { if (e.pointerType === 'mouse' || e.buttons) pointLaser(owner, toBoard(e)); return; }
     const g = gesture.current;
@@ -239,6 +319,19 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   };
 
   const up = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    touches.current.delete(e.pointerId);
+    const p = pinch.current;
+    if (p) {
+      if (!p.ids.includes(e.pointerId)) return;
+      pinch.current = null;
+      if (p.item && p.scaled) {
+        op({ t: 'put', item: p.scaled }, false);
+        recordStep(p.before, [{ t: 'put', item: p.scaled }], owner);
+        setDraft(null);
+      }
+      setSharpZoom(viewRef.current.z);
+      return;
+    }
     const g = gesture.current;
     if (!g || e.pointerId !== g.pointer) return;
     gesture.current = null;
@@ -264,6 +357,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
       const fileId = await uploadFile(small);
       op({ t: 'put', item: { id: newId(), kind: 'image', fileId, w, h, x: Math.round((BOARD_W - w) / 2), y: Math.round((BOARD_H - h) / 2), by: user.id, ...(page ? { pg: page } : {}) } });
       setTool('move');
+      setHint(true);
     } catch {
       setError(t('uploadFailed'));
     } finally { setUploading(false); }
@@ -293,6 +387,37 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [edit, onClose, readOnly, owner, isOwner, page, menu]);
+  // Mouse wheel: Ctrl (or a trackpad pinch, which arrives as Ctrl + wheel) zooms the view; with the move tool
+  // the wheel over one's own picture or text resizes it. Zooming back to 1 shows the whole board again.
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      const k = Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * (e.ctrlKey ? 0.01 : 0.0025));
+      if (!e.ctrlKey && tool === 'move' && !readOnly) {
+        const [x, y] = toBoard(e);
+        const hit = itemAt(items.filter((i) => i.kind !== 'stroke' && mine(i)), x, y, 8);
+        if (!hit) return;
+        e.preventDefault();
+        const before = boardOf(owner).items, scaled = scaleItem(hit, k, x, y);
+        op({ t: 'put', item: scaled }, false);
+        recordStep(before, [{ t: 'put', item: scaled }], owner);
+        return;
+      }
+      if (!e.ctrlKey && !readOnly) return;
+      e.preventDefault();
+      const next = zoomAt(viewRef.current, k, e.clientX, e.clientY);
+      setView(next);
+      clearTimeout(wheelSharp.current);
+      wheelSharp.current = setTimeout(() => setSharpZoom(next.z), 200);
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  });
+  const wheelSharp = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // A new page, another board or a new size starts with the whole board in view.
+  useEffect(() => { setView({ z: 1, x: 0, y: 0 }); setSharpZoom(1); }, [owner, page, box.w, box.h]);
+
   // Leaving the laser tool (or the board) hides one's pointer.
   useEffect(() => { if (tool !== 'laser') return; return () => pointLaser(owner, null); }, [tool, owner]);
 
@@ -420,13 +545,23 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
 
       {/* The board */}
       <div ref={wrap} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center">
-        <div className="relative" style={{ width: box.w, height: box.h }}>
+        <div ref={stage} className="relative" style={{ width: box.w, height: box.h }}>
+          <div className="absolute inset-0 overflow-hidden rounded-2xl shadow-[0_8px_30px_rgba(60,40,20,0.15)] ring-1 ring-black/5">
+          <div className="absolute inset-0 origin-top-left" style={view.z === 1 ? undefined : { transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
           <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
             onPointerLeave={(e) => { if (tool === 'laser' && e.pointerType === 'mouse') pointLaser(owner, null); }}
-            className={clsx('block size-full touch-none rounded-2xl shadow-[0_8px_30px_rgba(60,40,20,0.15)] ring-1 ring-black/5',
+            className={clsx('block size-full touch-none',
               !readOnly && (tool === 'move' ? 'cursor-grab' : tool === 'text' ? 'cursor-text' : tool === 'laser' ? 'cursor-none' : 'cursor-crosshair'))}
             style={{ width: box.w, height: box.h }} />
           <LaserDots owner={owner} color={colorOf} box={box} />
+          </div>
+          </div>
+          {view.z > 1.01 && (
+            <button type="button" onClick={() => { setView({ z: 1, x: 0, y: 0 }); setSharpZoom(1); }} aria-label={t('zoomReset')} title={t('zoomReset')}
+              className="absolute bottom-2 start-2 z-10 flex min-h-9 items-center gap-1.5 rounded-full bg-black/65 px-3 text-xs font-semibold text-white shadow active:scale-95">
+              <ZoomOut className="size-4" /><span dir="ltr" className="tabular-nums">{Math.round(view.z * 100)}%</span>
+            </button>
+          )}
           {items.length === 0 && !draft && !edit && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-[#9a8f84]">{readOnly ? '' : t('empty')}</div>
           )}
@@ -446,6 +581,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
           )}
           {uploading && <div className="absolute inset-x-0 top-3 mx-auto flex w-max items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white"><Loader2 className="size-3.5 animate-spin" />{t('uploading')}</div>}
           {!readOnly && !split && !vertical && box.w < 520 && <div className="pointer-events-none absolute inset-x-0 -bottom-7 text-center text-[11px] text-[#9a8f84]">{t('rotate')}</div>}
+          {hint && !error && !uploading && <div className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-max max-w-[90%] rounded-full bg-black/70 px-3 py-1.5 text-center text-xs text-white">{t('pinchHint')}</div>}
           {error && <div role="alert" className="absolute inset-x-0 top-3 mx-auto w-max rounded-full bg-[#d9443c] px-3 py-1.5 text-xs text-white">{error}</div>}
         </div>
 

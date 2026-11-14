@@ -216,3 +216,20 @@ export function nameTags(items: BoardItem[], owner: string, gap = 240): { by: st
   }
   return tags;
 }
+
+/**
+ * A picture or a piece of text made `factor` times bigger around the board point (cx, cy) — two fingers
+ * pinching it, or the mouse wheel. Pictures keep their shape; sizes stay within what the board accepts.
+ * Strokes are returned as they are.
+ */
+export function scaleItem(i: BoardItem, factor: number, cx: number, cy: number): BoardItem {
+  if (i.kind === 'image') {
+    const k = Math.min(BOARD_W * 2 / i.w, BOARD_H * 2 / i.h, Math.max(40 / Math.min(i.w, i.h), factor));
+    return { ...i, w: Math.round(i.w * k), h: Math.round(i.h * k), x: Math.round(cx + (i.x - cx) * k), y: Math.round(cy + (i.y - cy) * k) };
+  }
+  if (i.kind === 'text') {
+    const size = Math.min(160, Math.max(12, Math.round(i.size * factor))), k = size / i.size;
+    return { ...i, size, x: Math.min(BOARD_W, Math.max(0, Math.round(cx + (i.x - cx) * k))), y: Math.min(BOARD_H, Math.max(0, Math.round(cy + (i.y - cy) * k))) };
+  }
+  return i;
+}

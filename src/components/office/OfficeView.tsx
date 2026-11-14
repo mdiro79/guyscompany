@@ -33,7 +33,7 @@ import { music } from './play/music';
 import { GAME_IDS, isGameId } from '@/lib/arcade';
 import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
-import { tablet, type TabletButton } from './tablet';
+import { tablet, loadHolo, setHolo, type TabletButton } from './tablet';
 import { MeetingPanel, type MeetingPanelMode, type OfficeMeeting } from './MeetingPanel';
 import { meetingPresenceAction } from '@/app/actions/meetings';
 import { clockText, HEARTBEAT_MS, meetingEnd } from '@/lib/meetings';
@@ -131,7 +131,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
     raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),
     board: t('tablet.board'), present: t('tablet.present'), stopPresent: t('tablet.stopPresent'), view: t('tablet.view'),
-    react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'),
+    react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'), holo: t('tablet.holo'),
     stand: t('tablet.stand'), hands: t('meeting.hands'), notes: t('tablet.notes'), meeting: t('tablet.meeting'), startMeeting: t('tablet.startMeeting'), rtl: locale === 'fa',
   }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
@@ -323,15 +323,14 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     setMyPos((prev) => (Math.abs(prev[0] - p.x) + Math.abs(prev[1] - p.z) > 0.25 ? [p.x, p.z] : prev));
   }, [net]);
 
-  // Proximity voice: full volume in the same room, fading with distance; muted through closed offices.
+  // Voices are at full volume wherever people are in the office (owner request: no fading with distance,
+  // so the team can talk from anywhere). Only an office its owner closed (frosted glass, locked or focus)
+  // keeps its talk mostly inside.
   const voiceDistance = useCallback((pos: [number, number], userId: string) => {
-    const d = Math.hypot(pos[0] - myPos[0], pos[1] - myPos[1]);
     const a = officeAt(...pos)?.slot ?? (inConference(...pos) ? 0 : -1);
     const b = officeAt(...myPos)?.slot ?? (inConference(...myPos) ? 0 : -1);
-    let v = a === b && a !== -1 ? 1 : Math.max(0, Math.min(1, 1 - (d - 2) / 10));
-    const closed = offices.find((o) => (o.slot === a || o.slot === b) && a !== b && (o.glass === 'frosted' || o.locked || o.focus));
-    if (closed) v *= 0.15;
-    voice.setVolume(userId, v);
+    const closed = a !== b && offices.some((o) => (o.slot === a || o.slot === b) && (o.glass === 'frosted' || o.locked || o.focus));
+    voice.setVolume(userId, closed ? 0.15 : 1);
   }, [myPos, offices, voice]);
 
   // Owner panel of one's office: closed by default (a small pill in the top bar), closed again on leaving.
@@ -369,7 +368,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
   // The seat tablet: its labels, what it shows (hand, mic, presentation, light) and its button presses.
   const pressRef = useRef<(b: TabletButton) => void>(() => {});
-  useEffect(() => { tablet.handle((b) => pressRef.current(b)); return () => tablet.handle(null); }, []);
+  useEffect(() => { tablet.handle((b) => pressRef.current(b)); loadHolo(); return () => tablet.handle(null); }, []);
   useEffect(() => tablet.set({ labels: tabletLabels }), [tabletLabels]);
   useEffect(() => tablet.set({
     hand: hands.includes(user.id), mic: voice.micOn, hands: hands.length, dimmed: roomNow.light <= 40,
@@ -454,6 +453,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
         break;
       case 'react': openWheel(true); break;
       case 'look': input.lookAt = SCREEN_CENTER; break;
+      case 'holo': setHolo(!tablet.get().holo); break;
       case 'lights': {
         roomControls.set(roomNow.light <= 40 ? MEETING_LIGHT : PRESENT_LIGHT);
         void saveRoomAction('conference', roomControls.get());
