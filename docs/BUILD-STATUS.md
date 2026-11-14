@@ -10,7 +10,7 @@ All stages of `BUILD-INSTRUCTIONS.md` are implemented on branch `claude/vibrant-
 | 3 3D office | "+" plan, glass conference room, 4 offices, reception, floor lines, first person, arms, sit (E) with dashboard on monitor/fullscreen, joystick + drag on phones, auto low quality | screenshots from 8 viewpoints, layout/collision tests |
 | 4 Multiplayer | presence, WebRTC data channels for position (no DB), last command wins with server-corrected clock, chat/emote bubbles with history + counter | `scripts/sync-test.cjs` (two tabs, same user) |
 | 5 Characters | pick one of 20 (rotating 3D preview), head/arm motion while talking, 12 emotes | screenshots |
-| 6 Voice | audio-only mesh, one active mic (phone or computer), Steam Deck panel, proximity volume, focus mode, optional TURN | code path; needs two real people to verify by ear |
+| 6 Voice | audio-only mesh, one active mic (phone or computer), Steam Deck panel, full volume everywhere (closed offices keep talk inside), cleaned microphone (low cut, speech gate against taps and handling noise, compressor; 64 kb/s), focus mode, optional TURN | speech gate unit test on made-up sound; needs two real people to verify by ear |
 | 7 Offices | frosted/clear glass, lock, focus, public (view only), 30-day visitors, private chat after invite acceptance, admin assignment, member swaps by mutual agreement | door-rule tests |
 | 8 Ideas | polls 1–10 hidden until close (scores redacted server-side), manager decides ties, projects, volunteer roles | unit tests |
 | 9 Polish | receptionist tutorial, contextual key hints, user panel, daily cleanup cron (also keeps Supabase awake) | e2e tutorial check |

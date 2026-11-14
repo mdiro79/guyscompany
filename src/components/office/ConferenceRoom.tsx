@@ -536,9 +536,9 @@ function WallPanel() {
 // camera), a little in front of the middle of the table. It is turned on and off from the seat tablet
 // ("Smart screen", kept per device) and shows only inside the conference room.
 
-const HOLO_W = 2.2, HOLO_H = HOLO_W * (BOARD_H / BOARD_W); // 16:9, like the screen
-const HOLO_BOTTOM = CONF_TABLE_HEIGHT + 0.24;
-const HOLO_TOWARD = 0.35; // metres from the middle of the table towards the viewer
+const HOLO_W = 2.0, HOLO_H = HOLO_W * (BOARD_H / BOARD_W); // 16:9, like the screen
+const HOLO_BOTTOM = CONF_TABLE_HEIGHT + 0.2;
+const HOLO_TOWARD = 0.25; // metres from the middle of the table towards the viewer
 const HOLO_CYAN = new THREE.Color('#5fe6ff');
 const useHoloOn = () => useSyncExternalStore(tablet.subscribe, () => tablet.get().holo, () => false);
 
