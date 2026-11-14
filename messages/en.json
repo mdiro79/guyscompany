@@ -233,7 +233,13 @@
     "confirmDeletePage": "Delete this page and everything on it?",
     "lowerHand": "Lower {name}'s hand",
     "zoomReset": "Show the whole board",
-    "pinchHint": "Two fingers on a picture resize it; elsewhere they zoom"
+    "pinchHint": "Two fingers on a picture resize it; elsewhere they zoom",
+    "slides": "Presentation (PowerPoint or PDF)",
+    "slidesOpening": "Opening the presentation…",
+    "slidesProgress": "Slide {done} of {total}…",
+    "slidesFailed": "The presentation could not be opened",
+    "slidesUnsupported": "Choose a PowerPoint (.pptx) or PDF file",
+    "slidesOld": "This older format cannot be opened here: save it as .pptx or PDF (File › Save as)"
   },
   "top": {
     "focusMode": "Focus Mode",
@@ -1295,7 +1301,18 @@
     },
     "hall": "Arcade hall",
     "zen": "Zen deck",
-    "lab": "Idea lab"
+    "lab": "Idea lab",
+    "holo": {
+      "title": "Smart screen",
+      "on": "Turn on my smart screen",
+      "off": "Turn off my smart screen",
+      "bigger": "Bigger",
+      "smaller": "Smaller",
+      "turnLeft": "Turn left",
+      "turnRight": "Turn right",
+      "fit": "Fit to my view (automatic)",
+      "overTable": "Back over the table"
+    }
   },
   "emotes": {
     "smile": "Smile",

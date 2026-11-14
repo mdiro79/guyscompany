@@ -34,6 +34,7 @@ import { GAME_IDS, isGameId } from '@/lib/arcade';
 import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, loadHolo, setHolo, type TabletButton } from './tablet';
+import { HoloControls } from './HoloControls';
 import { MeetingPanel, type MeetingPanelMode, type OfficeMeeting } from './MeetingPanel';
 import { meetingPresenceAction } from '@/app/actions/meetings';
 import { clockText, HEARTBEAT_MS, meetingEnd } from '@/lib/meetings';
@@ -711,6 +712,10 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
             </button>
           )}
         </div>
+      )}
+      {/* One's own smart screen over the table: on/off, size, turning, fit to one's view */}
+      {!touring && ui.board === 'none' && ui.inConference && !ui.roomPanel && !ui.chat && !kb && (
+        <div className="gc-hud gc-kb-hide absolute end-safe top-1/2 z-30 -translate-y-1/2"><HoloControls /></div>
       )}
       {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} split={split} onSplit={setSplit} onClose={() => officeUi.set({ board: 'none' })} />}
 

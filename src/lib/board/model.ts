@@ -24,7 +24,7 @@ export const BOARD_COLORS = ['#1f2328', '#e5484d', '#f08a24', '#2f9e44', '#2a78d
 export const PEN_SIZES = [4, 9, 18] as const;
 export const TEXT_SIZES = [36, 56, 88] as const;
 export const MAX_ITEMS = 600;
-export const MAX_PAGES = 20;
+export const MAX_PAGES = 50; // room for a whole presentation, one slide a page
 const MAX_POINTS = 2000;
 const MAX_TEXT = 300;
 

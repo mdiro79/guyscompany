@@ -4,10 +4,11 @@ import clsx from 'clsx';
 import { useTranslations } from 'next-intl';
 import {
   Pen, Highlighter, Eraser, Type, ImagePlus, Move, Undo2, Redo2, Trash2, X, Cast, MonitorUp, Loader2, Eye, Columns2, Maximize2,
-  ChevronLeft, ChevronRight, FilePlus2, FileX2, Users, Lock, Timer, Hand, Crosshair, ZoomOut,
+  ChevronLeft, ChevronRight, FilePlus2, FileX2, Users, Lock, Timer, Hand, Crosshair, ZoomOut, Presentation,
 } from 'lucide-react';
 import { useShell } from '@/components/shell/ShellContext';
 import { uploadFile } from '@/lib/upload';
+import { renderSlides, slideKind, SLIDE_ACCEPT } from '@/lib/board/slides';
 import { BoardPainter, memberColor } from '@/lib/board/draw';
 import { useKeyboardOpen } from '@/lib/viewport';
 import {
@@ -108,6 +109,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   const [draft, setDraft] = useState<BoardItem | null>(null);
   const [edit, setEdit] = useState<TextEdit | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [slides, setSlides] = useState<{ done: number; total: number } | null>(null); // a presentation being put on the board
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState(false); // how to resize a picture, shown a moment after adding one
   useEffect(() => { if (!hint) return; const id = setTimeout(() => setHint(false), 4500); return () => clearTimeout(id); }, [hint]);
@@ -119,6 +121,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const slideInput = useRef<HTMLInputElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   // The gesture in progress: the board before it (for undo), the stroke being drawn or the item being moved (`moved`: where it is now).
   // A stroke goes out once whole (`live`), then only its new points (`sentLen`: how many numbers the others have).
@@ -363,6 +366,32 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
     } finally { setUploading(false); }
   };
 
+  // A presentation (PDF or PowerPoint): every slide a picture filling its own page, starting on this page
+  // if it is empty, else on new pages right after it. Afterwards the board shows the first slide.
+  const addSlides = async (file: File | undefined) => {
+    if (!file || !isOwner) return;
+    const kind = slideKind(file);
+    if (kind !== 'pdf' && kind !== 'pptx') { setError(t(kind === 'old' ? 'slidesOld' : 'slidesUnsupported')); return; }
+    commitText(); setMenu(null); setError(null); setSlides({ done: 0, total: 0 });
+    let first = -1, room = MAX_PAGES - boardOf(user.id).pages + (onPage(boardOf(user.id).items, page).length ? 0 : 1);
+    try {
+      await renderSlides(file, Math.max(1, room), (total) => setSlides({ done: 0, total }), async (slide, i) => {
+        const fileId = await uploadFile(slide.file);
+        const b = boardOf(user.id);
+        if (!(i === 0 && onPage(b.items, b.page).length === 0)) { if (b.pages >= MAX_PAGES) return; insertPage(); }
+        const pg = boardOf(user.id).page;
+        if (first < 0) first = pg;
+        const { w, h } = fitImage(slide.w, slide.h, 1);
+        boardOp({ t: 'put', item: { id: newId(), kind: 'image', fileId, w, h, x: Math.round((BOARD_W - w) / 2), y: Math.round((BOARD_H - h) / 2), by: user.id, ...(pg ? { pg } : {}) } }, false, user.id);
+        room--;
+        setSlides((x) => x && { ...x, done: i + 1 });
+      });
+      if (first >= 0) goToPage(first);
+    } catch (e) {
+      setError(t(e instanceof Error && e.message === 'unsupported' ? 'slidesUnsupported' : 'slidesFailed'));
+    } finally { setSlides(null); }
+  };
+
   // Paste a picture straight onto the board.
   useEffect(() => {
     if (readOnly) return;
@@ -383,6 +412,11 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
       if (!readOnly && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? redo : undo)(owner); rerender((n) => n + 1); }
       if (!readOnly && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(owner); rerender((n) => n + 1); }
       if (isOwner && (e.key === 'PageDown' || e.key === 'PageUp')) { e.preventDefault(); goToPage(page + (e.key === 'PageDown' ? 1 : -1)); }
+      // Arrow keys turn the slides too (as with a presentation clicker); the page's own direction decides which is "next".
+      if (isOwner && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !(e.target as HTMLElement | null)?.closest?.('input,textarea')) {
+        const rtl = document.documentElement.dir === 'rtl';
+        e.preventDefault(); goToPage(page + ((e.key === 'ArrowRight') !== rtl ? 1 : -1));
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
@@ -507,12 +541,14 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
       )}
       {!readOnly && iconBtn(Undo2, t('undo'), () => { undo(owner); rerender((n) => n + 1); }, !canUndo(owner))}
       {!readOnly && iconBtn(Redo2, t('redo'), () => { redo(owner); rerender((n) => n + 1); }, !canRedo(owner))}
+      {isOwner && board.pages > 1 && iconBtn(ChevronLeft, t('prevPage'), () => goToPage(page - 1), page === 0)}
       {isOwner ? (
         <button type="button" onClick={() => toggleMenu('page')} aria-expanded={menu === 'page'} title={t('page')} aria-label={`${t('page')} ${page + 1} / ${board.pages}`}
           className={clsx(btn, 'w-auto min-w-9 px-1 text-xs font-semibold tabular-nums', menu === 'page' && 'bg-black/10')} dir="ltr">
           {page + 1}/{board.pages}
         </button>
       ) : board.pages > 1 && <span className={clsx('flex shrink-0 items-center justify-center text-xs font-semibold tabular-nums', sz)} dir="ltr">{page + 1}/{board.pages}</span>}
+      {isOwner && board.pages > 1 && iconBtn(ChevronRight, t('nextPage'), () => goToPage(page + 1), page >= board.pages - 1)}
     </>
   );
 
@@ -579,6 +615,11 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
               </div>
             </div>
           )}
+          {slides && (
+            <div className="absolute inset-x-0 top-3 z-10 mx-auto flex w-max max-w-[90%] items-center gap-2 rounded-full bg-black/75 px-3 py-1.5 text-xs text-white">
+              <Loader2 className="size-3.5 animate-spin" />{slides.total ? t('slidesProgress', { done: slides.done, total: slides.total }) : t('slidesOpening')}
+            </div>
+          )}
           {uploading && <div className="absolute inset-x-0 top-3 mx-auto flex w-max items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white"><Loader2 className="size-3.5 animate-spin" />{t('uploading')}</div>}
           {!readOnly && !split && !vertical && box.w < 520 && <div className="pointer-events-none absolute inset-x-0 -bottom-7 text-center text-[11px] text-[#9a8f84]">{t('rotate')}</div>}
           {hint && !error && !uploading && <div className="pointer-events-none absolute inset-x-0 top-3 mx-auto w-max max-w-[90%] rounded-full bg-black/70 px-3 py-1.5 text-center text-xs text-white">{t('pinchHint')}</div>}
@@ -640,6 +681,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
           {toolBtn('move', Move, t('move'))}
           {toolBtn('laser', Crosshair, t('laser'))}
           {iconBtn(ImagePlus, t('image'), () => fileInput.current?.click(), uploading, false)}
+          {isOwner && iconBtn(Presentation, t('slides'), () => slideInput.current?.click(), !!slides, false)}
           {isOwner && iconBtn(Trash2, t('clear'), () => { if (confirm(t('confirmClear'))) op({ t: 'clear', pg: page }); }, items.length === 0, false)}
           <span className={sep} />
           {roomy ? (
@@ -657,6 +699,7 @@ export function BoardApp({ onClose, watch = false, split, onSplit }: { onClose: 
             </button>
           )}
           <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => { void addImage(e.target.files?.[0]); e.target.value = ''; }} />
+          <input ref={slideInput} type="file" accept={SLIDE_ACCEPT} hidden onChange={(e) => { void addSlides(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
       )}
     </div>

@@ -23,6 +23,7 @@ import { roomControls, useRoomSettings } from './roomControls';
 import { useConferenceGlass } from './conferenceGlass';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
 import { officeUi, useOfficeUi } from './store';
+import { holoView } from './holo';
 
 // The round conference room after the owner's reference image: a large light-oak table with a planter
 // in the middle and a glowing ring under its pedestal, light-blue armchairs with white frames, a tablet
@@ -533,8 +534,9 @@ function WallPanel() {
 // A large floating copy of the meeting screen above the middle of the table, like a hologram but sharp: the
 // same picture as the wall screen (presentations, pictures, the meeting page), so small writing can be read
 // without zooming. Everyone sees it turned towards themselves (it is drawn on each device for its own
-// camera), a little in front of the middle of the table. It is turned on and off from the seat tablet
-// ("Smart screen", kept per device) and shows only inside the conference room.
+// camera, so nobody else ever sees one's own), a little in front of the middle of the table, sized to fit
+// the viewer's screen. It is turned on and off from the seat tablet ("Smart screen", kept per device) and
+// shows only inside the conference room; size, turning and "fit to my view" are in holo.ts.
 
 const HOLO_W = 2.0, HOLO_H = HOLO_W * (BOARD_H / BOARD_W); // 16:9, like the screen
 const HOLO_BOTTOM = CONF_TABLE_HEIGHT + 0.2;
@@ -574,11 +576,13 @@ function beamGeometry(bottomW: number, topW: number, height: number, back: numbe
 function HoloScreen({ picture, people }: { picture: ScreenPicture; people: Person[] }) {
   const on = useHoloOn();
   const inRoom = useOfficeUi((u) => u.inConference);
+  const seat = useOfficeUi((u) => u.seatId);
   const show = on && inRoom;
-  const group = useRef<THREE.Group>(null);
+  const root = useRef<THREE.Group>(null);
+  const beamG = useRef<THREE.Group>(null);
   const panel = useRef<THREE.Group>(null);
-  const beam = useRef<THREE.Mesh>(null);
   const grow = useRef(0); // 0..1 while it switches on (and back while it switches off)
+  const seenFit = useRef(holoView.get().fit);
   const { camera } = useThree();
   const tx = holoTextures();
   const parts = useMemo(() => ({
@@ -591,36 +595,71 @@ function HoloScreen({ picture, people }: { picture: ScreenPicture; people: Perso
   }), [picture, tx]);
   const beamGeo = useMemo(() => beamGeometry(0.22, HOLO_W * 0.92, HOLO_BOTTOM - CONF_TABLE_HEIGHT + 0.02, HOLO_TOWARD), []);
   useEffect(() => () => { Object.values(parts).forEach((m) => m.dispose()); beamGeo.dispose(); }, [parts, beamGeo]);
+  // Taking another seat, or leaving the room, puts it back over the table.
+  useEffect(() => { holoView.overTable(); }, [inRoom, seat]);
+  const tmp = useMemo(() => ({ o: new THREE.Object3D(), v: new THREE.Vector3(), q: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0) }), []);
   useFrame((_, dt) => {
-    const g = group.current, p = panel.current;
-    if (!g || !p) return;
+    const g = root.current, p = panel.current, b = beamG.current;
+    if (!g || !p || !b) return;
     grow.current = Math.max(0, Math.min(1, grow.current + (show ? dt : -dt) * 3.2));
     const k = grow.current;
     g.visible = k > 0;
     if (!k) return;
-    // Towards the viewer: a little in front of the middle of the table, turned to face them.
-    const cx = camera.position.x, cz = camera.position.z, d = Math.hypot(cx, cz) || 1;
-    g.position.set((cx / d) * HOLO_TOWARD, 0, (cz / d) * HOLO_TOWARD);
-    g.rotation.y = Math.atan2(cx, cz);
-    // The screen tilts a little so it faces the eyes, seated or standing.
-    const y = HOLO_BOTTOM + HOLO_H / 2;
-    p.position.y = y;
-    p.rotation.x = -Math.atan2(camera.position.y - y, Math.max(0.5, d - HOLO_TOWARD)) * 0.6;
-    // Switching on: it unfolds from the emitter with a short flicker.
-    const flicker = k < 1 ? 0.75 + 0.25 * Math.sin(performance.now() / 18) : 1;
-    p.scale.set(0.2 + 0.8 * k, k * k, 1);
+    const cam = camera as THREE.PerspectiveCamera, eye = cam.position, half = THREE.MathUtils.degToRad(cam.fov / 2);
+    // How wide a screen at distance d fills most of this view (narrow on a phone held upright).
+    const fits = (d: number) => { const vh = 2 * d * Math.tan(half); return Math.min(0.9 * vh * cam.aspect, 0.85 * vh * (HOLO_W / HOLO_H)); };
+    let v = holoView.get();
+    // "Fit to my view": right in front of where one looks, facing one, as large as fits.
+    if (v.fit !== seenFit.current) {
+      seenFit.current = v.fit;
+      const dir = cam.getWorldDirection(tmp.v.set(0, 0, -1)).clone();
+      let d = 1.7;
+      for (; d > 0.7; d -= 0.1) { const x = eye.x + dir.x * d, z = eye.z + dir.z * d; if (Math.hypot(x, z) < CONF_RADIUS - 0.45) break; }
+      tmp.o.position.set(eye.x + dir.x * d, THREE.MathUtils.clamp(eye.y + dir.y * d, 0.5, WALL_HEIGHT - 0.3), eye.z + dir.z * d);
+      tmp.o.lookAt(eye);
+      const q = tmp.o.quaternion, w = THREE.MathUtils.clamp(fits(tmp.o.position.distanceTo(eye)), 0.5, 3.2);
+      holoView.placed({ x: tmp.o.position.x, y: tmp.o.position.y, z: tmp.o.position.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, w });
+      v = holoView.get();
+    }
+    // Turning: from where it stands now, around the upright axis.
+    if (v.turn) {
+      const base = v.place ?? { x: p.position.x, y: p.position.y, z: p.position.z, qx: p.quaternion.x, qy: p.quaternion.y, qz: p.quaternion.z, qw: p.quaternion.w, w: (p.scale.x / Math.max(0.01, 0.2 + 0.8 * k)) * HOLO_W / v.scale };
+      tmp.q.set(base.qx, base.qy, base.qz, base.qw).premultiply(new THREE.Quaternion().setFromAxisAngle(tmp.up, v.turn));
+      holoView.placed({ ...base, qx: tmp.q.x, qy: tmp.q.y, qz: tmp.q.z, qw: tmp.q.w });
+      v = holoView.get();
+    }
+    let w: number;
+    if (v.place) {
+      w = v.place.w * v.scale;
+      p.position.set(v.place.x, v.place.y, v.place.z);
+      p.quaternion.set(v.place.qx, v.place.qy, v.place.qz, v.place.qw);
+      b.visible = false;
+    } else {
+      // Over the table: a little in front of its middle, turned to face the viewer and tilted to the eyes.
+      const cx = eye.x, cz = eye.z, d = Math.hypot(cx, cz) || 1, yaw = Math.atan2(cx, cz);
+      w = THREE.MathUtils.clamp(fits(Math.max(0.8, d - HOLO_TOWARD)), 0.9, HOLO_W) * v.scale;
+      const y = HOLO_BOTTOM + (w * HOLO_H / HOLO_W) / 2;
+      p.position.set((cx / d) * HOLO_TOWARD, y, (cz / d) * HOLO_TOWARD);
+      p.rotation.set(-Math.atan2(eye.y - y, Math.max(0.5, d - HOLO_TOWARD)) * 0.6, yaw, 0, 'YXZ');
+      b.visible = true;
+      b.position.set((cx / d) * HOLO_TOWARD, 0, (cz / d) * HOLO_TOWARD);
+      b.rotation.set(0, yaw, 0);
+      b.scale.set((0.2 + 0.8 * k) * w / HOLO_W, k, 1);
+    }
+    // Switching on: it unfolds with a short flicker.
+    const flicker = k < 1 ? 0.75 + 0.25 * Math.sin(performance.now() / 18) : 1, sw = w / HOLO_W;
+    p.scale.set(sw * (0.2 + 0.8 * k), sw * k * k, 1);
     parts.content.opacity = k < 1 ? 0.9 * k * flicker : 1;
     parts.edge.opacity = k;
     parts.glass.opacity = 0.22 * k;
-    if (beam.current) beam.current.scale.set(0.2 + 0.8 * k, k, 1);
     parts.beam.opacity = 0.32 * k * flicker;
   });
   const E = 0.012; // edge thickness
   return (
-    <group ref={group} visible={false}>
+    <group ref={root} visible={false}>
       {/* the emitter in the middle of the planter, and the light rising from it to the screen */}
-      <mesh position={[0, CONF_TABLE_HEIGHT + 0.004, -HOLO_TOWARD]} rotation-x={-Math.PI / 2} material={parts.emitter}><ringGeometry args={[0.07, 0.11, 40]} /></mesh>
-      <mesh ref={beam} position-y={CONF_TABLE_HEIGHT - 0.01} material={parts.beam} geometry={beamGeo} renderOrder={2} />
+      <mesh position={[0, CONF_TABLE_HEIGHT + 0.004, 0]} rotation-x={-Math.PI / 2} material={parts.emitter}><ringGeometry args={[0.07, 0.11, 40]} /></mesh>
+      <group ref={beamG}><mesh position-y={CONF_TABLE_HEIGHT - 0.01} material={parts.beam} geometry={beamGeo} renderOrder={2} /></group>
       <group ref={panel}>
         {/* a glowing glass rim, its bright edges and the picture itself */}
         <mesh position-z={-0.004} material={parts.glass} renderOrder={2}><planeGeometry args={[HOLO_W + 0.06, HOLO_H + 0.06]} /></mesh>
