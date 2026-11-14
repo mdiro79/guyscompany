@@ -29,6 +29,9 @@ export const ARCADE = {
   hockey: { kind: 'versus', cap: 0 },
   pong: { kind: 'versus', cap: 0 },
   trails: { kind: 'versus', cap: 0 },
+  sumo: { kind: 'versus', cap: 0 },
+  rush: { kind: 'versus', cap: 0 },
+  volley: { kind: 'versus', cap: 0 },
 } as const satisfies Record<string, GameRule>;
 
 export type GameId = keyof typeof ARCADE;

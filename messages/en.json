@@ -1262,6 +1262,35 @@
         "touch": "Pull and let go",
         "round": "Round {n} of {all}",
         "miss": "Miss"
+      },
+      "sumo": {
+        "name": "Sumo Bumpers",
+        "tag": "Push everyone off the shrinking platform",
+        "how": "Every player is a bouncy bumper ball on a round platform floating in the sky. As many as like can join.\n• Steer into the others or dash to ram them over the edge. A falling ball is out.\n• The platform shrinks as the round goes on.\n• Power stones: 🪨 heavy (hard to push, hits hard) · 🌀 spring (whoever you touch flies off)\n• The last one on the platform wins the round. First to 3 rounds wins.",
+        "keys": "Move with the mouse (or arrows/WASD); click or Space to dash",
+        "touch": "Hold your finger where you want to go; tap to dash",
+        "round": "Round {n}",
+        "wonRound": "{name} wins the round",
+        "noWinner": "Everyone fell!",
+        "shrinking": "The platform is shrinking!"
+      },
+      "rush": {
+        "name": "Coin Rush",
+        "tag": "A minute of chaos: grab coins, steal from rivals",
+        "how": "Coins keep raining into the yard for one minute. As many as like can join.\n• Run over coins to pick them up; the golden star coin is worth 5.\n• Dash into a rival to knock coins out of their pocket, then grab them.\n• Bombs fall where a shadow grows: whoever is caught loses a third of their coins and is dizzy for a moment. They like to fall near the leader!\n• Most coins when the time is up wins.",
+        "keys": "Move with the mouse (or arrows/WASD); click or Space to dash",
+        "touch": "Hold your finger where you want to go; tap to dash",
+        "ready": "Get ready!",
+        "timeUp": "Time's up!"
+      },
+      "volley": {
+        "name": "Sky Volley",
+        "tag": "Beach volleyball from above, one or two a side",
+        "how": "Two teams across a net (2 to 4 players). The ball flies in real arcs; its shadow shows where it will come down.\n• Get under the ball and you hit it over the net automatically. Where it touches you decides where it goes: hit it with your left side and it flies right.\n• Dash close to the net to smash: fast and low.\n• A ball landing on your side, or your hit landing out, is a point for the other team.\n• First team to 7 points wins.",
+        "keys": "Move with the mouse (or arrows/WASD); click or Space to jump and smash near the net",
+        "touch": "Hold your finger where you want to go; tap to jump and smash",
+        "firstTo": "First to {n} points",
+        "pointTo": "Point for {name}"
       }
     },
     "hall": "Arcade hall",
