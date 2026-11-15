@@ -375,3 +375,15 @@ export const gameScores = pgTable('game_scores', {
   wins: integer('wins').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.game] })]);
+
+// The office phone's gallery: photos a member took with the phone's camera. Private to their owner; the
+// bytes are in Storage (WebP, about 100–300 KB each) and every member has a fixed amount of room.
+export const photos = pgTable('photos', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+  storagePath: text('storage_path').notNull(),
+  size: integer('size').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('photos_user_idx').on(t.userId, t.createdAt)]);

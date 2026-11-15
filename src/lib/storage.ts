@@ -13,9 +13,10 @@ export async function putObject(path: string, bytes: Buffer, mime: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function getObjectUrl(path: string, downloadName: string): Promise<string | null> {
+export async function getObjectUrl(path: string, downloadName: string | null): Promise<string | null> {
   if (isDemo) return null;
-  const { data } = await supabaseAdmin().storage.from(STORAGE_BUCKET).createSignedUrl(path, 60, { download: downloadName });
+  // `null`: shown in the page (a photo), not downloaded.
+  const { data } = await supabaseAdmin().storage.from(STORAGE_BUCKET).createSignedUrl(path, 300, downloadName === null ? undefined : { download: downloadName });
   return data?.signedUrl ?? null;
 }
 

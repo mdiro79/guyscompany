@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTr
 import dynamic from 'next/dynamic';
 import clsx from 'clsx';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, MessageCircle, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast, KeyRound, Map as MapIcon, MoreHorizontal, Gamepad2, Music, Coffee, Timer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Mic, MicOff, Smile, Gauge, Maximize2, Minimize2, Armchair, Hand, MessageSquare, MessageCircle, X, DoorOpen, DoorClosed, Lock, LogOut, SlidersHorizontal, EyeOff, Target, ChevronDown, PenLine, Cast, KeyRound, Map as MapIcon, MoreHorizontal, Gamepad2, Music, Coffee, Timer, Smartphone } from 'lucide-react';
 import { invalidate } from '@react-three/fiber';
 import { present, usePresenter } from '@/lib/board/sync';
 import { raiseHand, useHands } from '@/lib/board/hands';
@@ -37,6 +37,8 @@ import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, loadHolo, setHolo, type TabletButton } from './tablet';
 import { HoloControls } from './HoloControls';
+import { PhoneOverlay } from './phone/PhoneOverlay';
+import { phone, gestures, me as phoneMe, usePhone } from './phone/phone';
 import { PartyPanel } from './PartyPanel';
 import { connectParty, party } from './party';
 import { partyAudio, startPartyAudio } from './partyAudio';
@@ -142,6 +144,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
   const net = useOfficeNet(mesh, user.id);
+  const phoneState = usePhone();
+  useEffect(() => { gestures.connect(net.sendGesture); return () => gestures.connect(null); }, [net.sendGesture]);
   const ui = useOfficeUi((s) => s);
   const tourStep = useTourStep();
   const [myPos, setMyPos] = useState<[number, number]>([...SPAWN.pos]);
@@ -315,6 +319,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       if (e.code === 'KeyQ' && !e.repeat && !working) openWheel(!officeUi.get().emoteWheel);
       if (e.code === 'KeyM' && !e.repeat) voice.toggleMic();
       if (e.code === 'KeyN' && !e.repeat && !working && officeUi.get().overlay === 'none') { openMap(); return; }
+      if (e.code === 'KeyP' && !e.repeat && !working) { if (document.pointerLockElement) document.exitPointerLock(); phone.toggle(); return; }
       if (e.code === 'Escape') { officeUi.set({ emoteWheel: false, selectedUserId: null, roomPanel: false, overlay: 'none' }); setMeetingPanelState('none'); setMore(false); setVoteOpen(false); }
       const n = Number(e.key);
       if (officeUi.get().emoteWheel && n >= 1 && n <= 9) sendEmote(EMOTES[n - 1].id);
@@ -332,6 +337,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
 
   const lastPose = useRef<Parameters<typeof net.sendPose>[0] | null>(null);
   const onPose = useCallback((p: Parameters<typeof net.sendPose>[0]) => {
+    Object.assign(phoneMe, { x: p.x, z: p.z, yaw: p.yaw, seatId: p.seatId ?? null, moving: p.moving ?? 0 });
     lastPose.current = p;
     net.sendPose(p);
     setMyPos((prev) => (Math.abs(prev[0] - p.x) + Math.abs(prev[1] - p.z) > 0.25 ? [p.x, p.z] : prev));
@@ -581,6 +587,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
               <MessageCircle className="size-5" />
               {unreadChat > 0 && <span className="absolute -top-1 -end-1 min-w-5 rounded-full bg-[#f07a2a] px-1 text-center text-[11px] leading-5 font-bold shadow">{unreadChat > 9 ? '9+' : unreadChat}</span>}
             </button>
+            <button type="button" onClick={() => { if (document.pointerLockElement) document.exitPointerLock(); phone.toggle(); }} aria-label={t('phone.title')} aria-pressed={phoneState.open} title={`${t('phone.title')} (P)`}
+              className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', phoneState.open ? 'bg-[#2f8f7a]' : 'bg-black/55')}><Smartphone className="size-5" /></button>
             <button type="button" onClick={openMap} aria-label={t('map.title')} aria-pressed={ui.overlay === 'map'} title={`${t('map.title')} (N)`}
               className={clsx('flex size-11 items-center justify-center rounded-xl backdrop-blur', ui.overlay === 'map' ? 'bg-[#2f8f7a]' : 'bg-black/55')}><MapIcon className="size-5" /></button>
             <button type="button" onClick={() => officeUi.set({ lowQuality: !ui.lowQuality })} aria-label={ui.lowQuality ? t('highQuality') : t('lowQuality')} title={ui.lowQuality ? t('highQuality') : t('lowQuality')}
@@ -738,6 +746,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {ui.board !== 'none' && <BoardApp watch={ui.board === 'screen'} split={split} onSplit={setSplit} onClose={() => officeUi.set({ board: 'none' })} />}
 
       {/* Game room, library pod and the map */}
+      {!touring && <PhoneOverlay isPhone={isPhone} onOffice={(w) => { if (w === 'map') openMap(); else if (w === 'arcade') officeUi.set({ overlay: 'arcade' }); else openBoard('mine'); }} />}
       {ui.overlay === 'arcade' && <Arcade onClose={closeOverlay} />}
       {ui.overlay === 'jukebox' && !ui.seatId && (
         <div className="gc-hud absolute top-[4.25rem] end-safe z-30 short:top-14"><JukeboxPanel onClose={closeOverlay} /></div>

@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql }
 import { dbGeneration, getDb, resetDb, schema as s } from '@/db';
 import { describeDbError, isConnectionError, isNotSentError } from '@/lib/db-errors';
 import { cleanCounters, emptyCounters } from '@/lib/todo-game';
-import { OFFICE_DEFAULTS, type DataStore, type GameScore, type Issue, type IssueComment, type Meeting, type MeetingAttendance, type MeetingNote, type Message, type Milestone, type Notification, type Post, type ProjectIdea, type Room, type SharedNote, type Todo } from './types';
+import { OFFICE_DEFAULTS, type DataStore, type GameScore, type Photo, type Issue, type IssueComment, type Meeting, type MeetingAttendance, type MeetingNote, type Message, type Milestone, type Notification, type Post, type ProjectIdea, type Room, type SharedNote, type Todo } from './types';
 
 type Row = Record<string, unknown>;
 // Drizzle returns Date objects for timestamp columns; the app works with ISO strings.
@@ -261,6 +261,10 @@ export function createDbStore(injected?: Db): DataStore {
     async deletePost(id) { await db().delete(s.posts).where(eq(s.posts.id, id)); },
 
     async listGameScores() { return isoAll<GameScore>(await db().select().from(s.gameScores)); },
+    async listPhotos(userId) { return isoAll<Photo>(await db().select().from(s.photos).where(eq(s.photos.userId, userId)).orderBy(desc(s.photos.createdAt))); },
+    async getPhoto(id) { const [r] = await db().select().from(s.photos).where(eq(s.photos.id, id)); return r ? iso<Photo>(r) : null; },
+    async createPhoto(p) { const [r] = await db().insert(s.photos).values(p).returning(); return iso<Photo>(r); },
+    async deletePhoto(id) { await db().delete(s.photos).where(eq(s.photos.id, id)); },
     async reportGame(userId, game, d) {
       const [r] = await db().insert(s.gameScores).values({ userId, game, best: d.score + d.points, plays: 1, wins: d.wins })
         .onConflictDoUpdate({ target: [s.gameScores.userId, s.gameScores.game], set: {

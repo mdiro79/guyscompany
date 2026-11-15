@@ -1,11 +1,12 @@
 'use client';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { getCharacter } from '@/lib/characters';
 import { useVoice } from '@/components/voice/VoiceContext';
 import { input, useOfficeUi } from './store';
+import { hideInPhoto } from './phone/PhoneCamera';
 
 const FALLBACK = ['#d9a27a', '#7aa6c2', '#9fbf7a', '#c98fb6', '#e0b45a'];
 
@@ -36,6 +37,8 @@ export function FirstPersonArms({ characterId, userId }: { characterId: string; 
   const voice = useVoice();
   const seated = useOfficeUi((s) => s.seatId !== null);
   const t = useRef(0);
+  // Not in the phone camera's photos.
+  useEffect(() => { const g = group.current; if (!g) return; hideInPhoto.add(g); return () => { hideInPhoto.delete(g); }; });
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;

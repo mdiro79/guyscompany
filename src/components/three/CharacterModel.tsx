@@ -5,6 +5,7 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { getCharacter, KAYKIT_ANIMATIONS, type Character } from '@/lib/characters';
+import { gestureOf, type GestureId } from '@/components/office/phone/gestures';
 
 export type Motion = 'idle' | 'walk' | 'run' | 'sit';
 
@@ -27,7 +28,11 @@ const findBone = (root: THREE.Object3D, re: RegExp, not?: RegExp) => {
 
 // Reports the head bone and how far the top of the head is above it (metres), for labels above the head.
 export type HeadListener = (head: THREE.Object3D | null, top: number) => void;
-interface CharacterProps { characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean; typing?: boolean; onHead?: HeadListener }
+interface CharacterProps {
+  characterId: string; motion?: Motion; talkLevel?: number; hideHead?: boolean; onlyArms?: boolean; typing?: boolean; onHead?: HeadListener;
+  gesture?: GestureId | null; // a photo pose (phone camera)
+  lookAt?: () => THREE.Vector3 | null; // where the head turns (a phone camera pointed at the character), asked every frame
+}
 
 /**
  * One of the 20 characters, normalised to CHARACTER_HEIGHT with feet at y=0.
@@ -47,7 +52,7 @@ function KaykitCharacter(props: CharacterProps) {
   return <Rig {...props} sharedClips={clips} />;
 }
 
-function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, typing = false, onHead, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
+function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, onlyArms = false, typing = false, onHead, gesture = null, lookAt, sharedClips }: CharacterProps & { sharedClips?: THREE.AnimationClip[] }) {
   const character = getCharacter(characterId);
   const gltf = useGLTF(character.model);
   const talk = useRef(0);
@@ -90,7 +95,14 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
   useEffect(() => {
     const pick = (names: string[]) => names.map((n) => clips.find((c) => c.name === n)).find(Boolean) ?? clips[0];
     let action: THREE.AnimationAction | null = null;
-    if (motion === 'sit' && hasSitClip) {
+    const g = gestureOf(gesture);
+    const pose = g ? g.clips.map((n) => clips.find((c) => c.name === n)).find(Boolean) : null;
+    if (pose && motion !== 'sit') {
+      // A photo pose: the character's own clip for it, held at its end when it does not repeat.
+      action = mixer.clipAction(pose);
+      action.setLoop(g!.loop ? THREE.LoopRepeat : THREE.LoopOnce, g!.loop ? Infinity : 1);
+      action.clampWhenFinished = !g!.loop;
+    } else if (motion === 'sit' && hasSitClip) {
       action = mixer.clipAction(clips.find((c) => c.name === 'SitDown')!);
       action.setLoop(THREE.LoopOnce, 1);
       action.clampWhenFinished = true;
@@ -103,7 +115,7 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
     action.reset().fadeIn(0.2).play();
     if (current.current && current.current !== action) current.current.fadeOut(0.2);
     current.current = action;
-  }, [motion, clips, mixer, character.group, hasSitClip]);
+  }, [motion, clips, mixer, character.group, hasSitClip, gesture]);
 
   useEffect(() => () => { mixer.stopAllAction(); }, [mixer]);
 
@@ -121,7 +133,10 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
 
   // Talking offsets are additive; the previous frame's offset is removed first so un-animated bones do not drift.
   const applied = useRef({ hx: 0, hz: 0, al: 0, ar: 0, tl: 0, tr: 0, fl: 0, fr: 0 });
+  // Looking at a phone camera: the head's turn of the last frame is taken back first (like the offsets above).
+  const look = useMemo(() => ({ saved: null as THREE.Quaternion | null, w: 0, v: new THREE.Vector3(), q: new THREE.Quaternion(), pq: new THREE.Quaternion(), oq: new THREE.Quaternion(), d: new THREE.Quaternion(), f: new THREE.Vector3(), r: new THREE.Vector3() }), []);
   useFrame((state, dt) => {
+    if (look.saved && bones.head) { bones.head.quaternion.copy(look.saved); look.saved = null; }
     const a = applied.current;
     if (bones.head) { bones.head.rotation.x -= a.hx; bones.head.rotation.z -= a.hz; }
     if (bones.armL) bones.armL.rotation.z -= a.al;
@@ -154,6 +169,28 @@ function Rig({ characterId, motion = 'idle', talkLevel = 0, hideHead = false, on
     if (motion === 'sit' && !hasSitClip && character.group !== 'monsters-c') {
       for (const leg of [bones.legL, bones.legR]) if (leg) leg.rotation.x = -Math.PI / 2;
       for (const shin of [bones.shinL, bones.shinR]) if (shin) shin.rotation.x = Math.PI / 2;
+    }
+    // Turn the head towards a camera pointed at us (eases in and out), within what a neck can do.
+    const target = lookAt?.() ?? null, head = bones.head;
+    look.w += ((target ? 1 : 0) - look.w) * Math.min(1, dt * 6);
+    if (head && head.parent && look.w > 0.01 && (target || look.w > 0.01)) {
+      const tgt = target ?? look.r;
+      if (target) look.r.copy(target);
+      head.updateWorldMatrix(true, false);
+      const hp = head.getWorldPosition(look.v);
+      object.getWorldQuaternion(look.oq);
+      const fwd = look.f.set(0, 0, 1).applyQuaternion(look.oq);
+      const dx = tgt.x - hp.x, dy = tgt.y - hp.y, dz = tgt.z - hp.z;
+      let yaw = Math.atan2(dx, dz) - Math.atan2(fwd.x, fwd.z);
+      yaw = Math.max(-1.1, Math.min(1.1, Math.atan2(Math.sin(yaw), Math.cos(yaw)))) * look.w;
+      const pitch = Math.max(-0.45, Math.min(0.5, Math.atan2(dy, Math.hypot(dx, dz)))) * look.w;
+      // Turn in world space (up for the yaw, the head's sideways axis for the pitch), then back into the bone's space.
+      const side = new THREE.Vector3(Math.cos(Math.atan2(dx, dz)), 0, -Math.sin(Math.atan2(dx, dz)));
+      look.d.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw).multiply(new THREE.Quaternion().setFromAxisAngle(side, -pitch));
+      look.saved = head.quaternion.clone();
+      head.getWorldQuaternion(look.q);
+      head.parent.getWorldQuaternion(look.pq);
+      head.quaternion.copy(look.pq.invert().multiply(look.d.multiply(look.q)));
     }
   });
 

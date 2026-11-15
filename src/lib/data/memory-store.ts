@@ -1,7 +1,7 @@
 import type {
   DataStore, Profile, Project, Task, ProjectRole, FileMeta, Message, Poll, PollVote, FocusItem, Todo, TodoStats, Room,
   Issue, IssueComment, ProjectIdea, Milestone, Meeting, MeetingAttendance, MeetingNote, SharedNote,
-  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post, ChatRead, GameScore,
+  CalendarEvent, Notification, Office, OfficeVisit, SwapRequest, ChatInvite, NewTask, Post, ChatRead, GameScore, Photo,
 } from './types';
 import { MESSAGE_DEFAULTS, OFFICE_DEFAULTS, PROJECT_DEFAULTS } from './types';
 import { createSeed } from './seed';
@@ -36,6 +36,7 @@ export function createMemoryStore(): DataStore {
     notes: [] as MeetingNote[],
     shared: [] as SharedNote[],
     scores: [] as GameScore[],
+    photos: [] as Photo[],
     rooms: [{ id: 'conference', light: 100, warmth: 40, frost: 0, updatedAt: new Date(0).toISOString() }] as Room[],
     events: seed.events as CalendarEvent[],
     posts: seed.posts as Post[],
@@ -228,6 +229,10 @@ export function createMemoryStore(): DataStore {
     async deleteSharedNote(id, authorId) { db.shared = db.shared.filter((n) => !(n.id === id && n.authorId === authorId)); },
 
     async listGameScores() { return clone(db.scores); },
+    async listPhotos(userId) { return clone(db.photos.filter((p) => p.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))); },
+    async getPhoto(id) { return clone(db.photos.find((p) => p.id === id) ?? null); },
+    async createPhoto(p) { const x: Photo = { ...p, id: uuid(), createdAt: now() }; db.photos.push(x); return clone(x); },
+    async deletePhoto(id) { db.photos = db.photos.filter((p) => p.id !== id); },
     async reportGame(userId, game, d) {
       let row = db.scores.find((x) => x.userId === userId && x.game === game);
       if (!row) { row = { userId, game, best: 0, plays: 0, wins: 0, updatedAt: now() }; db.scores.push(row); }

@@ -188,6 +188,7 @@ export interface FocusItem {
 
 export type { TodoCategory, TodoStats } from '@/lib/todo-game';
 export type { GameScore } from '@/lib/arcade';
+export interface Photo { id: string; userId: string; storagePath: string; size: number; width: number; height: number; createdAt: string }
 import type { GameScore } from '@/lib/arcade';
 import type { TodoCategory, TodoStats } from '@/lib/todo-game';
 
@@ -438,6 +439,11 @@ export interface DataStore {
 
   // Game room records. `reportGame` adds a finished round in one step: best = max(best, score) + points.
   listGameScores(): Promise<GameScore[]>;
+  // The phone's gallery (newest first).
+  listPhotos(userId: string): Promise<Photo[]>;
+  getPhoto(id: string): Promise<Photo | null>;
+  createPhoto(p: Omit<Photo, 'id' | 'createdAt'>): Promise<Photo>;
+  deletePhoto(id: string): Promise<void>;
   reportGame(userId: string, game: string, d: { score: number; points: number; wins: number }): Promise<GameScore>;
 
   getRoom(id: string): Promise<Room | null>;

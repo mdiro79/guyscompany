@@ -71,6 +71,13 @@
       "when": 1794556323454,
       "tag": "0009_game_scores",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794728650126,
+      "tag": "0010_photos",
+      "breakpoints": true
     }
   ]
 }

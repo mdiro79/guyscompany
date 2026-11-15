@@ -5,11 +5,12 @@ import { syncedNow } from '@/lib/realtime/room';
 import type { Pose } from './Player';
 import { officeUi } from './store';
 import { EMOTE_MS, isEmoteId, type EmoteId } from './emotes';
+import { GESTURE_MS, isGestureId, type GestureId } from './phone/gestures';
 import { labelsChanged } from './labels';
 
 // typing: until when (Date.now()) the person counts as typing in the office chat.
 // vx, vz: metres per second from the last two poses, used to keep a walking character moving between messages.
-export interface RemoteAvatar { userId: string; pose: Pose; receivedAt: number; emote: { id: EmoteId; until: number } | null; typing: number; vx?: number; vz?: number }
+export interface RemoteAvatar { userId: string; pose: Pose; receivedAt: number; emote: { id: EmoteId; until: number } | null; typing: number; vx?: number; vz?: number; gesture?: { id: GestureId; until: number } | null }
 
 export const TYPING_MS = 4000; // a "typing" signal lasts this long unless renewed
 const TYPING_RENEW_MS = 2500;
@@ -47,6 +48,11 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
         if (cur) { cur.typing = msg.on ? Date.now() + TYPING_MS : 0; labelsChanged(); }
         return;
       }
+      if (msg.type === 'gesture' && isGestureId(msg.id) && from.userId !== userId) {
+        const cur = remotes.current.get(from.userId);
+        if (cur) cur.gesture = { id: msg.id, until: Date.now() + GESTURE_MS };
+        return;
+      }
       if (msg.type !== 'emote' || !isEmoteId(msg.id)) return;
       const until = Date.now() + EMOTE_MS;
       if (from.userId === userId) { officeUi.set({ myEmote: { id: msg.id, until } }); return; }
@@ -70,5 +76,7 @@ export function useOfficeNet(mesh: Mesh | null, userId: string) {
     mesh?.sendEvent({ type: 'typing', on });
   }, [mesh]);
 
-  return { remotes, external, sendPose, sendEmote, sendTyping };
+  const sendGesture = useCallback((id: GestureId) => { mesh?.sendEvent({ type: 'gesture', id }); }, [mesh]);
+
+  return { remotes, external, sendPose, sendEmote, sendTyping, sendGesture };
 }

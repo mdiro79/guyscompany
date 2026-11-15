@@ -22,7 +22,10 @@ it('supabase-setup.sql applies cleanly after the migration', async () => {
   const offices = await pg.query<{ n: number }>('select count(*)::int as n from offices');
   expect(offices.rows[0].n).toBe(4);
   const policies = await pg.query<{ n: number }>('select count(*)::int as n from pg_policies');
-  expect(policies.rows[0].n).toBe(31);
+  expect(policies.rows[0].n).toBe(32);
+  // The phone's photos are private: only their owner reads them.
+  const photos = await pg.query<{ n: number }>("select count(*)::int as n from pg_policies where tablename = 'photos'");
+  expect(photos.rows[0].n).toBe(1);
   // The arcade's records are readable by the team (the server writes them).
   const scores = await pg.query<{ n: number }>("select count(*)::int as n from pg_policies where tablename = 'game_scores'");
   expect(scores.rows[0].n).toBe(1);

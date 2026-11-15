@@ -25,6 +25,7 @@ import type { RemoteAvatar } from './useOfficeNet';
 import { input } from './store';
 import { SceneStats } from './SceneStats';
 import { ChessTable } from './ChessTable';
+import { PhoneCamera } from './phone/PhoneCamera';
 import { COMPUTER, LADDER, LOWEST, PHONE, WINDOW_MS, dprOf, initialQuality, stepQuality } from './quality';
 
 export interface SceneProps {
@@ -212,6 +213,7 @@ export default function OfficeScene(p: SceneProps) {
         <Receptionist />
         <Avatars remotes={p.remotes} profiles={p.profiles} voiceDistance={p.voiceDistance} />
         <FirstPersonArms characterId={p.user.characterId} userId={p.user.id} />
+        <PhoneCamera characterId={p.user.characterId} />
         <SceneReady onReady={markReady} />
       </Suspense>
       <Player offices={p.offices} viewerId={p.user.id} invitedSlots={p.invitedSlots} onPose={p.onPose} external={p.external} remotes={p.remotes} isPhone={p.isPhone} />

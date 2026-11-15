@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Profile } from '@/lib/data/types';
@@ -12,6 +12,8 @@ import type { RemoteAvatar } from './useOfficeNet';
 import { GroundShadow } from './GroundShadow';
 import { anchors, presentPeople } from './labels';
 import { partyHop, hopSeed } from './partyAudio';
+import { phoneLook } from './phone/phone';
+import type { GestureId } from './phone/gestures';
 
 const SEATS = allSeats();
 
@@ -23,6 +25,7 @@ function RemoteCharacter({ remotes, profile }: { remotes: React.RefObject<Map<st
   const voice = useVoice();
   const [motion, setMotion] = useState<Motion>('idle');
   const [talk, setTalk] = useState(0);
+  const [gesture, setGesture] = useState<GestureId | null>(null);
   const character = getCharacter(profile.characterId);
   useFrame((_, dt) => {
     const g = group.current;
@@ -54,9 +57,17 @@ function RemoteCharacter({ remotes, profile }: { remotes: React.RefObject<Map<st
     if (anchor) anchor.talk = level;
     const lvl = Math.round(level * 10) / 10;
     if (lvl !== talk) setTalk(lvl);
+    const gs = avatar.gesture && Date.now() < avatar.gesture.until ? avatar.gesture.id : null;
+    if (gs !== gesture) setGesture(gs);
   });
   // The model reports its head before this component's effects run (children first), so it is kept here too.
   const head = useRef<{ head: THREE.Object3D | null; top: number }>({ head: null, top: 0 });
+  // A phone camera pointed at this character: its head turns to the lens.
+  const headAt = useMemo(() => new THREE.Vector3(), []);
+  const lookAtPhone = useCallback(() => {
+    const h = head.current.head;
+    return h ? phoneLook(h.getWorldPosition(headAt)) : null;
+  }, [headAt]);
   const onHead = useCallback<HeadListener>((bone, top) => {
     head.current = { head: bone, top };
     const a = anchors.get(profile.id);
@@ -72,7 +83,7 @@ function RemoteCharacter({ remotes, profile }: { remotes: React.RefObject<Map<st
     <>
     <group ref={shadow}><GroundShadow size={[0.75, 0.75]} opacity={0.35} /></group>
     <group ref={group}>
-      <Suspense fallback={null}><CharacterModel characterId={profile.characterId} motion={motion} talkLevel={talk} onHead={onHead} /></Suspense>
+      <Suspense fallback={null}><CharacterModel characterId={profile.characterId} motion={motion} talkLevel={talk} onHead={onHead} gesture={gesture} lookAt={lookAtPhone} /></Suspense>
     </group>
     </>
   );

@@ -48,6 +48,7 @@ alter table shared_notes enable row level security;
 alter table posts enable row level security;
 alter table chat_reads enable row level security;
 alter table game_scores enable row level security;
+alter table photos enable row level security;
 
 create policy "read" on profiles for select to authenticated using (public.is_member());
 create policy "read" on projects for select to authenticated using (public.is_member());
@@ -64,6 +65,7 @@ create policy "read" on polls for select to authenticated using (public.is_membe
 -- Scores stay hidden: each member only sees their own vote rows.
 create policy "read own" on poll_votes for select to authenticated using (user_id = auth.uid());
 create policy "read own" on focus_items for select to authenticated using (user_id = auth.uid());
+create policy "read own" on photos for select to authenticated using (user_id = auth.uid());
 -- Personal to-dos are private to their owner.
 create policy "read own" on todos for select to authenticated using (user_id = auth.uid());
 create policy "read own" on todo_stats for select to authenticated using (user_id = auth.uid());
