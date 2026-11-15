@@ -5,7 +5,7 @@
 export type Vec2 = [number, number];
 export interface Segment { a: Vec2; b: Vec2; kind: 'solid' | 'glass' | 'door' | 'obstacle'; slot?: number; color?: string }
 export type SeatArea = 'office' | 'conference' | 'cafe' | 'library' | 'game' | 'garden' | 'zen' | 'lab';
-export interface Seat { id: string; pos: Vec2; facing: number; slot?: number; monitor?: { pos: [number, number, number]; facing: number }; area: SeatArea; exit?: Vec2 } // exit: where you stand up (default: a step behind the chair)
+export interface Seat { id: string; pos: Vec2; facing: number; slot?: number; monitor?: { pos: [number, number, number]; facing: number }; area: SeatArea; exit?: Vec2; pitch?: number } // exit: where you stand up (default: a step behind the chair)
 // Something to use with E (or the phone's action button) that is not a seat or a door.
 export interface Station { id: string; kind: 'arcade' | 'jukebox' | 'coffee' | 'board'; pos: Vec2; facing: number; game?: string } // game: the arcade game it opens (none: the list of games) // facing: the way its front points (rotation about Y, front = +Z)
 export interface Prop { model: string; pos: Vec2; rot: number; size: number; y?: number; h?: number } // h = target height (else uniform scale)
@@ -205,7 +205,7 @@ const inFront = (pos: Vec2, facing: number, d = 0.95): Vec2 => [pos[0] - Math.si
 const around = (c: Vec2, r: number, angles: number[]): Vec2[] => angles.map((a) => [c[0] + Math.sin(a) * r, c[1] + Math.cos(a) * r]);
 
 // ——— Café (west arm) ———
-export const CAFE_TABLES: Vec2[] = [[-12.2, -2.6], [-12.2, 2.6]];
+export const CAFE_TABLES: Vec2[] = [[-12.2, 2.6]]; // the south one became the chess table
 export const CAFE_TABLE_RADIUS = 0.55;
 export const CAFE_TABLE_HEIGHT = 0.76;
 export const CAFE_BAR = { x: -OUT + 0.45, z: -3.9, halfDepth: 0.33, halfLength: 2.1, height: 0.95 }; // along the glass wall, north of the garden door
@@ -213,6 +213,11 @@ export const CAFE_SOFA: { pos: Vec2; facing: number } = { pos: [-OUT + 0.75, 4.2
 export const COFFEE_MACHINE: Vec2 = [CAFE_BAR.x, CAFE_BAR.z + 1.45]; // at the bar's end by the garden door
 export const CAFE_STOOLS: Vec2[] = [-1.5, -0.7].map((d) => [CAFE_BAR.x + 0.82, CAFE_BAR.z + d]);
 export const WATER_COOLER: Vec2 = [-OUT + 0.4, 1.35];
+// The chess table (where the café's south round table stood): white plays from the east chair, black from the west one.
+export const CHESS_TABLE: Vec2 = [-12.2, -2.6];
+export const CHESS_TABLE_HEIGHT = 0.74;
+export const CHESS_TABLE_HALF = 0.42;
+export const CHESS_SEATS: { id: 'chess-w' | 'chess-b'; pos: Vec2 }[] = [{ id: 'chess-w', pos: [CHESS_TABLE[0] + 0.8, CHESS_TABLE[1]] }, { id: 'chess-b', pos: [CHESS_TABLE[0] - 0.8, CHESS_TABLE[1]] }];
 export function cafeSeats(): Seat[] {
   const s: Seat[] = [];
   // Chair angles of the south table; the north one mirrors them, so both leave the middle walkway free.
@@ -220,6 +225,8 @@ export function cafeSeats(): Seat[] {
   CAFE_TABLES.forEach((t, i) => around(t, 1.02, t[1] > 0 ? angles : angles.map((a) => Math.PI - a)).forEach((pos, j) => s.push({ id: `cafe-${i}-${j}`, pos, facing: facingTo(pos, t), area: 'cafe' })));
   CAFE_STOOLS.forEach((pos, i) => s.push({ id: `cafe-stool-${i}`, pos, facing: Math.PI / 2, area: 'cafe' })); // facing the bar
   s.push({ id: 'cafe-sofa', pos: CAFE_SOFA.pos, facing: CAFE_SOFA.facing, area: 'cafe', exit: inFront(CAFE_SOFA.pos, CAFE_SOFA.facing, 2.1) });
+  // At the chess table one looks down at the board.
+  for (const c of CHESS_SEATS) s.push({ id: c.id, pos: c.pos, facing: facingTo(c.pos, CHESS_TABLE), area: 'cafe', pitch: -0.5 });
   return s;
 }
 
@@ -445,7 +452,7 @@ export function props(): Prop[] {
   for (const t of CAFE_TABLES) {
     p.push({ model: 'plantSmall1', pos: t, rot: 0, size: 0.18, y: CAFE_TABLE_HEIGHT });
   }
-  for (const s of cafeSeats().filter((x) => /^cafe-\d/.test(x.id))) p.push({ model: 'chairModernCushion', pos: s.pos, rot: s.facing + Math.PI, size: 0.56 });
+  for (const s of cafeSeats().filter((x) => /^(cafe-\d|chess-)/.test(x.id))) p.push({ model: 'chairModernCushion', pos: s.pos, rot: s.facing + Math.PI, size: 0.56 });
   p.push({ model: 'loungeSofa', pos: [CAFE_SOFA.pos[0] - 0.15, CAFE_SOFA.pos[1]], rot: Math.PI / 2, size: 2.2 });
   p.push({ model: 'tableCoffee', pos: [CAFE_SOFA.pos[0] + 1.25, CAFE_SOFA.pos[1]], rot: Math.PI / 2, size: 1.0 });
   p.push({ model: 'rugRound', pos: [CAFE_SOFA.pos[0] + 1.0, CAFE_SOFA.pos[1]], rot: 0, size: 2.6, y: 0.005 });
@@ -488,6 +495,7 @@ export function propColliders(): Circle[] {
     c.push({ pos: [cx - 0.5, back + inward * 1.5], r: 0.45 }, { pos: [cx + 0.5, back + inward * 1.5], r: 0.45 });
   }
   for (const t of CAFE_TABLES) c.push({ pos: t, r: CAFE_TABLE_RADIUS - 0.05 });
+  c.push({ pos: CHESS_TABLE, r: CHESS_TABLE_HALF });
   c.push({ pos: [CAFE_SOFA.pos[0] + 1.25, CAFE_SOFA.pos[1]], r: 0.42 });
   for (const st of CAFE_STOOLS) c.push({ pos: st, r: 0.2 });
   c.push({ pos: WATER_COOLER, r: 0.25 });

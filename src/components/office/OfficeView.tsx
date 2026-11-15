@@ -29,6 +29,8 @@ import { XoPanel } from './play/XoPanel';
 import { FocusTimer, useFocusTimer, clock } from './play/FocusTimer';
 import { connectJukebox, jukebox } from './play/jukebox';
 import { connectXo } from './play/xo';
+import { connectChess } from './play/chessGame';
+import { ChessPanel } from './play/ChessPanel';
 import { music } from './play/music';
 import { GAME_IDS, isGameId } from '@/lib/arcade';
 import { connectDoors, setDoor } from './doors';
@@ -196,6 +198,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   // connected on every page, see AppShell).
   useEffect(() => connectJukebox(mesh), [mesh]);
   useEffect(() => connectXo(mesh), [mesh]);
+  useEffect(() => connectChess(mesh), [mesh]);
   // The music follows where I stand (louder in the game room, silent far away).
   useEffect(() => { jukebox.listen(myPos); }, [myPos]);
   useEffect(() => () => jukebox.listen(null), []);
@@ -480,6 +483,9 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   // Who sits on the other chair of the game table (live positions).
   const otherXoSeat = ui.seatId === 'xo-a' ? 'xo-b' : 'xo-a';
   const xoOpponent = ui.seatId?.startsWith('xo-') ? [...net.remotes.current.values()].find((r) => performance.now() - r.receivedAt < 5000 && r.pose.seatId === otherXoSeat)?.userId ?? null : null;
+  // The other chair of the chess table: a teammate, or nobody (then the computer plays that side).
+  const chessColor = ui.seatId === 'chess-w' ? 'w' : ui.seatId === 'chess-b' ? 'b' : null;
+  const chessOpponent = chessColor ? [...net.remotes.current.values()].find((r) => performance.now() - r.receivedAt < 5000 && r.pose.seatId === (chessColor === 'w' ? 'chess-b' : 'chess-w'))?.userId ?? null : null;
   const officeControls = inMyOffice && !!myOffice && !ui.seatId && !touring;
   const showCursor = !isPhone && !ui.locked && !(working && ui.panel !== 'none');
   const it = ui.interact;
@@ -739,6 +745,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       {ui.overlay === 'map' && (
         <MiniMap profiles={profiles} offices={offices} meId={user.id} myPos={myPos} remotes={net.remotes} mesh={mesh} onClose={closeOverlay}
           onGo={(p) => { input.teleport = p; invalidate(); }} />
+      )}
+      {!touring && ui.overlay === 'none' && !ui.chat && chessColor && (
+        <div className="gc-hud pointer-events-none absolute end-safe top-[4.25rem] z-30 short:top-14">
+          <ChessPanel color={chessColor} opponent={profiles.find((p) => p.id === chessOpponent)?.displayName ?? null} onEmote={sendEmoteNow} />
+        </div>
       )}
       {!touring && ui.board === 'none' && ui.overlay === 'none' && !ui.chat && (ui.seatId?.startsWith('xo-') || ui.seatId?.startsWith('pod-')) && (
         <div className="pointer-events-none absolute inset-x-0 bottom-20 z-30 flex justify-center px-3 short:bottom-3 short:justify-start">

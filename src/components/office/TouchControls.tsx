@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { input } from './store';
 import { pressAt, toNdc } from './tablet';
+import { chessPressAt } from './ChessTable';
 
 const TAP_PX = 10, TAP_MS = 400;
 
@@ -43,7 +44,7 @@ export function TouchControls({ lookOnly = false }: { lookOnly?: boolean }) {
         const l = look.current;
         if (l?.id === e.pointerId) {
           look.current = null;
-          if (Math.hypot(e.clientX - l.x0, e.clientY - l.y0) < TAP_PX && performance.now() - l.at < TAP_MS) pressAt(toNdc(e.clientX, e.clientY));
+          if (Math.hypot(e.clientX - l.x0, e.clientY - l.y0) < TAP_PX && performance.now() - l.at < TAP_MS) { const ndc = toNdc(e.clientX, e.clientY); if (!pressAt(ndc)) chessPressAt(ndc); }
         }
       }}
       onPointerCancel={() => { stick.current = null; look.current = null; setKnob(null); input.forward = input.right = 0; }}>

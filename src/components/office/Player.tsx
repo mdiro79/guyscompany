@@ -310,9 +310,9 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       } else {
         // Chairs without a monitor (conference, lounge): look around freely while seated. Phones held sideways
         // lean in at the conference table so the seat tablet's buttons are big enough to tap.
-        const lean = seat.area === 'conference' && isPhone && (camera as THREE.PerspectiveCamera).aspect > 1 ? SIT_LEAN : 0;
+        const lean = (seat.area === 'conference' || seat.id.startsWith('chess-')) && isPhone && (camera as THREE.PerspectiveCamera).aspect > 1 ? SIT_LEAN : 0;
         target = new THREE.Vector3(seat.pos[0] - Math.sin(seat.facing) * lean, SIT_EYE, seat.pos[1] - Math.cos(seat.facing) * lean);
-        if (sitT.current - dt <= 0) { yaw.current = seat.facing; pitch.current = -0.12; }
+        if (sitT.current - dt <= 0) { yaw.current = seat.facing; pitch.current = seat.pitch ?? -0.12; }
       }
       camTarget.current.lerp(target, 1 - Math.exp(-dt * 6));
       camera.position.copy(camTarget.current);

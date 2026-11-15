@@ -24,6 +24,7 @@ import { SPAWN } from './layout';
 import type { RemoteAvatar } from './useOfficeNet';
 import { input } from './store';
 import { SceneStats } from './SceneStats';
+import { ChessTable } from './ChessTable';
 import { COMPUTER, LADDER, LOWEST, PHONE, WINDOW_MS, dprOf, initialQuality, stepQuality } from './quality';
 
 export interface SceneProps {
@@ -204,6 +205,7 @@ export default function OfficeScene(p: SceneProps) {
       <SoftEnvironment />
       <ConferenceRoom labels={p.meetingLabels} people={people} lowQuality={q.step.simpleLights} />
       <Rooms labels={p.roomLabels} people={people} />
+      <ChessTable />
       <Suspense fallback={null}>
         <Building offices={p.offices} />
         <Furniture />

@@ -1353,6 +1353,28 @@
       "speed": "Speed",
       "lightsHint": "The light show appears once party mode is on.",
       "jump": "Jumping"
+    },
+    "chess": {
+      "title": "Chess",
+      "you": "You",
+      "computer": "Computer",
+      "yourTurn": "Your move",
+      "yourTurnCheck": "Check! Your move",
+      "theirTurn": "{name} to move",
+      "how": "Click (or tap) one of your pieces on the table, then the square to move it to.",
+      "promote": "Promote to",
+      "piece_q": "Queen",
+      "piece_r": "Rook",
+      "piece_b": "Bishop",
+      "piece_n": "Knight",
+      "newGame": "New game",
+      "resign": "Resign",
+      "won_mate": "Checkmate — {name} won",
+      "won_resign": "Resigned — {name} won",
+      "draw_stalemate": "Stalemate — a draw",
+      "draw_fifty": "Draw (fifty moves without a capture)",
+      "draw_material": "Draw (not enough pieces to mate)",
+      "draw_repetition": "Draw (the same position three times)"
     }
   },
   "emotes": {

@@ -2,7 +2,7 @@
 import type { Batch } from '../batch';
 import {
   WALL_HEIGHT, H, OUT, GAME_WALL, ARCADES, JUKEBOX, DANCE_FLOOR, GAME_TV, XO_TABLE, BEAN_BAGS,
-  CAFE_BAR, CAFE_TABLES, CAFE_TABLE_RADIUS, CAFE_TABLE_HEIGHT, CAFE_STOOLS, WATER_COOLER,
+  CAFE_BAR, CAFE_TABLES, CAFE_TABLE_RADIUS, CAFE_TABLE_HEIGHT, CAFE_STOOLS, WATER_COOLER, CHESS_TABLE, CHESS_TABLE_HEIGHT, CHESS_TABLE_HALF,
   LIB_SHELVES, LIB_SHELF, LIB_TABLE, LIB_PODS, GARDEN, FOUNTAIN, GARDEN_TREES, GARDEN_BENCHES, NOTICE_KIOSK,
   HALL, HALL_ARCH, HALL_CABINETS, HALL_TABLES, HALL_TABLE_HALF, HALL_SCREEN, HALL_TARGETS, NARD_TABLE,
   ZEN, ZEN_POND, ZEN_BENCH, ZEN_LANTERN, ZEN_DECK, ZEN_BAMBOO, zenSeats, LAB, LAB_TABLE, LAB_BOARDS, LAB_POSTS, labSeats, GATE,
@@ -133,7 +133,15 @@ export function buildCafe(b: Batch) {
     b.cyl(0.06, 0.2, 0.2, [x, y - 0.08, z], color, 16);
     b.sphere(0.065, [x, y - 0.17, z], rgb(WARM), 10, 'glow', 1.7);
   };
-  CAFE_TABLES.forEach((t, i) => pendant(t[0], t[1], 2.05, i ? TEAL : ORANGE));
+  CAFE_TABLES.forEach((t) => pendant(t[0], t[1], 2.05, TEAL));
+  // The chess table: dark wood on four legs, a raised frame round the board (the board itself is ChessTable),
+  // and its own lamp hanging lower, so the game is lit like a club's table.
+  const [cx, cz] = CHESS_TABLE, h = CHESS_TABLE_HEIGHT, half = CHESS_TABLE_HALF;
+  b.box([half * 2, 0.045, half * 2], [cx, h - 0.0225, cz], '#5a3b28');
+  b.box([half * 2 - 0.08, 0.06, half * 2 - 0.08], [cx, h - 0.075, cz], '#4a3020');
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) b.box([0.05, h - 0.05, 0.05], [cx + dx * (half - 0.07), (h - 0.05) / 2, cz + dz * (half - 0.07)], '#4a3020');
+  for (const s of [-1, 1]) { b.box([0.6, 0.012, 0.03], [cx, h + 0.006, cz + s * 0.295], '#3a2416'); b.box([0.03, 0.012, 0.62], [cx + s * 0.295, h + 0.006, cz], '#3a2416'); }
+  pendant(cx, cz, 1.72, ORANGE);
   [-1.4, 0, 1.4].forEach((d, i) => pendant(bar.x + 0.1, bar.z + d, 2.15, i === 1 ? ORANGE : TEAL));
   // Water cooler.
   b.box([0.34, 1.0, 0.34], [WATER_COOLER[0], 0.5, WATER_COOLER[1]], '#eef0f2').cyl(0.13, 0.13, 0.36, [WATER_COOLER[0], 1.2, WATER_COOLER[1]], '#9fd4ec', 14).cyl(0.05, 0.13, 0.06, [WATER_COOLER[0], 1.03, WATER_COOLER[1]], '#9fd4ec', 14);
