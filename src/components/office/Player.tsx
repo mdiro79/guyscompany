@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { invalidate, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Office } from '@/lib/data/types';
-import { buildWalls, doorSegments, propColliders, allSeats, stations, officeAt, inConference, areaAt, doorCenter, CONF_WALL_PANEL, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
+import { buildWalls, doorSegments, propColliders, allSeats, stations, officeAt, inConference, areaAt, doorCenter, CONF_WALL_PANEL, CONF_SEATS, EYE_HEIGHT, PLAYER_RADIUS, AVATAR_RADIUS, SPAWN, type Seat, type Vec2, type DoorDef, type Circle } from './layout';
+import { party, floorTaken, partyNow } from './party';
+import { partyHop, hopSeed } from './partyAudio';
 import { resolveCollisions } from './collision';
 import { input, officeUi, lockPointer, type Interact } from './store';
 import { DOORS, doorLeaves, isDoorOpen, toggleDoor, setDoor } from './doors';
@@ -60,6 +62,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
   const { camera, gl } = useThree();
   const walls = useMemo(() => buildWalls(), []);
   const props = useMemo(() => propColliders(), []);
+  const mySeed = useMemo(() => hopSeed(viewerId), [viewerId]);
   const seats = useMemo(() => allSeats(), []);
   const stationList = useMemo(() => stations(), []);
   const sent = useRef({ x: 0, z: 0, yaw: 0, pitch: 0, moving: 0, seatId: null as string | null });
@@ -130,7 +133,10 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     const fresh = [...(remotes.current?.values() ?? [])].filter((r) => performance.now() - r.receivedAt < REMOTE_FRESH_MS);
     const bodies: Circle[] = fresh.filter((r) => !r.pose.seatId).map((r) => ({ pos: [r.pose.x, r.pose.z], r: AVATAR_RADIUS }));
     bodies.push({ pos: guide.pos, r: AVATAR_RADIUS });
-    const circles = [...props, ...bodies];
+    // Party mode: the table and chairs are up in the ceiling, so the middle of the room is free.
+    const cleared = floorTaken(party.get(), partyNow());
+    const around = cleared ? props.slice(1 + CONF_SEATS) : props;
+    const circles = [...around, ...bodies];
     const insideSlot = officeAt(pos.current[0], pos.current[1])?.slot ?? null;
     const solid = [...walls, ...noAccess.filter((d) => d.slot !== insideSlot), ...doorLeaves()];
     const taken = new Set(fresh.map((r) => r.pose.seatId).filter(Boolean));
@@ -157,7 +163,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       const elapsed = (performance.now() - t.startedAt) / 1000;
       const p = pointAt(t.playerPath, Math.max(0, elapsed - PLAYER_DELAY) * GUIDE_SPEED);
       const before = pos.current;
-      pos.current = resolveCollisions(p.pos, PLAYER_RADIUS, solid, props);
+      pos.current = resolveCollisions(p.pos, PLAYER_RADIUS, solid, around);
       const moving = Math.hypot(pos.current[0] - before[0], pos.current[1] - before[1]) > 0.001;
       if (moving) bob.current += dt * 9;
       const step = t.steps[t.step!];
@@ -211,7 +217,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
       const cand: { i: Interact; d: number }[] = [];
       for (const s of seats) {
         const d = Math.hypot(s.pos[0] - pos.current[0], s.pos[1] - pos.current[1]);
-        if (d < 1.3 && canSit(s, offices, viewerId) && !taken.has(s.id)) cand.push({ i: { kind: 'seat', id: s.id }, d });
+        if (d < 1.3 && canSit(s, offices, viewerId) && !taken.has(s.id) && !(cleared && s.id.startsWith('conf-'))) cand.push({ i: { kind: 'seat', id: s.id }, d });
       }
       for (const door of DOORS) {
         const c = doorCenter(door);
@@ -238,6 +244,8 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
     const key = interactKey(interact);
     if (key !== lastInteract.current) { lastInteract.current = key; officeUi.set({ interact }); }
 
+    // The party starts while sitting at the conference table: stand up (the chair is about to go up).
+    if (cleared && seatId?.startsWith('conf-')) input.action = true;
     if (input.action) {
       input.action = false;
       lastLocalInput.current = now;
@@ -332,7 +340,7 @@ export function Player({ offices, viewerId, invitedSlots, onPose, external, remo
         // A door swinging or someone walking into us still pushes us out.
         pos.current = resolveCollisions(pos.current, PLAYER_RADIUS, solid, circles);
       }
-      const eye = EYE_HEIGHT + Math.sin(bob.current) * (moving ? 0.035 : 0);
+      const eye = EYE_HEIGHT + Math.sin(bob.current) * (moving ? 0.035 : 0) + partyHop(pos.current[0], pos.current[1], mySeed);
       camTarget.current.set(pos.current[0], eye, pos.current[1]);
       camera.position.copy(camTarget.current);
       camera.rotation.set(pitch.current, yaw.current, 0, 'YXZ');

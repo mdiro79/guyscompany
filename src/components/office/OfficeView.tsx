@@ -35,6 +35,9 @@ import { connectDoors, setDoor } from './doors';
 import { connectRoomControls, roomControls, useRoomSettings } from './roomControls';
 import { tablet, loadHolo, setHolo, type TabletButton } from './tablet';
 import { HoloControls } from './HoloControls';
+import { PartyPanel } from './PartyPanel';
+import { connectParty, party } from './party';
+import { partyAudio, startPartyAudio } from './partyAudio';
 import { MeetingPanel, type MeetingPanelMode, type OfficeMeeting } from './MeetingPanel';
 import { meetingPresenceAction } from '@/app/actions/meetings';
 import { clockText, HEARTBEAT_MS, meetingEnd } from '@/lib/meetings';
@@ -132,7 +135,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
     title: t('tablet.title'), idle: t('tablet.idle'), presenting: t('tablet.presenting', { name: '{name}' }),
     raiseHand: t('tablet.raiseHand'), lowerHand: t('tablet.lowerHand'), micOn: t('tablet.micOn'), micOff: t('tablet.micOff'),
     board: t('tablet.board'), present: t('tablet.present'), stopPresent: t('tablet.stopPresent'), view: t('tablet.view'),
-    react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'), holo: t('tablet.holo'),
+    react: t('tablet.react'), look: t('tablet.look'), lightPresent: t('tablet.lightPresent'), holo: t('tablet.holo'), tvDown: t('tablet.tvDown'), tvUp: t('tablet.tvUp'),
     stand: t('tablet.stand'), hands: t('meeting.hands'), notes: t('tablet.notes'), meeting: t('tablet.meeting'), startMeeting: t('tablet.startMeeting'), rtl: locale === 'fa',
   }), [locale, t]);
   const mesh = useMemo(() => (embedded ? null : getMesh(user.id, device)), [embedded, user.id, device]);
@@ -198,6 +201,11 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   useEffect(() => () => jukebox.listen(null), []);
   // Conference room light and glass: live from the others over WebRTC, the saved value from the page data.
   useEffect(() => connectRoomControls(mesh), [mesh]);
+  // The party room: shared state, its music on this device (louder the nearer the room) and the TV on the tablet.
+  useEffect(() => connectParty(mesh), [mesh]);
+  useEffect(() => startPartyAudio(), []);
+  useEffect(() => { partyAudio.listen(myPos); }, [myPos]);
+  useEffect(() => { const sync = () => tablet.set({ tvDown: party.get().tvDown }); sync(); return party.subscribe(sync); }, []);
   useEffect(() => { if (room) roomControls.load(room); }, [room]);
   // The wall panel's controls close when you leave the room.
   useEffect(() => { if (!ui.inConference) officeUi.set({ roomPanel: false }); }, [ui.inConference]);
@@ -254,6 +262,8 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
   }, [dancing, sendEmoteNow]);
   const [more, setMore] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
+  const [partyOpen, setPartyOpen] = useState(false);
+  useEffect(() => { if (!ui.inConference) setPartyOpen(false); }, [ui.inConference]);
   useEffect(() => { if (!ui.inConference) setVoteOpen(false); }, [ui.inConference]);
   const focusTimer = useFocusTimer();
   const closeOverlay = useCallback(() => {
@@ -455,6 +465,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
       case 'react': openWheel(true); break;
       case 'look': input.lookAt = SCREEN_CENTER; break;
       case 'holo': setHolo(!tablet.get().holo); break;
+      case 'tv': party.setTvDown(!party.get().tvDown); break;
       case 'lights': {
         roomControls.set(roomNow.light <= 40 ? MEETING_LIGHT : PRESENT_LIGHT);
         void saveRoomAction('conference', roomControls.get());
@@ -698,6 +709,7 @@ export function OfficeView({ messages, privateChats, invitedSlots, files, room, 
           ? 'pointer-events-none absolute inset-0'
           : 'absolute top-[4.25rem] left-1/2 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap justify-center gap-2 short:top-14')}>
           <MeetingPanel data={meetingData} running={running} mode={meetingPanel} onMode={setMeetingPanel} presentNow={presentNow} />
+          <PartyPanel open={partyOpen} onOpen={(o) => { if (o && document.pointerLockElement) document.exitPointerLock(); if (o) setVoteOpen(false); setPartyOpen(o); }} />
           <QuickVotePanel meId={user.id} names={(id) => profiles.find((p) => p.id === id)?.displayName ?? '—'} open={voteOpen} onOpen={(o) => { if (o && document.pointerLockElement) document.exitPointerLock(); setVoteOpen(o); }} />
           {atTable && (
             <button type="button" onClick={() => openBoard('mine')}

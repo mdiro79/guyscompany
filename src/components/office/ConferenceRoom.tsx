@@ -4,7 +4,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import * as THREE from 'three';
 import {
-  buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS, CONF_WALL_PANEL,
+  buildWalls, conferenceSeats, CONF_RADIUS, CONF_TABLE_RADIUS, CONF_CHAIR_RING, CONF_TABLE_HOLE, CONF_TABLE_HEIGHT, CONF_SCREEN, CONF_CREDENZA, CONF_PLANTS, CONF_WALL_PANEL,
   WALL_HEIGHT,
 } from './layout';
 import { GroundShadow } from './GroundShadow';
@@ -24,6 +24,8 @@ import { useConferenceGlass } from './conferenceGlass';
 import { ENV_INTENSITY, HEMI_NAME, hemiIntensity } from './lighting';
 import { officeUi, useOfficeUi } from './store';
 import { holoView } from './holo';
+import { party, partyPhase, tvPhase, partyNow } from './party';
+import { PartyRig } from './PartyRig';
 
 // The round conference room after the owner's reference image: a large light-oak table with a planter
 // in the middle and a glowing ring under its pedestal, light-blue armchairs with white frames, a tablet
@@ -128,7 +130,8 @@ function LiveTablet() {
 // screens in another (one texture); the leaves, the wall panels, the contact shadows and the ceiling's
 // lit ring and spots one each. Before, every box of every chair was drawn on its own.
 function buildStatic() {
-  const matte = new Batch(), leaves = new Batch(), panels = new Batch(true), shadows = new Batch(true), screens = new Batch(true), lights = new Batch();
+  // `seat*` and `tableLeaves` go up into the ceiling in party mode (LiftParts); the rest stays.
+  const matte = new Batch(), seat = new Batch(), leaves = new Batch(), tableLeaves = new Batch(), panels = new Batch(true), shadows = new Batch(true), seatShadows = new Batch(true), screens = new Batch(true), lights = new Batch();
   const rounded = (w: number, h: number, d: number, r: number) => new RoundedBoxGeometry(w, h, d, 2, r);
   const cushionSeat = rounded(0.54, 0.11, 0.5, 0.04), cushionBack = rounded(0.52, 0.5, 0.1, 0.04), frameBack = rounded(0.6, 0.6, 0.05, 0.02);
   const frameBase = rounded(0.6, 0.06, 0.54, 0.02), arm = rounded(0.07, 0.05, 0.56, 0.02), body = rounded(TABLET_W + 0.03, TABLET_H + 0.03, 0.022, 0.011);
@@ -140,24 +143,24 @@ function buildStatic() {
     return m;
   };
   for (const s of conferenceSeats()) {
-    const seat: [[number, number, number], [number, number, number]] = [[s.pos[0], 0, s.pos[1]], [0, s.facing, 0]];
-    shadows.addMatrix('matte', flat, '#ffffff', at([[s.pos[0], 0.009, s.pos[1]], [0, 0, 0], [0.85, 1, 0.85]]));
+    const chair: [[number, number, number], [number, number, number]] = [[s.pos[0], 0, s.pos[1]], [0, s.facing, 0]];
+    seatShadows.addMatrix('matte', flat, '#ffffff', at([[s.pos[0], 0.009, s.pos[1]], [0, 0, 0], [0.85, 1, 0.85]]));
     // Armchair facing the table: cushions, then the white frame with armrests and runners.
-    matte.addMatrix('matte', cushionSeat, CUSHION, at(seat, [[0, 0.43, -0.02]]));
-    matte.addMatrix('matte', cushionBack, CUSHION, at(seat, [[0, 0.79, 0.25], [0.14, 0, 0]]));
-    matte.addMatrix('matte', frameBack, FRAME, at(seat, [[0, 0.79, 0.25], [0.14, 0, 0]], [[0, 0.02, 0.07]]));
-    matte.addMatrix('matte', frameBase, FRAME, at(seat, [[0, 0.35, -0.02]]));
+    seat.addMatrix('matte', cushionSeat, CUSHION, at(chair, [[0, 0.43, -0.02]]));
+    seat.addMatrix('matte', cushionBack, CUSHION, at(chair, [[0, 0.79, 0.25], [0.14, 0, 0]]));
+    seat.addMatrix('matte', frameBack, FRAME, at(chair, [[0, 0.79, 0.25], [0.14, 0, 0]], [[0, 0.02, 0.07]]));
+    seat.addMatrix('matte', frameBase, FRAME, at(chair, [[0, 0.35, -0.02]]));
     for (const side of [-1, 1]) {
-      matte.addMatrix('matte', arm, FRAME, at(seat, [[side * 0.32, 0.65, -0.02]]));
-      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.33, -0.26], [0, 0, 0], [0.05, 0.66, 0.05]]));
-      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.48, 0.24], [0, 0, 0], [0.05, 0.96, 0.05]]));
-      matte.addMatrix('matte', unit, FRAME, at(seat, [[side * 0.32, 0.02, -0.01], [0, 0, 0], [0.05, 0.04, 0.62]]));
+      seat.addMatrix('matte', arm, FRAME, at(chair, [[side * 0.32, 0.65, -0.02]]));
+      seat.addMatrix('matte', unit, FRAME, at(chair, [[side * 0.32, 0.33, -0.26], [0, 0, 0], [0.05, 0.66, 0.05]]));
+      seat.addMatrix('matte', unit, FRAME, at(chair, [[side * 0.32, 0.48, 0.24], [0, 0, 0], [0.05, 0.96, 0.05]]));
+      seat.addMatrix('matte', unit, FRAME, at(chair, [[side * 0.32, 0.02, -0.01], [0, 0, 0], [0.05, 0.04, 0.62]]));
     }
     // The tablet on its stand, screen turned up towards the person.
     const r = CONF_TABLE_RADIUS - 0.3;
     const tab: [[number, number, number], [number, number, number]][] = [[[Math.sin(s.facing) * r, CONF_TABLE_HEIGHT, Math.cos(s.facing) * r], [0, s.facing, 0]], [[0, (TABLET_H / 2) * Math.cos(TABLET_TILT) + 0.012, 0], [-TABLET_TILT, 0, 0]]];
-    matte.addMatrix('matte', body, '#16181d', at(...tab));
-    matte.addMatrix('matte', unit, '#16181d', at(...tab, [[0, -0.04, -0.09], [0.95, 0, 0], [0.26, 0.22, 0.012]]));
+    seat.addMatrix('matte', body, '#16181d', at(...tab));
+    seat.addMatrix('matte', unit, '#16181d', at(...tab, [[0, -0.04, -0.09], [0.95, 0, 0], [0.26, 0.22, 0.012]]));
     screens.addMatrix('matte', plane, '#ffffff', at(...tab, [[0, 0, 0.0115], [0, 0, 0], [TABLET_W, TABLET_H, 1]]));
   }
   // Slim plants in white pots on both sides of the screen, and the low bed in the table.
@@ -168,11 +171,11 @@ function buildStatic() {
     g.computeVertexNormals();
     return g;
   };
-  const blades = (base: [number, number, number], count: number, height: number, width: number, lean: number, seed: number) => {
+  const blades = (base: [number, number, number], count: number, height: number, width: number, lean: number, seed: number, into = leaves) => {
     const g = blade(height, width);
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + seed, k = 0.8 + ((i * 5 + seed) % 4) * 0.08;
-      leaves.addMatrix('matte', g, '#8fa889', at([base, [0, a, 0]], [[0, 0, 0], [lean * (0.6 + (i % 3) * 0.25), 0, 0], [1, k, 1]]));
+      into.addMatrix('matte', g, '#8fa889', at([base, [0, a, 0]], [[0, 0, 0], [lean * (0.6 + (i % 3) * 0.25), 0, 0], [1, k, 1]]));
     }
   };
   for (const p of CONF_PLANTS) {
@@ -183,9 +186,9 @@ function buildStatic() {
   const ico = new THREE.IcosahedronGeometry(0.11, 1);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2, d = i ? 0.17 : 0;
-    leaves.addMatrix('matte', ico, '#8fa889', at([[Math.sin(a) * d, CONF_TABLE_HEIGHT - 0.01, Math.cos(a) * d], [0, 0, 0], [1, 0.35, 1]]));
+    tableLeaves.addMatrix('matte', ico, '#8fa889', at([[Math.sin(a) * d, CONF_TABLE_HEIGHT - 0.01, Math.cos(a) * d], [0, 0, 0], [1, 0.35, 1]]));
   }
-  blades([0, CONF_TABLE_HEIGHT - 0.02, 0], 6, 0.2, 0.05, 0.35, 4);
+  blades([0, CONF_TABLE_HEIGHT - 0.02, 0], 6, 0.2, 0.05, 0.35, 4, tableLeaves);
   // Solid panels behind the screen: cream, washed with light from the top, dark posts and skirting.
   for (const w of buildWalls().filter((x) => x.kind === 'solid' && Math.abs(Math.hypot((x.a[0] + x.b[0]) / 2, (x.a[1] + x.b[1]) / 2) - CONF_RADIUS) < 0.2)) {
     const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), rot = -Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
@@ -203,32 +206,89 @@ function buildStatic() {
   lights.add('matte', new THREE.TorusGeometry(2.45, 0.045, 8, 96), '#ffffff', [0, WALL_HEIGHT - 0.02, 0], [Math.PI / 2, 0, 0]);
   const spot = new THREE.CircleGeometry(0.06, 14);
   for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; lights.add('matte', spot, '#ffffff', [Math.sin(a) * 3.6, WALL_HEIGHT - 0.018, Math.cos(a) * 3.6], [Math.PI / 2, 0, 0]); }
-  return { matte: matte.build().matte!, leaves: leaves.build().matte!, panels: panels.build().matte!, shadows: shadows.build().matte!, screens: screens.build().matte!, lights: lights.build().matte! };
+  return {
+    matte: matte.build().matte!, leaves: leaves.build().matte!, panels: panels.build().matte!, shadows: shadows.build().matte!, lights: lights.build().matte!,
+    seat: withTuck(seat.build().matte!), seatShadows: withTuck(seatShadows.build().matte!), screens: screens.build().matte!, tableLeaves: tableLeaves.build().matte!,
+  };
+}
+
+// Before the table and chairs go up into the ceiling the chairs slide in under the table (through the
+// hatch they fit only tucked in). Every vertex of a chair knows its chair's way in (`aTuck`), and the
+// shader moves it by `uTuck` metres: one draw call for all eight chairs.
+const TUCK = CONF_CHAIR_RING - CONF_TABLE_RADIUS - 0.18;
+function withTuck(g: THREE.BufferGeometry) {
+  const seats = conferenceSeats(), p = g.attributes.position, dir = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    if (Math.hypot(x, z) < CONF_TABLE_RADIUS + 0.1) continue; // tablets on the table stay put
+    let best = seats[0], bd = Infinity;
+    for (const st of seats) { const d = Math.hypot(st.pos[0] - x, st.pos[1] - z); if (d < bd) { bd = d; best = st; } }
+    const l = Math.hypot(best.pos[0], best.pos[1]) || 1;
+    dir[i * 2] = best.pos[0] / l; dir[i * 2 + 1] = best.pos[1] / l;
+  }
+  g.setAttribute('aTuck', new THREE.BufferAttribute(dir, 2));
+  return g;
+}
+const tuck = { value: 0 };
+function tuckable<M extends THREE.Material>(m: M): M {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTuck = tuck;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aTuck;\nuniform float uTuck;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.xz -= aTuck * uTuck;');
+  };
+  m.customProgramCacheKey = () => 'gc-tuck';
+  return m;
 }
 
 const staticMaterials = (() => {
-  let made: { leaves: THREE.Material; shadow: THREE.Material; rest: THREE.Material } | null = null;
+  let made: { leaves: THREE.Material; shadow: THREE.Material; rest: THREE.Material; seat: THREE.Material; seatShadow: THREE.Material } | null = null;
   return () => (made ??= {
+    seat: tuckable(batchMaterials.matte.clone()),
+    seatShadow: tuckable(new THREE.MeshBasicMaterial({ map: softShadow(), color: '#2b1d12', transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })),
     leaves: new THREE.MeshStandardMaterial({ color: '#8fa889', roughness: 0.85, side: THREE.DoubleSide }),
     shadow: new THREE.MeshBasicMaterial({ map: softShadow(), color: '#2b1d12', transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
     rest: new THREE.MeshBasicMaterial({ map: restScreen(), toneMapped: false, color: '#9aa0aa' }),
   });
 })();
 
-function StaticParts() {
-  const g = useMemo(() => buildStatic(), []);
+type Built = ReturnType<typeof buildStatic>;
+function StaticParts({ g }: { g: Built }) {
   const m = textured(), sm = staticMaterials();
-  useEffect(() => () => Object.values(g).forEach((x) => x.dispose()), [g]);
   return (
     <>
       <mesh geometry={g.matte} material={batchMaterials.matte} />
       <mesh geometry={g.leaves} material={sm.leaves} />
       <mesh geometry={g.panels} material={m.panel} />
       <mesh geometry={g.shadows} material={sm.shadow} renderOrder={1} />
-      <mesh geometry={g.screens} material={sm.rest} />
       <mesh geometry={g.lights} material={lit.ring} />
     </>
   );
+}
+// The table, the chairs and the tablets: what goes up into the ceiling in party mode.
+function LiftParts({ g }: { g: Built }) {
+  const sm = staticMaterials();
+  return (
+    <>
+      <mesh geometry={g.seat} material={sm.seat} />
+      <mesh geometry={g.seatShadows} material={sm.seatShadow} renderOrder={1} />
+      <mesh geometry={g.screens} material={sm.rest} />
+      <mesh geometry={g.tableLeaves} material={sm.leaves} />
+    </>
+  );
+}
+
+// ——— Party mode: the ceiling hatch and the furniture's way up ———
+const HATCH_R = 2.35, SHAFT_H = 3.3, LIFT_H = WALL_HEIGHT + 0.25;
+const smooth = (k: number) => k * k * (3 - 2 * k);
+// Moves the furniture group (chairs tucked in, then all of it up) from the shared party state.
+function Lift({ children }: { children: React.ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const ph = partyPhase(party.get(), partyNow());
+    tuck.value = smooth(ph.tuck) * TUCK;
+    if (g.current) { g.current.position.y = smooth(ph.lift) * LIFT_H; g.current.visible = ph.lift < 0.999 || ph.hatch > 0; }
+  });
+  return <group ref={g}>{children}</group>;
 }
 
 // Clicks and taps on the live tablet. Computers: the crosshair while looking around, the cursor otherwise;
@@ -370,8 +430,16 @@ function Screen({ labels, people, picture: { tex, cv } }: { labels: MeetingLabel
     return () => { live = false; offBoards(); offHands(); offVote(); clearInterval(tick); cancelAnimationFrame(raf); clearTimeout(wait); };
   }, [cv, tex, labels, people]);
   const { width: w, height: h, bottom, z } = CONF_SCREEN;
+  // The screen slides down into its cabinet (and up again) when anyone presses the button.
+  const slide = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const k = smooth(tvPhase(party.get(), partyNow()));
+    if (!slide.current) return;
+    slide.current.position.y = bottom + h / 2 - k * (bottom + h + 0.05);
+    slide.current.visible = k < 0.999;
+  });
   return (
-    <group position={[0, bottom + h / 2, z]}>
+    <group ref={slide} position={[0, bottom + h / 2, z]}>
       <mesh material={mat.dark}><boxGeometry args={[w + 0.1, h + 0.1, 0.06]} /></mesh>
       <mesh position-z={0.031}><planeGeometry args={[w, h]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>
       <ScreenLasers people={people} w={w} h={h} z={0.036} />
@@ -426,11 +494,33 @@ function Credenza() {
   );
 }
 
+// The ceiling, with a round hatch in its middle (the lit disc): four quarters that slide out into the
+// ceiling over a dark shaft, so the table and chairs can go up (party mode).
 function Ceiling() {
+  const quarters = useRef<(THREE.Mesh | null)[]>([]);
+  const shaft = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const h = smooth(partyPhase(party.get(), partyNow()).hatch);
+    quarters.current.forEach((q, i) => {
+      if (!q) return;
+      const a = (i + 0.5) * (Math.PI / 2), d = h * (HATCH_R + 0.08);
+      q.position.set(Math.cos(a) * d, -0.014 + h * 0.16, Math.sin(a) * d);
+    });
+    if (shaft.current) shaft.current.visible = h > 0.001;
+  });
   return (
     <group position-y={WALL_HEIGHT}>
-      <mesh position-y={-0.012} rotation-x={Math.PI / 2}><circleGeometry args={[CONF_RADIUS - 0.08, 96]} /><meshStandardMaterial color="#f5ede1" roughness={1} /></mesh>
-      <mesh position-y={-0.016} rotation-x={Math.PI / 2} material={lit.disc}><circleGeometry args={[2.4, 96]} /></mesh>
+      <mesh position-y={-0.012} rotation-x={Math.PI / 2}><ringGeometry args={[HATCH_R, CONF_RADIUS - 0.08, 96, 1]} /><meshStandardMaterial color="#f5ede1" roughness={1} side={THREE.DoubleSide} /></mesh>
+      {[0, 1, 2, 3].map((i) => (
+        <mesh key={i} ref={(el) => { quarters.current[i] = el; }} rotation-x={Math.PI / 2} material={lit.disc}>
+          <circleGeometry args={[HATCH_R + 0.01, 24, i * (Math.PI / 2), Math.PI / 2]} />
+        </mesh>
+      ))}
+      <group ref={shaft} visible={false}>
+        <mesh position-y={SHAFT_H / 2}><cylinderGeometry args={[HATCH_R + 0.01, HATCH_R + 0.01, SHAFT_H, 64, 1, true]} /><meshStandardMaterial color="#2a2530" roughness={0.9} side={THREE.BackSide} /></mesh>
+        <mesh position-y={SHAFT_H} rotation-x={Math.PI / 2}><circleGeometry args={[HATCH_R + 0.02, 48]} /><meshStandardMaterial color="#1d1a22" roughness={1} /></mesh>
+        <mesh position-y={0.05} rotation-x={Math.PI / 2}><torusGeometry args={[HATCH_R - 0.03, 0.02, 6, 64]} /><meshBasicMaterial color="#7fe3ff" toneMapped={false} /></mesh>
+      </group>
     </group>
   );
 }
@@ -439,19 +529,25 @@ export function ConferenceRoom({ labels, people, lowQuality }: { labels: Meeting
   const m = textured();
   const { gl } = useThree();
   const picture = useMemo(() => makeScreenPicture(gl.capabilities.getMaxAnisotropy()), [gl]);
+  const built = useMemo(() => buildStatic(), []);
+  useEffect(() => () => Object.values(built).forEach((x) => x.dispose()), [built]);
   useEffect(() => () => picture.tex.dispose(), [picture]);
   const seats = useMemo(() => conferenceSeats(), []);
   const mySeat = useOfficeUi((u) => u.seatId);
   return (
     <group>
       <mesh position-y={0.006} rotation-x={-Math.PI / 2} material={m.carpet}><circleGeometry args={[CONF_RADIUS - 0.02, 96]} /></mesh>
-      <Table />
-      <StaticParts />
-      {seats.filter((s) => s.id === mySeat).map((s) => (
-        <group key={s.id} position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.3), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.3)]} rotation-y={s.facing}>
-          <LiveTablet />
-        </group>
-      ))}
+      <StaticParts g={built} />
+      <Lift>
+        <Table />
+        <LiftParts g={built} />
+        {seats.filter((s) => s.id === mySeat).map((s) => (
+          <group key={s.id} position={[Math.sin(s.facing) * (CONF_TABLE_RADIUS - 0.3), CONF_TABLE_HEIGHT, Math.cos(s.facing) * (CONF_TABLE_RADIUS - 0.3)]} rotation-y={s.facing}>
+            <LiveTablet />
+          </group>
+        ))}
+      </Lift>
+      <PartyRig low={lowQuality} />
       <Screen labels={labels} people={people} picture={picture} />
       <HoloScreen picture={picture} people={people} />
       <TabletInput />
@@ -477,18 +573,23 @@ function RoomLights({ low }: { low: boolean }) {
   useConferenceGlass();
   useFrame((_, dt) => {
     const s = roomControls.get(), c = cur.current, k = 1 - Math.exp(-dt * 6);
-    c.b = c.b < 0 ? s.light / 100 : c.b + (s.light / 100 - c.b) * k;
+    // At a party with the ceiling lights off the room goes dark, so the colours show.
+    const ps = party.get(), rig = partyPhase(ps, partyNow()).rig;
+    const light = (s.light / 100) * (1 - rig * (ps.lights.main ? 0.35 : 0.93));
+    c.b = c.b < 0 ? light : c.b + (light - c.b) * k;
     c.w = c.w < 0 ? s.warmth / 100 : c.w + (s.warmth / 100 - c.w) * k;
-    const ambient = officeUi.get().inConference ? 0.3 + 0.7 * c.b : 1;
+    const ambient = officeUi.get().inConference ? (0.3 + 0.7 * c.b) * (1 - rig * (ps.lights.main ? 0.25 : 0.72)) : 1;
     c.a += (ambient - c.a) * k;
     tint.lerpColors(COOL, WARM, c.w);
     if (main.current) { main.current.intensity = 8 * c.b; main.current.color.copy(tint); }
-    if (screen.current) screen.current.intensity = 1.2 + 1.3 * c.b;
+    if (screen.current) screen.current.intensity = (1.2 + 1.3 * c.b) * (1 - tvPhase(ps, partyNow()));
     if (under.current) { under.current.intensity = 1.6 * c.b; under.current.color.copy(tint); }
     lit.ring.color.copy(tint).multiplyScalar(0.3 + 1.7 * c.b);
     lit.disc.emissive.copy(tint); lit.disc.emissiveIntensity = 0.1 * c.b;
     lit.plinth.emissive.copy(tint); lit.plinth.emissiveIntensity = 0.9 * c.b;
     textured().glow.opacity = c.b;
+    // The pink carpet and the cream panels darken at a party, so the dance floor and the beams shine.
+    (textured().carpet as THREE.MeshStandardMaterial).color.setScalar(1 - rig * 0.78); (textured().panel as THREE.MeshStandardMaterial).color.setScalar(1 - rig * 0.6);
     hemi.current ??= scene.getObjectByName(HEMI_NAME) as THREE.HemisphereLight | null;
     if (hemi.current) hemi.current.intensity = hemiIntensity(low) * c.a;
     scene.environmentIntensity = ENV_INTENSITY * c.a;

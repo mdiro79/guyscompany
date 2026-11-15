@@ -15,7 +15,9 @@ export const STYLES: Style[] = [
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 const LOOKAHEAD_S = 0.25, TICK_MS = 80;
 
-class Engine {
+export class Engine {
+  /** `ctx` and `out`: play into someone else's audio graph (the party room's, for its light show). */
+  constructor(private opts: { ctx?: AudioContext; out?: AudioNode } = {}) {}
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
@@ -28,16 +30,17 @@ class Engine {
   private ensure() {
     if (this.ctx) return this.ctx;
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return null;
-    const ctx = new Ctx();
+    if (!Ctx && !this.opts.ctx) return null;
+    const ctx = this.opts.ctx ?? new Ctx();
     const comp = ctx.createDynamicsCompressor();
     const master = ctx.createGain();
     master.gain.value = 0;
-    master.connect(comp).connect(ctx.destination);
+    master.connect(comp).connect(this.opts.out ?? ctx.destination);
     const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     this.ctx = ctx; this.master = master; this.noise = noise;
+    if (this.opts.ctx) return ctx; // its owner wakes it
     // Browsers only start sound after a tap or a key press on the page.
     const wake = () => { void ctx.resume(); };
     window.addEventListener('pointerdown', wake);

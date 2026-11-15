@@ -6,23 +6,24 @@ import { drawIcon, type IconName } from './icons';
 // (click with the crosshair or the cursor, tap on phones). Only the tablet at one's own seat is live;
 // the others show the same screen at rest. What the buttons do is wired up by the office view.
 
-export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'holo' | 'notes' | 'react' | 'look' | 'lights' | 'meeting' | 'stand';
-export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'holo', 'notes', 'react', 'look', 'lights', 'meeting', 'stand'];
+export type TabletButton = 'hand' | 'mic' | 'board' | 'present' | 'holo' | 'notes' | 'react' | 'look' | 'lights' | 'tv' | 'meeting' | 'stand';
+export const TABLET_BUTTONS: TabletButton[] = ['hand', 'mic', 'board', 'present', 'holo', 'notes', 'react', 'look', 'lights', 'tv', 'meeting', 'stand'];
 
 export interface TabletLabels {
   title: string; idle: string; presenting: string; // "{name}" is replaced
   raiseHand: string; lowerHand: string; micOn: string; micOff: string; board: string; present: string; stopPresent: string; view: string;
-  react: string; look: string; lightPresent: string; holo: string; stand: string; hands: string; notes: string; meeting: string; startMeeting: string; rtl: boolean;
+  react: string; look: string; lightPresent: string; holo: string; tvDown: string; tvUp: string; stand: string; hands: string; notes: string; meeting: string; startMeeting: string; rtl: boolean;
 }
 
 export interface TabletState {
   hand: boolean; mic: boolean; presenting: 'me' | 'other' | null; presenterName: string; dimmed: boolean; hands: number;
   holo: boolean; // the smart screen over the table (one's own choice, kept on this device)
+  tvDown: boolean; // the main screen is down in its cabinet (shared)
   hover: TabletButton | null; flash: TabletButton | null; labels: TabletLabels | null;
   meeting: string | null; meetingClock: string; // the running meeting's name and how long it has run
 }
 
-let state: TabletState = { hand: false, mic: false, holo: true, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null, meeting: null, meetingClock: '' };
+let state: TabletState = { hand: false, mic: false, holo: true, tvDown: false, presenting: null, presenterName: '', dimmed: false, hands: 0, hover: null, flash: null, labels: null, meeting: null, meetingClock: '' };
 const listeners = new Set<() => void>();
 let onPress: ((b: TabletButton) => void) | null = null;
 
@@ -91,6 +92,7 @@ function look(s: TabletState, id: TabletButton): { icon: IconName; label: string
     case 'look': return { icon: 'shareScreen', label: l.look, color: '#3fb3ad', on: false };
     case 'lights': return { icon: 'sun', label: l.lightPresent, color: '#e0a526', on: s.dimmed };
     case 'holo': return { icon: 'holo', label: l.holo, color: '#19a7c9', on: s.holo };
+    case 'tv': return { icon: 'shareScreen', label: s.tvDown ? l.tvUp : l.tvDown, color: '#6c7a96', on: s.tvDown };
     case 'stand': return { icon: 'logOut', label: l.stand, color: '#7d8597', on: false };
     case 'notes': return { icon: 'notebook', label: l.notes, color: '#0f9d9a', on: false };
     case 'meeting': return { icon: 'users', label: s.meeting ? l.meeting : l.startMeeting, color: '#c2417c', on: !!s.meeting };

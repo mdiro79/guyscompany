@@ -11,6 +11,7 @@ import { jukebox } from './play/jukebox';
 import type { RemoteAvatar } from './useOfficeNet';
 import { GroundShadow } from './GroundShadow';
 import { anchors, presentPeople } from './labels';
+import { partyHop, hopSeed } from './partyAudio';
 
 const SEATS = allSeats();
 
@@ -40,6 +41,8 @@ function RemoteCharacter({ remotes, profile }: { remotes: React.RefObject<Map<st
     g.position.x += (tx - g.position.x) * k;
     g.position.z += (tz - g.position.z) * k;
     g.position.y = isFlying(character) ? 0.35 + Math.sin(performance.now() / 400) * 0.06 + (seat ? 0.2 : 0) : seat ? -0.05 : dancing ? Math.abs(Math.sin(performance.now() / 230)) * 0.12 : 0;
+    // At a party everyone in the room hops to the music (worked out here, on every device).
+    if (!seat) g.position.y += partyHop(g.position.x, g.position.z, hopSeed(profile.id));
     let d = yaw - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * k;

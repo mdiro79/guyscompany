@@ -2,11 +2,13 @@
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { roomControls } from './roomControls';
+import { party, partyPhase, partyNow } from './party';
 
 // Shared materials of the conference room's glass ring and glass door. The frosting (0–100 from the wall
 // panel) fades them smoothly from clear tinted glass to milky white; the eye-level band fades out with it.
 const CLEAR = new THREE.Color('#c9e6e3');
 const FROSTED = new THREE.Color('#f4f1ec');
+const SMOKED = new THREE.Color('#141019'); // party: dark glass, so the light show is not lost in daylight
 
 export const confGlass = {
   pane: new THREE.MeshStandardMaterial({ color: CLEAR.clone(), transparent: true, opacity: 0.3, roughness: 0.04, metalness: 0.15, envMapIntensity: 2, depthWrite: false }),
@@ -25,5 +27,13 @@ export function useConferenceGlass() {
     confGlass.pane.metalness = 0.15 * (1 - f);
     confGlass.pane.depthWrite = f > 0.75; // solid enough to hide what is behind it
     confGlass.band.opacity = 0.55 * (1 - f);
+    const dark = partyPhase(party.get(), partyNow()).rig;
+    if (dark > 0) {
+      confGlass.pane.color.lerp(SMOKED, dark * 0.92);
+      confGlass.pane.opacity = Math.max(confGlass.pane.opacity, 0.3 + 0.62 * dark);
+      confGlass.pane.roughness *= 1 - dark * 0.8;
+      confGlass.pane.depthWrite = confGlass.pane.depthWrite || dark > 0.75;
+      confGlass.band.opacity *= 1 - dark;
+    }
   });
 }
